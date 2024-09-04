@@ -34,6 +34,7 @@ function config = loadPara(fileName, filePath)
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     fullFileName = fullfile(filePath.config, fileName);
+    fullFileName = fullFileName + '.xlsx';
     sheets = {'Exp', 'Dat', 'Mdl', 'Par'};
     config = struct();
 
@@ -43,7 +44,7 @@ function config = loadPara(fileName, filePath)
     %===================================================
     % Load the complete xlsx file
     %===================================================
-    [~, sheetNames] = xlsfinfo(fullFileName);
+    sheetNames = sheetnames(fullFileName);
     data = struct();
     
     %===================================================
@@ -93,10 +94,21 @@ function config = loadPara(fileName, filePath)
             %----------------------------------------
             % Store the value in the struct
             %----------------------------------------
-            if isnumeric(value)
-                config.(sheetName).(category).(variable) = value;
+            % Category
+            if isnan(category)
+                if isnumeric(value)
+                    config.(sheetName).(variable) = value;
+                else
+                    config.(sheetName).(variable) = char(value);
+                end
+
+            % No Category
             else
-                config.(sheetName).(category).(variable) = char(value);
+                if isnumeric(value)
+                    config.(sheetName).(category).(variable) = value;
+                else
+                    config.(sheetName).(category).(variable) = char(value);
+                end
             end
         end
     end
