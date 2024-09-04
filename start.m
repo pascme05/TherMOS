@@ -106,7 +106,7 @@ setup = struct();
 % General
 %===================================================
 setup.user = "Pascal Schirmer";                                             % name of the user (string)
-setup.name = "Default";                                                     % name of the simulation (string)
+setup.name = "default";                                                     % name of the simulation (string)
 
 %===================================================
 % Experiment
