@@ -52,8 +52,6 @@ function [] = main(setup, path)
     fprintf('RC-Mdl:\t\t\t\t%d\n', setup.selRC);
     fprintf('SS-Mdl:\t\t\t\t%d\n', setup.selSS);
     fprintf('TF-Mdl:\t\t\t\t%d\n', setup.selAR);
-    fprintf('NN-Mdl:\t\t\t\t%d\n', setup.selNN);
-    fprintf('PN-Mdl:\t\t\t\t%d\n', setup.selPN);
     fprintf('PO-Mdl:\t\t\t\t%d\n', setup.selPO);
     disp('===================================================')
     disp('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')

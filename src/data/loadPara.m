@@ -94,17 +94,21 @@ function config = loadPara(fileName, filePath)
             %----------------------------------------
             % Store the value in the struct
             %----------------------------------------
-            % Category
+            % No Category
             if isnan(category)
-                if isnumeric(value)
+                if isnan(value)
+                    config.(sheetName).(variable) = 0;
+                elseif isnumeric(value)
                     config.(sheetName).(variable) = value;
                 else
                     config.(sheetName).(variable) = char(value);
                 end
 
-            % No Category
+            % Category
             else
-                if isnumeric(value)
+                if isnan(value)
+                    config.(sheetName).(category).(variable) = 0;
+                elseif isnumeric(value)
                     config.(sheetName).(category).(variable) = value;
                 else
                     config.(sheetName).(category).(variable) = char(value);

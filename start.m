@@ -177,8 +177,6 @@ setup.selRC = 1;
 setup.selSS = 0;
 setup.selTF = 0;
 setup.selAR = 0;
-setup.selNN = 0;
-setup.selPN = 0;
 
 %----------------------------------------
 % 2D Models
