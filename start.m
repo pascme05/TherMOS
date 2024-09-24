@@ -136,17 +136,21 @@ setup.test = 1;                                                             % 0)
 %----------------------------------------
 % Format and Dimension
 %----------------------------------------
-setup.file = "default";                                                     % dataset filename (string)
-setup.format = 'xlsx';                                                      % input data format: "xlsx" or "mat
+setup.format = 'xlsx';                                                      % input data format: "xlsx" or "mat"
 setup.datDim = 1;                                                           % input data dimension: 1) 1D data, 2) 2D data, 3) 3D data
 
 %----------------------------------------
 % Training and Testing Selection
 %----------------------------------------
-% File/Sheet based
-setup.trFile = ["train"];                                                   % list of training files or excel sheets (strings) at least one
-setup.teFile = "test";                                                      % testing file or excel sheets (string) exactly one
-setup.vlFile = ["val"];                                                     % list of validation files or excel sheets (strings) at least one
+% File based
+setup.trFile = ["default"];                                                 % list of training files (strings) at least one
+setup.teFile = "default";                                                   % testing file (string) exactly one
+setup.vlFile = ["default"];                                                 % list of validation files (strings) at least one
+
+% Sheet based
+setup.trSheet = ["train"];                                                  % list of training sheets (strings) at least one
+setup.teSheet = "test";                                                     % testing sheet (string) exactly one
+setup.vlSheet = ["val"];                                                    % list of validation sheets (strings) at least one
 
 % ID based
 setup.trID = [];                                                            % list of training IDs (if empty all remaining ones are used)
@@ -160,9 +164,9 @@ setup.rVl = 0.2;                                                            % pe
 %----------------------------------------
 % Inputs and Output Mapping
 %----------------------------------------
-setup.inp = [];                                                             % list of input feature (strings) if empty all
-setup.out = [];                                                             % list of temperature outputs (strings) if empty all
-
+setup.inp = ["P1", "P2", "P3"];                                             % list of input feature (strings)
+setup.out = ["T1", "T2", "T3"];                                             % list of temperature outputs (strings) 
+setup.ref = ["R1", "R2", "R3"];                                             % list of reference temperatures (strings)
 
 %===================================================
 % Model

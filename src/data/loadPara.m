@@ -15,6 +15,7 @@
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Load parameters from the specified xlsx file and store them in a struct.
+% -------------------------------------------------------------------------
 % Inputs:
 %   - fileName - The name of the Excel file (e.g., 'example.xlsx')
 %   - filePath - The path to the directory (e.g., 'C:\data\')
