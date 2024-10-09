@@ -32,7 +32,7 @@ classdef DataLoader
         Intp                                                                % Interpolation method
         Inp                                                                 % List of input features
         Out                                                                 % List of output features
-        time                                                                % Time vector (sec)
+        t                                                                   % Time vector (sec)
         X                                                                   % Input vector
         y                                                                   % Output vector
         r                                                                   % Reference vector
@@ -116,7 +116,7 @@ classdef DataLoader
 
                 % Resampling Data
                 try
-                    obj.Data = resampleData1D(obj, obj.Data.time);
+                    obj.Data = resampleData1D(obj, obj.Data.t);
                 catch ME
                     disp('INFO: Failed to resample data');
                     rethrow(ME);
@@ -267,7 +267,7 @@ classdef DataLoader
             %----------------------------------------
             selectedCols = [selectedInpCols, selectedOutCols, selectedRefCols];
             selectedCols = unique(selectedCols, 'stable');
-            obj.time = obj.Data.time;
+            obj.t = obj.Data.t;
             obj.X = table2array(obj.Data(:, selectedInpCols));
             obj.y = table2array(obj.Data(:, selectedOutCols));
             obj.r = table2array(obj.Data(:, selectedRefCols));

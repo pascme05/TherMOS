@@ -18,14 +18,16 @@
 % resampling techniques.
 % -------------------------------------------------------------------------
 % Inp:  1) data:    Input data struct including tr, te, and vl
-%       2) setup:   All setup values of the current simulation
-%       3) para:    All simulation parameters of the current simulation
-% Out:  1) out:     Adapted input simulation data
+%       2) para:    All simulation parameters of the current simulation
+% Out:  1) outX:    Adapted input simulation data
+%       2) outY:    Adapted output simulation data
+%       3) outR:    Adapted reference simulation data
+%       4) outT:    Adapted time simulation data
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function out = resmpData(data, setup, para)
+function [xOut, yOut, rOut, tOut]  = resmpData(data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -199,18 +201,6 @@ function out = resmpData(data, setup, para)
     else
         disp("WARN: Incorrect reference dimension, no resampling")
     end
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Post-Processing
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Output
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    out = data;
-    out.X = xOut;
-    out.y = yOut;
-    out.r = rOut;
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
