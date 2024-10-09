@@ -39,9 +39,9 @@ function out = resmpData(data, setup, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Data
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    outDim = size(data.y);
-    inpDim = size(data.X);
-    refDim = size(data.r);
+    outDim = size(data.y{1,1});
+    inpDim = size(data.X{1,1});
+    refDim = size(data.r{1,1});
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing

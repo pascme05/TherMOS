@@ -17,16 +17,17 @@
 % This function normalises the data.
 % -------------------------------------------------------------------------
 % Inp:  1) data:    Input data struct including tr, te, and vl
-%       2) para:    All simulation parameters of the current simulation
-%       3) sel:     Selector: 1) apply and get norm, 2) applying norm
+%       2) setup:   All setup values of the current simulation
+%       3) para:    All simulation parameters of the current simulation
+%       4) sel:     Selector: 1) apply and get norm, 2) applying norm
 %                             3) applying inv norm
-% Out:  1) data:    Normalised input simulation data
+% Out:  1) out:     Adapted input simulation data
 %       2) para:    Includes the normalisation parameters
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [data, para] = normData(data, para, sel)
+function [out, para] = normData(data, setup, para, sel)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -147,48 +148,18 @@ function [data, para] = normData(data, para, sel)
     % 0/1
     %----------------------------------------
     elseif para.Par.gen.normY == 2
-        % Inv Norm
-        if sel == 3
-            data.y = (data.y - minY) / (maxY - minY);
-
-        % Norm
-        else
-            data.y = data.y * (maxY - minY) + minY;
-        end
-
-        % Msg
         disp("INFO: 0/1 normalisation applied to output")
 
     %----------------------------------------
     % Min/Max
     %----------------------------------------
     elseif para.Par.gen.normY == 3
-        % Inv Norm
-        if sel == 3
-            data.y = (data.y - avgY) / (maxY - minY);
-
-        % Norm
-        else
-            data.y = data.y * (maxY - minY) + avgY;
-        end
-
-        % Msg
         disp("INFO: Min/Max normalisation applied to output")
 
     %----------------------------------------
     % Avg/Std
     %----------------------------------------
     elseif para.Par.gen.normY == 4
-        % Inv Norm
-        if sel == 3
-            data.y = (data.y - avgY) / sigY;
-
-        % Norm
-        else
-            data.y = data.y * sigY + avgY;
-        end
-
-        % Msg
         disp("INFO: Avg/Std normalisation applied to output")
 
     %----------------------------------------

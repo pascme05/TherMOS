@@ -36,7 +36,7 @@ classdef DataLoader
         X                                                                   % Input vector
         y                                                                   % Output vector
         r                                                                   % Reference vector
-        Ts {mustBeNumeric}                                                  % sampling time (sec)
+        Ts                                                                  % sampling time (sec)
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

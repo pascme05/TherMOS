@@ -124,8 +124,21 @@ function [] = main(setup, path)
     %===================================================
     % Resample
     %===================================================
-    data.tr = resmpData(data.tr, setup, para);
+    %----------------------------------------
+    % Training
+    %----------------------------------------
+    for i = 1:length(setup.teFile)
+        data.tr = resmpData(data.tr, setup, para);
+    end
+
+    %----------------------------------------
+    % Testing
+    %----------------------------------------
     data.te = resmpData(data.te, setup, para);
+
+    %----------------------------------------
+    % Validation
+    %----------------------------------------
     data.vl = resmpData(data.vl, setup, para);
 
     %===================================================
@@ -138,6 +151,9 @@ function [] = main(setup, path)
     %===================================================
     % Normalisation
     %===================================================
+    [data.tr, para] = normData(data.tr, para, 1);
+    [data.te, ~] = normData(data.te, para, 2);
+    [data.vl, ~] = normData(data.vl, para, 2);
 
     %===================================================
     % Pre-Padding

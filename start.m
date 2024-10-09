@@ -148,7 +148,7 @@ setup.teFile = "default";                                                   % te
 setup.vlFile = ["default"];                                                 % list of validation files (strings) at least one
 
 % Sheet based
-setup.trSheet = ["train"];                                                  % list of training sheets (strings) at least one
+setup.trSheet = ["train-1", "train-2", "train-3"];                          % list of training sheets (strings) at least one
 setup.teSheet = "test";                                                     % testing sheet (string) exactly one
 setup.vlSheet = ["val"];                                                    % list of validation sheets (strings) at least one
 
