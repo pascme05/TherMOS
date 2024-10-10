@@ -34,10 +34,10 @@ function config = loadPara(fileName, filePath)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    fullFileName = fullfile(filePath.config, fileName);
-    fullFileName = fullFileName + '.xlsx';
-    sheets = {'Exp', 'Dat', 'Mdl', 'Par'};
-    config = struct();
+    fullFileName = fullfile(filePath.config, fileName);                     % full path name including file name
+    fullFileName = fullFileName + '.xlsx';                                  % file name including extension
+    sheets = {'Exp', 'Dat', 'Mdl', 'Par'};                                  % sheets names from parameter file
+    config = struct();                                                      % empty structure for config
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Data
@@ -45,8 +45,8 @@ function config = loadPara(fileName, filePath)
     %===================================================
     % Load the complete xlsx file
     %===================================================
-    sheetNames = sheetnames(fullFileName);
-    data = struct();
+    sheetNames = sheetnames(fullFileName);                                  % sheetnames from xlsx file
+    data = struct();                                                        % empty data struct
     
     %===================================================
     % Access the sheets

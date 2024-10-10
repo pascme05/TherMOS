@@ -138,9 +138,6 @@ function [] = main(setup, path)
     %===================================================
     % Pre-Padding
     %===================================================
-    data.tr = padData(data.tr, para);
-    data.te = padData(data.te, para);
-    data.vl = padData(data.vl, para);
 
     %===================================================
     % Msg

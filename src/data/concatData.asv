@@ -116,16 +116,8 @@ function out = concatData(data, setup, para)
     out.t2 = out.t2';
 
     %===================================================
-    % ID Data
+    % Reshape
     %===================================================
-    for i = 1:N
-        if i == 1
-            out.idData = iddata(data.y{1,i},data.X{1,i},Ts);
-        else
-            temp = iddata(data.y{1,i},data.X{1,i},Ts);
-            out.idData = merge(out.idData,temp);
-        end
-    end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output

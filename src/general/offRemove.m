@@ -49,13 +49,13 @@ function out = offRemove(data, setup, para)
     %===================================================
     % No removal
     %===================================================
-    if setup.Exp.gen.init == 1
+    if para.Exp.gen.init == 1
         disp("INFO: Output data unchanged")
 
     %===================================================
     % Init to zero
     %===================================================
-    elseif setup.Exp.init == 2
+    elseif para.Exp.gen.init == 2
         %----------------------------------------
         % Initial Value
         %----------------------------------------
@@ -80,7 +80,7 @@ function out = offRemove(data, setup, para)
     %===================================================
     % Remove reference
     %===================================================
-    elseif setup.Exp.init == 3
+    elseif para.Exp.gen.init == 3
         %----------------------------------------
         % Removal
         %----------------------------------------

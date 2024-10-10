@@ -116,7 +116,7 @@ classdef DataLoader
 
                 % Resampling Data
                 try
-                    obj.Data = resampleData1D(obj, obj.Data.t);
+                    obj.Data = resampleData1D(obj, obj.Data.time);
                 catch ME
                     disp('INFO: Failed to resample data');
                     rethrow(ME);
@@ -267,7 +267,7 @@ classdef DataLoader
             %----------------------------------------
             selectedCols = [selectedInpCols, selectedOutCols, selectedRefCols];
             selectedCols = unique(selectedCols, 'stable');
-            obj.t = obj.Data.t;
+            obj.t = obj.Data.time;
             obj.X = table2array(obj.Data(:, selectedInpCols));
             obj.y = table2array(obj.Data(:, selectedOutCols));
             obj.r = table2array(obj.Data(:, selectedRefCols));

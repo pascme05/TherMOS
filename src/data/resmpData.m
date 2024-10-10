@@ -27,7 +27,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [xOut, yOut, rOut, tOut]  = resmpData(data, para)
+function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -36,14 +36,14 @@ function [xOut, yOut, rOut, tOut]  = resmpData(data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    Ts = para.Exp.gen.Ts;
+    Ts = para.Exp.gen.Ts;                                                   % target sampling time (sec)
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Data
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    outDim = size(data.y{1,1});
-    inpDim = size(data.X{1,1});
-    refDim = size(data.r{1,1});
+    outDim = size(data.y);                                                  % output data dimension
+    inpDim = size(data.X);                                                  % input data dimension
+    refDim = size(data.r);                                                  % reference data dimension
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
@@ -51,15 +51,13 @@ function [xOut, yOut, rOut, tOut]  = resmpData(data, para)
     %===================================================
     % Time Vector
     %===================================================
-    tInp = data.X.time(1):Ts:data.X.time(end);
-    tOut = data.y.time(1):Ts:data.y.time(end);
-    tRef = data.r.time(1):Ts:data.r.time(end);
+    tRef = data.t(1):Ts:data.t(end);
     
     %===================================================
     % Init Output
     %===================================================
-    yOut = zeros(length(tOut), outDim(2:end));
-    xOut = zeros(length(tInp), inpDim(2:end));
+    yOut = zeros(length(tRef), outDim(2:end));
+    xOut = zeros(length(tRef), inpDim(2:end));
     rOut = zeros(length(tRef), refDim(2:end));
 
     %===================================================
@@ -90,7 +88,7 @@ function [xOut, yOut, rOut, tOut]  = resmpData(data, para)
     %----------------------------------------
     if (length(outDim) - 1) == 1
         for i = 1:outDim(2)
-            yOut(:,i) = interp1(data.y.time, data.y(:,i), tOut, intp);
+            yOut(:,i) = interp1(data.t, data.y(:,i), tRef, intp);
         end
     
     %----------------------------------------
@@ -99,7 +97,7 @@ function [xOut, yOut, rOut, tOut]  = resmpData(data, para)
     elseif (length(outDim) - 1) == 2
         for i = 1:outDim(2)
             for ii = 1:outDim(3)
-                yOut(:,i,ii) = interp1(data.y.time, data.y(:,i,ii), tOut, intp);
+                yOut(:,i,ii) = interp1(data.t, data.y(:,i,ii), tRef, intp);
             end
         end
 
@@ -110,7 +108,7 @@ function [xOut, yOut, rOut, tOut]  = resmpData(data, para)
         for i = 1:outDim(2)
             for ii = 1:outDim(3)
                 for iii = 1:outDim(4)
-                    yOut(:,i,ii) = interp1(data.y.time, data.y(:,i,ii,iii), tOut, intp);
+                    yOut(:,i,ii) = interp1(data.t, data.y(:,i,ii,iii), tRef, intp);
                 end
             end
         end
@@ -130,7 +128,7 @@ function [xOut, yOut, rOut, tOut]  = resmpData(data, para)
     %----------------------------------------
     if (length(inpDim) - 1) == 1
         for i = 1:inpDim(2)
-            xOut(:,i) = interp1(data.X.time, data.X(:,i), tInp, intp);
+            xOut(:,i) = interp1(data.t, data.X(:,i), tRef, intp);
         end
     
     %----------------------------------------
@@ -139,7 +137,7 @@ function [xOut, yOut, rOut, tOut]  = resmpData(data, para)
     elseif (length(inpDim) - 1) == 2
         for i = 1:inpDim(2)
             for ii = 1:inpDim(3)
-                xOut(:,i,ii) = interp1(data.X.time, data.X(:,i,ii), tInp, intp);
+                xOut(:,i,ii) = interp1(data.t, data.X(:,i,ii), tRef, intp);
             end
         end
 
@@ -150,7 +148,7 @@ function [xOut, yOut, rOut, tOut]  = resmpData(data, para)
         for i = 1:inpDim(2)
             for ii = 1:inpDim(3)
                 for iii = 1:inpDim(4)
-                    xOut(:,i,ii) = interp1(data.X.time, data.X(:,i,ii,iii), tInp, intp);
+                    xOut(:,i,ii) = interp1(data.t, data.X(:,i,ii,iii), tRef, intp);
                 end
             end
         end
@@ -170,7 +168,7 @@ function [xOut, yOut, rOut, tOut]  = resmpData(data, para)
     %----------------------------------------
     if (length(refDim) - 1) == 1
         for i = 1:refDim(2)
-            rOut(:,i) = interp1(data.r.time, data.r(:,i), tRef, intp);
+            rOut(:,i) = interp1(data.t, data.r(:,i), tRef, intp);
         end
     
     %----------------------------------------
@@ -179,7 +177,7 @@ function [xOut, yOut, rOut, tOut]  = resmpData(data, para)
     elseif (length(refDim) - 1) == 2
         for i = 1:refDim(2)
             for ii = 1:refDim(3)
-                rOut(:,i,ii) = interp1(data.r.time, data.r(:,i,ii), tRef, intp);
+                rOut(:,i,ii) = interp1(data.t, data.r(:,i,ii), tRef, intp);
             end
         end
 
@@ -190,7 +188,7 @@ function [xOut, yOut, rOut, tOut]  = resmpData(data, para)
         for i = 1:refDim(2)
             for ii = 1:refDim(3)
                 for iii = 1:refDim(4)
-                    rOut(:,i,ii) = interp1(data.r.time, data.r(:,i,ii,iii), tRef, intp);
+                    rOut(:,i,ii) = interp1(data.t, data.r(:,i,ii,iii), tRef, intp);
                 end
             end
         end
