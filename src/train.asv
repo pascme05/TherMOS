@@ -2,8 +2,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: padData                                                           %
-% Date: 09.10.2024                                                        %
+% File: train                                                             %
+% Date: 11.10.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -14,27 +14,27 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function applies pre-padding to the data.
+% This function trains a prediction model.
 % -------------------------------------------------------------------------
 % Inp:  1) data:    Input data struct including tr, te, and vl
-%       2) para:    All simulation parameters of the current simulation
-% Out:  1) data:    Normalised input simulation data
+%       2) setup:   All setup values of the current simulation
+%       3) para:    All simulation parameters of the current simulation
+%       4) path:    Structure of all path variables
+% Out:  1) mdl:     Trained model
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function data = padData(data, para)
+function mdl = train(data, setup, para, path)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Data data padding")
+    disp("START: Training model")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    pad = para.Exp.gen.pad;                                                 % padding length (samples)
-    Ts = data.Ts;                                                           % sampling time of the data (sec)
-
+    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Data
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -46,36 +46,55 @@ function data = padData(data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    if pad > 0
-        %===================================================
-        % Msg
-        %===================================================
-        fprintf('INFO: Adding padding samples %d\n', pad);
+    %===================================================
+    % Foster-Model
+    %===================================================
+    if setup.selRC == 1
+        %----------------------------------------
+        % Fitting 
+        %----------------------------------------
+        mdl = rcFit(data.tr, data.vl, para);
 
-        %===================================================
-        % Padding
-        %===================================================
-        data.X = [zeros(pad, size(data.X,2)); data.X];
-        data.y = [zeros(pad, size(data.y,2)); data.y];
-        data.r = [zeros(pad, size(data.r,2)); data.r];
-        data.id = [zeros(pad, size(data.id,2)); data.id];
-        data.t2 = [zeros(pad, size(data.t2,2)); data.t2];       
+        %----------------------------------------
+        % Saving
+        %----------------------------------------
+        mdlName = 'mdl_rc_' + '';
+        filename = fullfile('C:\my_models', 'mdlRc.mat');
     end
+    
+    %===================================================
+    % State-Space Model
+    %===================================================
 
+    %===================================================
+    % Transfer Model
+    %===================================================
+
+    %===================================================
+    % Arima Model
+    %===================================================
+
+    %===================================================
+    % POD Model
+    %===================================================
+    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    data.t = 0:Ts:length(data.y)/Ts-Ts;
-    data.t = data.t';
-
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Output
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Saving Models
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % Define path and filename
+filename = fullfile('C:\my_models', 'model_parameters.mat');
+
+% Save the struct mdl
+save(filename, 'mdl');
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Data padding")
+    disp("DONE: Training model")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -2,8 +2,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: padData                                                           %
-% Date: 09.10.2024                                                        %
+% File: rcSol                                                             %
+% Date: 13.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -14,68 +14,84 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function applies pre-padding to the data.
+% This function fits the thermal resistances (Rth) and the thermal 
+% capcitances (Cth) for a one dimensional Foster network. The function
+% that is fitted can be written as:
+%
+%                     Zth = Σ Rth * (1 - exp(-t/tau))
+%
+% and describes the transient thermal impedance where tau=Rth*Cth.
 % -------------------------------------------------------------------------
-% Inp:  1) data:    Input data struct including tr, te, and vl
-%       2) para:    All simulation parameters of the current simulation
-% Out:  1) data:    Normalised input simulation data
+% Inp:  1) mdl:     Fitted model parameters
+%       2) data:    Testing input data struct
+%       3) para:    All simulation parameters of the current simulation
+% Out:  1) mdl:     Trained model
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function data = padData(data, para)
+function pred = rcSol(mdl, data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Data data padding")
+    disp("START: Solving Foster Network")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    pad = para.Exp.gen.pad;                                                 % padding length (samples)
-    Ts = data.Ts;                                                           % sampling time of the data (sec)
+    %===================================================
+    % Parameter
+    %===================================================
+    Ts = data.Ts;                                                           % sampling time data (sec)
+    Nt = length(data.X(:,1));                                               % number of time steps (sec)
+    test = 1;
 
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Data
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
+    %===================================================
+    % Variables
+    %===================================================
+    Pv = data.X(:,1);                                                       % power losses input (W)
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    if pad > 0
-        %===================================================
-        % Msg
-        %===================================================
-        fprintf('INFO: Adding padding samples %d\n', pad);
-
-        %===================================================
-        % Padding
-        %===================================================
-        data.X = [zeros(pad, size(data.X,2)); data.X];
-        data.y = [zeros(pad, size(data.y,2)); data.y];
-        data.r = [zeros(pad, size(data.r,2)); data.r];
-        data.id = [zeros(pad, size(data.id,2)); data.id];
-        data.t2 = [zeros(pad, size(data.t2,2)); data.t2];       
-    end
-
+    %===================================================
+    % Fitting Parameters
+    %===================================================
+    dT = (2 * tau - dt) / (2 * tau + dt) * Tc + (Rth * dt) / (2 * tau + dt) * (Pv1 + Pv2)
+    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    data.t = 0:Ts:length(data.y)/Ts-Ts;
-    data.t = data.t';
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Data padding")
+    disp("DONE: Solving Foster Model")
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Additional Functions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function Zth_fit = fncZth(params, t, K)
+    % Initialize Rth and Cth   
+    Rth = params(1:K);
+    tau = params(K+1:end);
+    
+    % Initialize the thermal impedance response
+    Zth_fit = zeros(size(t));
+    
+    % Calculate the contribution of each RC pair
+    for i = 1:K
+        Zth_fit = Zth_fit + Rth(i) * (1 - exp(-t / tau(i)));
+    end
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
