@@ -122,6 +122,11 @@ function [] = main(setup, path)
     data = dimData(data, setup, para);
     
     %===================================================
+    % Update Losses
+    %===================================================
+    [data, para] = updLoss(data, para);
+    
+    %===================================================
     % Offset Removal
     %===================================================
     data.tr = offRemove(data.tr, setup, para);

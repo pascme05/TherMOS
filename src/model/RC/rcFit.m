@@ -282,6 +282,7 @@ function mdl = rcFit(data, val, para)
     mdl.Ts = Ts;
     mdl.res = res;
     mdl.resnorm = resnorm;
+    mdl.K = K;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
@@ -309,4 +310,6 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% References
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% [1] REF-1
+% [1] Touzelbaev, Maxat N., et al. "High-efficiency transient temperature 
+% calculations for applications in dynamic thermal management of electronic 
+% devices." Journal of Electronic Packaging 135.3 (2013): 031001.

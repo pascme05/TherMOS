@@ -35,11 +35,8 @@ function [data, para] = normData(data, para, sel)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Data
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
+    Tref = para.Par.loss.Tref;                                              % reference temperature (°C)
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -201,7 +198,70 @@ function [data, para] = normData(data, para, sel)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
+    %===================================================
+    % Temperature Reference
+    %===================================================
+    %----------------------------------------
+    % None
+    %----------------------------------------
+    if para.Par.gen.normY == 1
+        disp("INFO: No normalisation applied to Tref")
+        
+    %----------------------------------------
+    % 0/1
+    %----------------------------------------
+    elseif para.Par.gen.normY == 2
+        % Inv Norm
+        if sel == 3
+            Tref = (Tref - minY) / (maxY - minY);
+
+        % Norm
+        else
+            Tref = Tref * (maxY - minY) + minY;
+        end
+
+        % Msg
+        disp("INFO: 0/1 normalisation applied to Tref")
+
+    %----------------------------------------
+    % Min/Max
+    %----------------------------------------
+    elseif para.Par.gen.normY == 3
+        % Inv Norm
+        if sel == 3
+            Tref = (Tref - avgY) / (maxY - minY);
+
+        % Norm
+        else
+            Tref = Tref * (maxY - minY) + avgY;
+        end
+
+        % Msg
+        disp("INFO: Min/Max normalisation applied to Tref")
+
+    %----------------------------------------
+    % Avg/Std
+    %----------------------------------------
+    elseif para.Par.gen.normY == 4
+        % Inv Norm
+        if sel == 3
+            Tref = (Tref - avgY) / sigY;
+
+        % Norm
+        else
+            Tref = Tref * sigY + avgY;
+        end
+
+        % Msg
+        disp("INFO: Avg/Std normalisation applied to Tref")
+
+    %----------------------------------------
+    % Invalid
+    %----------------------------------------
+    else
+        disp("INFO: Invalid normalisation approach")
+    end
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -232,6 +292,11 @@ function [data, para] = normData(data, para, sel)
         para.Dat.normVal.r.min = minR;
         para.Dat.normVal.r.avg = avgR; 
         para.Dat.normVal.r.std = stdR;
+        
+        %----------------------------------------
+        % Loss Update
+        %----------------------------------------
+        para.Par.loss.Tref = Tref;
 
         %----------------------------------------
         % Msg
