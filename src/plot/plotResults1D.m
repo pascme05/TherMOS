@@ -1,0 +1,255 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
+% Topic: Power Electronics, Model Order Reduction                         %
+% File: plotResults1D                                                     %
+% Date: 13.08.2024                                                        %
+% Author: Dr. Pascal A. Schirmer                                          %
+% Version: V.0.1                                                          %
+% Copyright: Pascal Schirmer                                              %
+% Comments:                                                               %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Description
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Here goes the description of the function.
+% -------------------------------------------------------------------------
+% Inp:  1) data:    All simulation input data as well as prediction
+%       2) results: All obtained accuracy values and results
+%       2) para:    All simulation parameters of the current simulation
+%       3) setup:   All simulation setup parameters
+% Out:  1) None
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Function
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function [] = plotResults1D(data, results, para, setup)
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Message Input
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    disp("START: Plotting results")
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Init
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Parameters
+    %===================================================
+    [~, nTr] = size(data.tr.X2);                                            % number of training instances
+    [~, nVl] = size(data.vl.X2);                                            % number of validation instances
+    [~, Ny] = size(data.te.y);                                              % number of output samples
+
+    %===================================================
+    % Variables
+    %===================================================
+    time = data.te.t;
+    yPred = data.pr.y;
+    yTest = data.te.y;
+    XPred = data.pr.X;
+    XTest = data.te.X;
+    rPred = data.pr.r;
+    rTest = data.te.r;
+    
+    %===================================================
+    % Names
+    %===================================================
+    namesInp = setup.inp;
+    namesOut = setup.out;
+    names = [namesInp, namesOut];
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Pre-Processing
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Feature Ranking
+    %===================================================
+    [~, weights] = relieff(data.tr.X,data.tr.y,10);
+
+    %===================================================
+    % Correlation Analysis
+    %===================================================
+    vaCor = corr([data.tr.X; data.tr.y]);
+
+    %===================================================
+    % Residuals
+    %===================================================
+    err = yTest - yPred;
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Calculation
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Input Features Analysis
+    %===================================================
+    %----------------------------------------
+    % Init
+    %----------------------------------------
+    figure;
+    sgtitle('Input Feature Analysis using Distribution, Heatmap, and Feature Ranking');
+
+    %----------------------------------------
+    % Boxplot
+    %----------------------------------------
+    subplot(2,2, [1, 2]);
+    boxplot(data.tr.X);
+    xlabel(namesInp)
+    ylabel('Input Features')
+    title('Boxplot of Training Input Features')
+    grid on;
+
+    %----------------------------------------
+    % Correlation
+    %----------------------------------------
+    subplot(2,2,3);
+    h = heatmap(r,'MissingDataColor','w');
+    h.XDisplayLabels = names;
+    h.YDisplayLabels = names;
+    title('Pearson Correlation Input/Output')
+    grid on;
+
+    %----------------------------------------
+    % Feature Ranking
+    %----------------------------------------
+    subplot(2,2,4);
+    bar(namesInp,weights);
+    ylabel('Input Features')
+    title('Feature Ranking using ReliefF')
+    grid on;
+
+    %===================================================
+    % Plotting Input
+    %===================================================
+    %----------------------------------------
+    % Init
+    %----------------------------------------
+    figure;
+
+    %----------------------------------------
+    % Training Data
+    %----------------------------------------
+    % Init
+    figure;
+    sgtitle('Input Training Data');
+
+    % Looping
+    for i = 1:nTr
+        subplot(1,nTr,i);
+        yyaxis left
+        plot(data.tr.t2{i}, data.tr.X2{1,i});
+        xlabel('time (sec)');
+        ylabel('losses (W)');
+        yyaxis right
+        plot(data.tr.t2{i}, data.tr.y2{1,i});
+        txt = 'Train Data: ' + string(i);
+        title(txt);
+        ylabel('T (°C)');
+        grid on;
+    end
+
+    %----------------------------------------
+    % Validation Data
+    %----------------------------------------
+    % Init
+    figure;
+    sgtitle('Input Validation Data');
+
+    % Looping
+    for i = 1:nVl
+        subplot(1,nVl,i);
+        yyaxis left
+        plot(data.vl.t2{i}, data.vl.X2{1,i});
+        xlabel('time (sec)');
+        ylabel('losses (W)');
+        yyaxis right
+        plot(data.vl.t2{i}, data.vl.y2{1,i});
+        txt = 'Validation Data: ' + string(i);
+        title(txt);
+        ylabel('T (°C)');
+        grid on;
+    end
+
+    %----------------------------------------
+    % Testing Data
+    %----------------------------------------
+    % Init
+    figure;
+    sgtitle('Input Testing Data');
+
+    % Output
+    plot(time, data.te.X);
+    xlabel('time (sec)');
+    ylabel('losses (W)');
+    yyaxis right
+    plot(time, data.te.y);
+    ylabel('T (°C)');
+    grid on;
+
+    %===================================================
+    % Average Accuracies
+    %===================================================
+    %----------------------------------------
+    % Correlation
+    %----------------------------------------
+    figure;
+    subplot(2,2,1);
+    hold on;
+    title('Scattering Prediction and Residuals');
+    for i = 1:Ny
+        plot(yTest, yPred);
+        xlabel('True Values');
+        ylabel('Pred Values');
+    end
+
+    %----------------------------------------
+    % Error Distribution
+    %----------------------------------------
+    figure;
+    subplot(2,2,2);
+    hold on;
+    title('Residual Distribution');
+    for i = 1:Ny
+        histogram(err,'Normalization','probability');
+        xlabel('Error');
+        ylabel('Data Samples (%)');
+    end
+
+    %----------------------------------------
+    % Accuracy Metric
+    %----------------------------------------
+
+    %===================================================
+    % Plotting Predictions
+    %===================================================
+    %----------------------------------------
+    % Predictions
+    %----------------------------------------
+    % Sub-Sub Section I
+    
+    % Sub-Sub Section II
+    
+    % Sub-Sub Section III
+    
+    %----------------------------------------
+    % Errors
+    %----------------------------------------
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Post-Processing
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Output
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Message Output
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    disp("DONE: Plotting results")
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% References
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% [1] REF-1

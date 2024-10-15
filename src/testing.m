@@ -22,19 +22,21 @@
 %       4) para:    All simulation parameters of the current simulation
 %       5) path:    Structure of all path variables
 % Out:  1) pred:    Predicted output
+%       2) grt:    Updated grt data
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function pred = testing(mdl, data, setup, para, path)
+function [pred, grt] = testing(mdl, data, setup, para, path)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     disp("START: Testing model")
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Input Model
+    %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    grt = data.te;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -61,7 +63,23 @@ function pred = testing(mdl, data, setup, para, path)
         %----------------------------------------
         % Fitting 
         %----------------------------------------
+        timeStart = tic;
         pred = rcSol(mdl, data.te, para);
+        pred.testTime = toc(timeStart);
+
+        %----------------------------------------
+        % Formatting 
+        %----------------------------------------
+        % Prediction
+        pred.y = pred.y(:,1);
+        pred.X = pred.X(:,1);
+        pred.r = pred.r(:,1);
+
+        % Testing
+        grt.y = data.te.y(:,1);
+        grt.X = data.te.X(:,1);
+        grt.r = data.te.r(:,1);
+        
     end
     
     %===================================================

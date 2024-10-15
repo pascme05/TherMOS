@@ -2,8 +2,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: training                                                          %
-% Date: 11.10.2024                                                        %
+% File: offAdd                                                            %
+% Date: 26.09.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -14,70 +14,88 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function trains a prediction model.
+% This function removes the offset from the output data or set the intial
+% value of the output data.
 % -------------------------------------------------------------------------
 % Inp:  1) data:    Input data struct including tr, te, and vl
-%       2) setup:   All setup values of the current simulation
-%       3) para:    All simulation parameters of the current simulation
-%       4) path:    Structure of all path variables
-% Out:  1) mdl:     Trained model
+%       2) para:    All simulation parameters of the current simulation
+% Out:  1) out:     Adapted input simulation data
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function mdl = training(data, setup, para, path)
+function out = offAdd(data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Training model")
+    disp("START: Offset adding to output data")
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Init
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    off = data.off;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Foster-Model
+    % No removal
     %===================================================
-    if setup.selRC == 1
+    if para.Exp.gen.init == 1
         %----------------------------------------
-        % Fitting 
+        % Adding
         %----------------------------------------
-        timeStart = tic;
-        mdl = rcFit(data.tr, data.vl, para);
-        mdl.timeTrain = toc(timeStart);
-        
-        %----------------------------------------
-        % Model Size 
-        %----------------------------------------
-        mdl.size = numel(mdl.Rth) + numel(mdl.Cth);
+        data.y = data.y + off;
 
         %----------------------------------------
-        % Saving
+        % Msg
         %----------------------------------------
-        mdlName = 'mdl_rc_' + setup.name + '.mat';
-        filename = fullfile(path.mdl, mdlName);
-        save(filename, 'mdl');
+        disp("INFO: Output data unchanged")
+
+    %===================================================
+    % Init to zero
+    %===================================================
+    elseif para.Exp.gen.init == 2
+        %----------------------------------------
+        % Adding
+        %----------------------------------------
+        data.y = data.y + off;
+
+        %----------------------------------------
+        % Msg
+        %----------------------------------------
+        disp("INFO: Initial value of zero is used")
+
+    %===================================================
+    % Remove reference
+    %===================================================
+    elseif para.Exp.gen.init == 3
+        %----------------------------------------
+        % Adding
+        %----------------------------------------
+        data.y = data.y + off;
+
+        %----------------------------------------
+        % Msg
+        %----------------------------------------
+        disp("INFO: Reference signal added subtracted")
+
+    %===================================================
+    % Invalid Input
+    %===================================================
+    else
+        disp("WARN: Invalid input for offset removal")
     end
     
-    %===================================================
-    % State-Space Model
-    %===================================================
-
-    %===================================================
-    % Transfer Model
-    %===================================================
-
-    %===================================================
-    % Arima Model
-    %===================================================
-
-    %===================================================
-    % POD Model
-    %===================================================
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Output
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    out = data;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Training model")
+    disp("DONE: Offset adding to output data")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

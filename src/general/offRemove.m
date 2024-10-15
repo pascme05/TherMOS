@@ -18,14 +18,13 @@
 % value of the output data.
 % -------------------------------------------------------------------------
 % Inp:  1) data:    Input data struct including tr, te, and vl
-%       2) setup:   All setup values of the current simulation
-%       3) para:    All simulation parameters of the current simulation
+%       2) para:    All simulation parameters of the current simulation
 % Out:  1) out:     Adapted input simulation data
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function out = offRemove(data, setup, para)
+function out = offRemove(data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -50,6 +49,14 @@ function out = offRemove(data, setup, para)
     % No removal
     %===================================================
     if para.Exp.gen.init == 1
+        %----------------------------------------
+        % Define Offset
+        %----------------------------------------
+        off = zeros(size(data.y));
+
+        %----------------------------------------
+        % Msg
+        %----------------------------------------
         disp("INFO: Output data unchanged")
 
     %===================================================
@@ -57,7 +64,7 @@ function out = offRemove(data, setup, para)
     %===================================================
     elseif para.Exp.gen.init == 2
         %----------------------------------------
-        % Initial Value
+        % Define Offset
         %----------------------------------------
         if length(size(data.y)) == 3
             initVal = data.y(1,:,:);
@@ -82,9 +89,14 @@ function out = offRemove(data, setup, para)
     %===================================================
     elseif para.Exp.gen.init == 3
         %----------------------------------------
+        % Define Offset
+        %----------------------------------------
+        off = data.r;
+
+        %----------------------------------------
         % Removal
         %----------------------------------------
-        data.y = data.y - data.r;
+        data.y = data.y - off;
 
         %----------------------------------------
         % Msg
@@ -106,6 +118,7 @@ function out = offRemove(data, setup, para)
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     out = data;
+    out.off = off;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output

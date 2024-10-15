@@ -2,8 +2,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: training                                                          %
-% Date: 11.10.2024                                                        %
+% File: saving                                                            %
+% Date: 13.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -14,70 +14,61 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function trains a prediction model.
+% Here goes the description of the function.
 % -------------------------------------------------------------------------
-% Inp:  1) data:    Input data struct including tr, te, and vl
-%       2) setup:   All setup values of the current simulation
-%       3) para:    All simulation parameters of the current simulation
-%       4) path:    Structure of all path variables
-% Out:  1) mdl:     Trained model
+% Inp:  1) Input-1
+%       2) Input-2
+% Out:  1) Output-1
+%       2) Output-2
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function mdl = training(data, setup, para, path)
+function [] = saving(data, setup, para, path)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Training model")
+    disp("START: Saving results")
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Init
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    time = datestr(datetime('now'), 'yyyy-mm-dd_HH-MM-SS');
+    nameData = 'result_data_' + setup.name + '_' + time + '.mat';
+    namePara = 'result_para_' + setup.name + '_' + time + '.mat';
+    nameSetup = 'result_setup_' + setup.name + '_' + time + '.mat';
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Foster-Model
+    % Generate new folder
     %===================================================
-    if setup.selRC == 1
-        %----------------------------------------
-        % Fitting 
-        %----------------------------------------
-        timeStart = tic;
-        mdl = rcFit(data.tr, data.vl, para);
-        mdl.timeTrain = toc(timeStart);
-        
-        %----------------------------------------
-        % Model Size 
-        %----------------------------------------
-        mdl.size = numel(mdl.Rth) + numel(mdl.Cth);
-
-        %----------------------------------------
-        % Saving
-        %----------------------------------------
-        mdlName = 'mdl_rc_' + setup.name + '.mat';
-        filename = fullfile(path.mdl, mdlName);
-        save(filename, 'mdl');
-    end
+    new_folder = fullfile(path.results, setup.name );
+    mkdir(new_folder);
     
     %===================================================
-    % State-Space Model
+    % Save data
     %===================================================
+    %----------------------------------------
+    % Data
+    %----------------------------------------
+    save(fullfile(new_folder, nameData), 'data');
 
-    %===================================================
-    % Transfer Model
-    %===================================================
+    %----------------------------------------
+    % Setup
+    %----------------------------------------
+    save(fullfile(new_folder, namePara), 'setup');
 
-    %===================================================
-    % Arima Model
-    %===================================================
-
-    %===================================================
-    % POD Model
-    %===================================================
-
+    %----------------------------------------
+    % Para
+    %----------------------------------------
+    save(fullfile(new_folder, nameSetup), 'para');
+    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Training model")
+    disp("DONE: Saving results")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
