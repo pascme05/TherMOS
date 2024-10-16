@@ -317,6 +317,8 @@ function [] = main(setup, path)
     %----------------------------------------
     if setup.save == 1
         saving(data, setup, para, path);
+    else
+        disp("INFO: Saving deactivated");
     end
 
     %===================================================

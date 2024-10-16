@@ -14,7 +14,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Here goes the description of the function.
+% This function plots the results from a 1D model.
 % -------------------------------------------------------------------------
 % Inp:  1) data:    All simulation input data as well as prediction
 %       2) results: All obtained accuracy values and results
@@ -36,8 +36,6 @@ function [] = plotResults1D(data, results, setup)
     %===================================================
     % Parameters
     %===================================================
-    [~, nTr] = size(data.tr.X2);                                            % number of training instances
-    [~, nVl] = size(data.vl.X2);                                            % number of validation instances
     [~, Ny] = size(data.te.y);                                              % number of output samples
 
     %===================================================
@@ -46,8 +44,6 @@ function [] = plotResults1D(data, results, setup)
     time = data.te.t;
     yPred = data.pr.y;
     yTest = data.te.y;
-    XPred = data.pr.X;
-    XTest = data.te.X;
     rTest = data.te.r;
     
     %===================================================
@@ -98,8 +94,7 @@ function [] = plotResults1D(data, results, setup)
     % Boxplot
     %----------------------------------------
     subplot(2,2, [1, 2]);
-    boxplot(data.tr.X);
-    xlabel(namesInp')
+    boxplot(data.tr.X, namesInp);
     ylabel('Input Features')
     title('Boxplot of Training Input Features')
     grid on;
@@ -184,10 +179,12 @@ function [] = plotResults1D(data, results, setup)
     hold on;
     title('Scattering Prediction and Residuals');
     for i = 1:Ny
-        scatter(yTest, yPred);
+        scatter(yTest(:,i)/max(yTest(:,i)), yPred(:,i)/max(yPred(:,i)));
         xlabel('True Values');
         ylabel('Pred Values');
     end
+    xlim([0 1])
+    ylim([0 1])
     grid on;
 
     %----------------------------------------
@@ -197,7 +194,7 @@ function [] = plotResults1D(data, results, setup)
     hold on;
     title('Residual Distribution');
     for i = 1:Ny
-        histogram(err,'Normalization','probability');
+        histogram(err(:,i),'Normalization','probability');
         xlabel('Error');
         ylabel('Data Samples (%)');
     end
