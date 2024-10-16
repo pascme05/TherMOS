@@ -74,12 +74,13 @@ function [pred, grt] = testing(mdl, data, setup, para, path)
         pred.y = pred.y(:,1);
         pred.X = pred.X(:,1);
         pred.r = pred.r(:,1);
+        pred.off = pred.off(:,1);
 
         % Testing
         grt.y = data.te.y(:,1);
         grt.X = data.te.X(:,1);
         grt.r = data.te.r(:,1);
-        
+        grt.off = data.te.off(:,1);
     end
     
     %===================================================

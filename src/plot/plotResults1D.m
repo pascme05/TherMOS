@@ -18,14 +18,13 @@
 % -------------------------------------------------------------------------
 % Inp:  1) data:    All simulation input data as well as prediction
 %       2) results: All obtained accuracy values and results
-%       2) para:    All simulation parameters of the current simulation
 %       3) setup:   All simulation setup parameters
 % Out:  1) None
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [] = plotResults1D(data, results, para, setup)
+function [] = plotResults1D(data, results, setup)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -49,7 +48,6 @@ function [] = plotResults1D(data, results, para, setup)
     yTest = data.te.y;
     XPred = data.pr.X;
     XTest = data.te.X;
-    rPred = data.pr.r;
     rTest = data.te.r;
     
     %===================================================
@@ -58,6 +56,7 @@ function [] = plotResults1D(data, results, para, setup)
     namesInp = setup.inp;
     namesOut = setup.out;
     names = [namesInp, namesOut];
+    metrics = ["MAE", "RMSE", "MAX"];
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
@@ -70,12 +69,18 @@ function [] = plotResults1D(data, results, para, setup)
     %===================================================
     % Correlation Analysis
     %===================================================
-    vaCor = corr([data.tr.X; data.tr.y]);
+    vaCor = corr([data.tr.X, data.tr.y]);
 
     %===================================================
     % Residuals
     %===================================================
     err = yTest - yPred;
+
+    %===================================================
+    % Error Metric
+    %===================================================
+    errTot = [results.err.tot.MAE, results.err.tot.RMSE, results.err.tot.MAX];
+    errSS = [results.err.ss.MAE, results.err.ss.RMSE, results.err.ss.MAX];
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -94,7 +99,7 @@ function [] = plotResults1D(data, results, para, setup)
     %----------------------------------------
     subplot(2,2, [1, 2]);
     boxplot(data.tr.X);
-    xlabel(namesInp)
+    xlabel(namesInp')
     ylabel('Input Features')
     title('Boxplot of Training Input Features')
     grid on;
@@ -103,7 +108,7 @@ function [] = plotResults1D(data, results, para, setup)
     % Correlation
     %----------------------------------------
     subplot(2,2,3);
-    h = heatmap(r,'MissingDataColor','w');
+    h = heatmap(vaCor,'MissingDataColor','w');
     h.XDisplayLabels = names;
     h.YDisplayLabels = names;
     title('Pearson Correlation Input/Output')
@@ -125,64 +130,46 @@ function [] = plotResults1D(data, results, para, setup)
     % Init
     %----------------------------------------
     figure;
+    sgtitle('Input Training/Validation/Testing Data (First Dataset only)');
 
     %----------------------------------------
     % Training Data
     %----------------------------------------
-    % Init
-    figure;
-    sgtitle('Input Training Data');
-
-    % Looping
-    for i = 1:nTr
-        subplot(1,nTr,i);
-        yyaxis left
-        plot(data.tr.t2{i}, data.tr.X2{1,i});
-        xlabel('time (sec)');
-        ylabel('losses (W)');
-        yyaxis right
-        plot(data.tr.t2{i}, data.tr.y2{1,i});
-        txt = 'Train Data: ' + string(i);
-        title(txt);
-        ylabel('T (°C)');
-        grid on;
-    end
+    subplot(1,3,1);
+    yyaxis left
+    plot(data.tr.t2{1,1}, data.tr.X2{1,1});
+    xlabel('time (sec)');
+    ylabel('losses (W)');
+    yyaxis right
+    plot(data.tr.t2{1,1}, data.tr.y2{1,1});
+    title('Train Data-1');
+    ylabel('T (°C)');
+    grid on;
 
     %----------------------------------------
     % Validation Data
     %----------------------------------------
-    % Init
-    figure;
-    sgtitle('Input Validation Data');
-
-    % Looping
-    for i = 1:nVl
-        subplot(1,nVl,i);
-        yyaxis left
-        plot(data.vl.t2{i}, data.vl.X2{1,i});
-        xlabel('time (sec)');
-        ylabel('losses (W)');
-        yyaxis right
-        plot(data.vl.t2{i}, data.vl.y2{1,i});
-        txt = 'Validation Data: ' + string(i);
-        title(txt);
-        ylabel('T (°C)');
-        grid on;
-    end
+    subplot(1,3,2);
+    yyaxis left
+    plot(data.vl.t2{1,1}, data.vl.X2{1,1});
+    xlabel('time (sec)');
+    ylabel('losses (W)');
+    yyaxis right
+    plot(data.vl.t2{1,1}, data.vl.y2{1,1});
+    title('Validation Data-1');
+    ylabel('T (°C)');
+    grid on;
 
     %----------------------------------------
     % Testing Data
     %----------------------------------------
-    % Init
-    figure;
-    sgtitle('Input Testing Data');
-
-    % Output
+    subplot(1,3,3);
     plot(time, data.te.X);
     xlabel('time (sec)');
     ylabel('losses (W)');
     yyaxis right
     plot(time, data.te.y);
+    title('Testing Data-1');
     ylabel('T (°C)');
     grid on;
 
@@ -197,15 +184,15 @@ function [] = plotResults1D(data, results, para, setup)
     hold on;
     title('Scattering Prediction and Residuals');
     for i = 1:Ny
-        plot(yTest, yPred);
+        scatter(yTest, yPred);
         xlabel('True Values');
         ylabel('Pred Values');
     end
+    grid on;
 
     %----------------------------------------
     % Error Distribution
     %----------------------------------------
-    figure;
     subplot(2,2,2);
     hold on;
     title('Residual Distribution');
@@ -214,34 +201,78 @@ function [] = plotResults1D(data, results, para, setup)
         xlabel('Error');
         ylabel('Data Samples (%)');
     end
+    grid on;
 
     %----------------------------------------
     % Accuracy Metric
     %----------------------------------------
+    % Total Error
+    subplot(2,2,3);
+    bar(metrics,errTot);
+    ylabel('Error (K)')
+    title('Total Error Values')
+    grid on;
+
+    % Steady Error
+    subplot(2,2,4);
+    bar(metrics,errSS);
+    ylabel('Error (K)')
+    title('Steady State Error Values')
+    grid on;
 
     %===================================================
     % Plotting Predictions
     %===================================================
     %----------------------------------------
+    % Init
+    %----------------------------------------
+    figure;
+    sgtitle('Predicted Temperature and Error for Testing Data');
+
+    %----------------------------------------
     % Predictions
     %----------------------------------------
-    % Sub-Sub Section I
+    % Init
+    subplot(2,1,1);
+    hold on
+
+    % Prediction
+    set(gca,'ColorOrderIndex',1);
+    for i = 1:Ny
+        set(gca,'ColorOrderIndex',i);
+        plot(time, yTest(:,i));
+        plot(time, yPred(:,i),'--');
+    end
     
-    % Sub-Sub Section II
-    
-    % Sub-Sub Section III
+    % Reference
+    plot(time,rTest,'k--');
+
+    % Labels
+    xlabel('time (sec)');
+    ylabel('temperature (°C)');
+    title('Temperature Prediction');
+    grid on;
     
     %----------------------------------------
-    % Errors
+    % Error
     %----------------------------------------
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Post-Processing
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Output
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % Init
+    subplot(2,1,2);
+    hold on
+
+    % Prediction
+    set(gca,'ColorOrderIndex',1);
+    for i = 1:Ny
+        set(gca,'ColorOrderIndex',i);
+        yErr = yTest(:,i) - yPred(:,i);
+        plot(time, yErr);
+    end
+
+    % Labels
+    xlabel('time (sec)');
+    ylabel('error (K)');
+    title('Temperature Prediction Error');
+    grid on;
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
