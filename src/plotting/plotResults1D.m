@@ -180,8 +180,8 @@ function [] = plotResults1D(data, results, setup)
     title('Scattering Prediction and Residuals');
     for i = 1:Ny
         scatter(yTest(:,i)/max(yTest(:,i)), yPred(:,i)/max(yPred(:,i)));
-        xlabel('True Values');
-        ylabel('Pred Values');
+        xlabel('True Values (p.u.)');
+        ylabel('Pred Values (p.u.)');
     end
     xlim([0 1])
     ylim([0 1])
@@ -195,7 +195,7 @@ function [] = plotResults1D(data, results, setup)
     title('Residual Distribution');
     for i = 1:Ny
         histogram(err(:,i),'Normalization','probability');
-        xlabel('Error');
+        xlabel('Error (K)');
         ylabel('Data Samples (%)');
     end
     grid on;
@@ -238,6 +238,7 @@ function [] = plotResults1D(data, results, setup)
     for i = 1:Ny
         set(gca,'ColorOrderIndex',i);
         plot(time, yTest(:,i));
+        set(gca,'ColorOrderIndex',i);
         plot(time, yPred(:,i),'--');
     end
     

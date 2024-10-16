@@ -114,7 +114,7 @@ function [] = main(setup, path)
     % Calc
     %----------------------------------------
     data = dimData(data, setup, para);
-    fprintf('\n');
+    disp('');
     
     %===================================================
     % Update Losses
@@ -130,7 +130,7 @@ function [] = main(setup, path)
     % Calc
     %----------------------------------------
     [data, para] = updLoss(data, para);
-    fprintf('\n');
+    disp('');
     
     %===================================================
     % Offset Removal
@@ -148,7 +148,7 @@ function [] = main(setup, path)
     data.tr = offRemove(data.tr, para);
     data.te = offRemove(data.te, para);
     data.vl = offRemove(data.vl, para);
-    fprintf('\n');
+    disp('');
 
     %===================================================
     % Normalisation
@@ -166,7 +166,7 @@ function [] = main(setup, path)
     [data.tr, para] = normData(data.tr, para, 1);
     [data.te, ~] = normData(data.te, para, 2);
     [data.vl, ~] = normData(data.vl, para, 2);
-    fprintf('\n');
+    disp('');
 
     %===================================================
     % Pre-Padding
@@ -184,7 +184,7 @@ function [] = main(setup, path)
     data.tr = padData(data.tr, para);
     data.te = padData(data.te, para);
     data.vl = padData(data.vl, para);
-    fprintf('\n');
+    disp('');
 
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -212,7 +212,7 @@ function [] = main(setup, path)
         % Training
         %----------------------------------------
         mdl = training(data, setup, para, path);
-        fprintf('\n');
+        disp('');
     else
         %----------------------------------------
         % Empty Model
@@ -234,7 +234,7 @@ function [] = main(setup, path)
     % Testing
     %----------------------------------------
     [data.pr, data.te] = testing(mdl, data, setup, para, path);
-    fprintf('\n');
+    disp('');
     
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -264,7 +264,7 @@ function [] = main(setup, path)
     [data.te, ~] = normData(data.te, para, 3);
     [data.vl, ~] = normData(data.vl, para, 3);
     [data.pr, ~] = normData(data.pr, para, 3);
-    fprintf('\n');
+    disp('');
 
     %===================================================
     % Offset Correction
@@ -283,7 +283,7 @@ function [] = main(setup, path)
     data.te = offAdd(data.te, para);
     data.vl = offAdd(data.vl, para);
     data.pr = offAdd(data.pr, para);
-    fprintf('\n');
+    disp('');
 
     %===================================================
     % Performance
@@ -299,7 +299,7 @@ function [] = main(setup, path)
     % Calc
     %----------------------------------------
     results = performance(data.te, data.pr, para, mdl);
-    fprintf('\n');
+    disp('');
 
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -327,10 +327,10 @@ function [] = main(setup, path)
     %----------------------------------------
     if setup.save == 1
         saving(data, setup, para, path);
-        fprintf('\n');
+        disp('');
     else
         disp("INFO: Saving deactivated");
-        fprintf('\n');
+        disp('');
     end
 
     %===================================================
@@ -347,7 +347,7 @@ function [] = main(setup, path)
     % Printing Console
     %----------------------------------------
     printConsole(data, results, setup);
-    fprintf('\n');
+    disp('');
 
     %===================================================
     % Plotting
@@ -374,7 +374,6 @@ function [] = main(setup, path)
 
         % 2D Output
     end
-    fprintf('\n');
 
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
