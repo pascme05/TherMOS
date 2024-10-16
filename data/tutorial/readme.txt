@@ -1,4 +1,4 @@
-Tutorials
+Tutorials POD
 ---------------------------------------------------------------------------
 exp1:		Different boundary conditions for a symmetrical problem with uniform and constant heat generation
 - exp11:	Boundary conditions with constant temperature at the edges
