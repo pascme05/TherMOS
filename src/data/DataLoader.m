@@ -59,30 +59,27 @@ classdef DataLoader
         %===================================================
         % General Loading
         %===================================================
-        function data = loadData(obj, FileName, SheetName, ID, para, setup)
+        function data = loadData(obj, FileName, SheetName, ID, stat, para, setup)
             %----------------------------------------
             % 1D Xlsx
             %----------------------------------------
             if obj.Type == "xlsx"
                 % Loading
-                obj = loadXlsx(obj, FileName, SheetName, ID, para, setup);
-
-                % Output
-                data = obj;
+                data = loadXlsx(obj, FileName, SheetName, ID, stat, para, setup);
 
             %----------------------------------------
             % 1D Mat
             %----------------------------------------
             elseif obj.Type == "mat" && obj.Dim == 1
                 % Loading
-                obj = loadXlsx(obj, FileName, SheetName, ID, para, setup);
+                obj = loadXlsx(obj, FileName, SheetName, ID, stat, para, setup);
 
             %----------------------------------------
             % 2D Mat
             %----------------------------------------
             elseif obj.Type == "mat" && obj.Dim == 2
                 % Loading
-                obj = loadXlsx(obj, FileName, SheetName, ID, para, setup);
+                obj = loadXlsx(obj, FileName, SheetName, ID, stat, para, setup);
 
             %----------------------------------------
             % Error Handling
@@ -95,55 +92,64 @@ classdef DataLoader
         %===================================================
         % Load xlsx Data
         %===================================================
-        function obj = loadXlsx(obj, FileName, SheetName, ID, para, setup)
+        function obj = loadXlsx(obj, FileName, SheetName, ID, stat, para, setup)
             %----------------------------------------
-            % File based and Sheet based
+            % Loading Data
             %----------------------------------------
-            if para.Dat.gen.sep == 1 || para.Dat.gen.sep == 2
-                % Check if FileName is set
-                if isempty(FileName)
-                    error('ERROR: FileName is not set. Please set the FileName property');
-                end
-                
-                % Try loading the data from the specified worksheet
-                try
-                    obj.Data = readtable(FileName, 'Sheet', SheetName);
-                    disp('INFO: Xlsx data successfully loaded');
-                catch ME
-                    disp('INFO: Failed to load data from the specified worksheet');
-                    rethrow(ME);
-                end
+            % Check file name
+            if isempty(FileName)
+                error('ERROR: FileName is not set. Please set the FileName property');
+            end
 
-                % Resampling Data
-                try
-                    obj.Data = resampleData1D(obj, obj.Data.time);
-                catch ME
-                    disp('INFO: Failed to resample data');
-                    rethrow(ME);
-                end
-
-                % Selecting Input and Ouput
-                try
-                    obj = selectInpOut(obj, setup);
-                catch ME
-                    disp('INFO: Failed to select input and output');
-                    rethrow(ME);
-                end
-
-            %----------------------------------------
-            % ID based
-            %----------------------------------------
-            elseif para.Dat.gen.sep == 3
-
-            %----------------------------------------
-            % Split based
-            %----------------------------------------
-            else
+            % Loading
+            try
+                obj.Data = readtable(FileName, 'Sheet', SheetName);
+                disp('INFO: Xlsx data successfully loaded');
+            catch ME
+                disp('INFO: Failed to load data from the specified worksheet');
+                rethrow(ME);
             end
 
             %----------------------------------------
-            % Output
+            % Selecting Data
             %----------------------------------------
+            % File and Sheet based
+            if para.Dat.gen.sep == 1 || para.Dat.gen.sep == 2
+                disp('INFO: File and sheet based data');
+
+            % ID based
+            elseif para.Dat.gen.sep == 3
+                obj.Data = obj.Data(obj.Data.id == ID, :);
+                disp('INFO: ID based data');
+
+            % Split based
+            else
+                num_samples = height(obj.Data);
+                tr_idx = floor(num_samples * setup.rTr);
+                te_idx = floor(num_samples * setup.rTr);
+
+                if stat == 1
+                    obj.Data = obj.Data(1:tr_idx, :);
+                elseif stat == 2
+                    obj.Data = obj.Data(te_idx:end, :);
+                else
+                    obj.Data = obj.Data(1:tr_idx, :);
+                    num_samples = height(obj.Data);
+                    vl_idx = floor(num_samples * setup.rVl);
+                    obj.Data = obj.Data(1:vl_idx, :);
+                end
+                disp('INFO: Split based data');
+            end
+
+            %----------------------------------------
+            % Selecting Input and Ouput
+            %----------------------------------------
+            try
+                obj = selectInpOut(obj, setup);
+            catch ME
+                disp('INFO: Failed to select input and output');
+                rethrow(ME);
+            end
 
         end
 
@@ -159,57 +165,6 @@ classdef DataLoader
         %===================================================
         function r = loadMat2D(obj,n)
             r = [obj.Value] * n;
-        end
-
-        %===================================================
-        % Resample the Data
-        %===================================================
-        function out = resampleData1D(obj, tref)
-            %----------------------------------------
-            % Check if Data exists
-            %----------------------------------------
-            if isempty(obj.Data)
-                error('ERROR: No data to resample. Load the data first');
-            end
-            
-            %----------------------------------------
-            % Original time vector 
-            %----------------------------------------
-            if nargin < 2
-                error('INFO: You must provide the original time vector');
-            end
-            
-            %----------------------------------------
-            % Create new time vector
-            %----------------------------------------
-            startTime = tref(1);
-            endTime = tref(end);
-            newTime = (startTime:obj.Ts:endTime)';
-            
-            %----------------------------------------
-            % New Output
-            %----------------------------------------
-            names = obj.Data.Properties.VariableNames;
-            out = zeros(length(newTime), width(obj.Data));
-
-            %----------------------------------------
-            % Interpolation
-            %----------------------------------------
-            for col = 1:width(obj.Data)
-                if obj.Intp == 1
-                    out(:, col) = interp1(tref, obj.Data{:, col}, newTime, 'previous');
-                elseif obj.Intp == 3
-                    out(:, col) = interp1(tref, obj.Data{:, col}, newTime, 'spline');
-                else
-                    out(:, col) = interp1(tref, obj.Data{:, col}, newTime, 'linear');
-                end
-            end
-
-            %----------------------------------------
-            % Update the Data 
-            %----------------------------------------
-            out = array2table(out, 'VariableNames', names);
-            disp('INFO: Data resampled');
         end
 
         %===================================================

@@ -64,7 +64,6 @@ function mdl = rcFit(data, val, para)
     %----------------------------------------
     Nt_vl = min(val.Nt);                                                    % minimum number of validation time steps
     [~, N_vl] = size(val.X2);                                               % number of validation datasets used for fitting
-    
 
     %===================================================
     % Variables
