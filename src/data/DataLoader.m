@@ -72,12 +72,12 @@ classdef DataLoader
             %----------------------------------------
             elseif obj.Type == "mat" && obj.Dim == 1
                 % Loading
-                obj = loadXlsx(obj, FileName, SheetName, ID, stat, para, setup);
+                data = loadMat1D(obj, FileName, ID, stat, para, setup);
 
             %----------------------------------------
             % 2D Mat
             %----------------------------------------
-            elseif obj.Type == "mat" && obj.Dim == 2
+            elseif obj.Type == "mat" && obj.Dim >= 2
                 % Loading
                 obj = loadXlsx(obj, FileName, SheetName, ID, stat, para, setup);
 
@@ -156,8 +156,84 @@ classdef DataLoader
         %===================================================
         % Load Matlab 1D Data
         %===================================================
-        function r = loadMat1D(obj,n)
-            r = [obj.Value] * n;
+        function obj = loadMat1D(obj, FileName, ID, stat, para, setup)
+            %----------------------------------------
+            % Loading Data
+            %----------------------------------------
+            % Check file name
+            if isempty(FileName)
+                error('ERROR: FileName is not set. Please set the FileName property');
+            end
+
+            % Loading
+            try
+                obj.Data = load(FileName, "-mat");
+                obj.Data = obj.Data.data;
+                disp('INFO: 1D Matlab data successfully loaded');
+            catch ME
+                disp('INFO: Failed to load data');
+                rethrow(ME);
+            end
+
+            %----------------------------------------
+            % Selecting Data
+            %----------------------------------------
+            % File and Sheet based
+            if para.Dat.gen.sep == 1 || para.Dat.gen.sep == 2
+                disp('INFO: File and sheet based data');
+
+            % ID based
+            elseif para.Dat.gen.sep == 3
+                obj.Data = obj.Data(obj.Data.id == ID, :);
+                disp('INFO: ID based data');
+
+            % Split based
+            else
+                num_samples = height(obj.Data);
+                tr_idx = floor(num_samples * setup.rTr);
+                te_idx = floor(num_samples * setup.rTr);
+
+                if stat == 1
+                    obj.Data = obj.Data(1:tr_idx, :);
+                elseif stat == 2
+                    obj.Data = obj.Data(te_idx:end, :);
+                else
+                    obj.Data = obj.Data(1:tr_idx, :);
+                    num_samples = height(obj.Data);
+                    vl_idx = floor(num_samples * setup.rVl);
+                    obj.Data = obj.Data(1:vl_idx, :);
+                end
+                disp('INFO: Split based data');
+            end
+
+            %----------------------------------------
+            % Selecting Input and Ouput
+            %----------------------------------------
+            % Time
+            obj.t = obj.Data.time;
+
+            % Input
+            obj.X = zeros(length(obj.t), length(setup.inp));
+            for i = 1:length(setup.inp)
+                obj.X(:, i) = obj.Data.(setup.inp(i));
+            end
+
+            % Output
+            obj.y = zeros(length(obj.t), length(setup.inp));
+            for i = 1:length(setup.out)
+                obj.y(:, i) = obj.Data.(setup.out(i));
+            end
+
+            % Reference
+            obj.r = zeros(length(obj.t), length(setup.inp));
+            for i = 1:length(setup.ref)
+                obj.r(:, i) = obj.Data.(setup.ref(i));
+            end
+
+            % Data
+            obj.Data.time = [];
+            obj.Data.id = [];
+
         end
 
         %===================================================
