@@ -58,7 +58,8 @@ function [] = main(setup, path)
     fprintf('SS-Mdl:\t\t\t\t%d\n', setup.selSS);
     fprintf('AR-Mdl:\t\t\t\t%d\n', setup.selAR);
     fprintf('TF-Mdl:\t\t\t\t%d\n', setup.selTF);
-    fprintf('PO-Mdl:\t\t\t\t%d\n', setup.selPO);
+    fprintf('TF-Mdl:\t\t\t\t%d\n', setup.selTF);
+    fprintf('SF-Mdl:\t\t\t\t%d\n', setup.selSF);
     disp('===================================================')
     disp('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
     disp('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
@@ -363,6 +364,7 @@ function [] = main(setup, path)
     % Plot Model
     %----------------------------------------
     if setup.plotMdl == 1
+        plotMdl(data, mdl, setup);
     end
 
     %----------------------------------------

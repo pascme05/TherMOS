@@ -136,7 +136,7 @@ setup.test = 1;                                                             % 0)
 %----------------------------------------
 % Format and Dimension
 %----------------------------------------
-setup.format = 'mat';                                                      % input data format: "xlsx" or "mat"
+setup.format = 'xlsx';                                                      % input data format: "xlsx" or "mat"
 setup.datDim = 1;                                                           % input data dimension: 1) 1D data, 2) 2D data, 3) 3D data
 
 %----------------------------------------
@@ -175,12 +175,13 @@ setup.ref = ["R1", "R2", "R3"];                                             % li
 % 1D Models
 %----------------------------------------
 % Single-Input Single-Output (SISO)
-setup.selRC = 1;
+setup.selRC = 1;                                                            % RC-Model (Foster) 0) de-activated, 1) activated
 
 % Multiple-Input Multiple-Output (MIMO)
-setup.selSS = 0;
-setup.selTF = 0;
-setup.selAR = 0;
+setup.selSS = 0;                                                            % RC-Model (Foster) 0) de-activated, 1) activated
+setup.selTF = 0;                                                            % RC-Model (Foster) 0) de-activated, 1) activated
+setup.selAR = 0;                                                            % RC-Model (Foster) 0) de-activated, 1) activated
+setup.selSF = 0;                                                            % RC-Model (Foster) 0) de-activated, 1) activated
 
 %----------------------------------------
 % 2D Models
@@ -190,6 +191,7 @@ setup.selPO = 0;
 %----------------------------------------
 % Machine Learning
 %----------------------------------------
+setup.selML = 0;
 
 %----------------------------------------
 % Deep Learning

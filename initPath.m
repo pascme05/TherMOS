@@ -41,6 +41,7 @@ function path = initPath()
     path.setup = fullfile(baseDir, 'setup');
     path.src = fullfile(baseDir, 'src');
     path.results = fullfile(baseDir, 'results');
+    path.docu = fullfile(baseDir, 'docu');
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Add folders to MATLAB path
@@ -51,6 +52,7 @@ function path = initPath()
     addpath(genpath(path.setup));
     addpath(genpath(path.src));
     addpath(genpath(path.results));
+    addpath(genpath(path.docu));
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
