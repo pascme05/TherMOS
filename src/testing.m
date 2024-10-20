@@ -86,6 +86,44 @@ function [pred, grt] = testing(mdl, data, setup, para, path)
     %===================================================
     % State-Space Model
     %===================================================
+    if setup.selSS == 1
+        %----------------------------------------
+        % Loading
+        %----------------------------------------
+        if isempty(mdl)
+            try
+                mdlName = 'mdl_ss_' + setup.name + '.mat';
+                filename = fullfile(path.mdl, mdlName);
+                load(filename, 'mdl');
+                disp('INFO: Model loaded successfully.');
+            catch ME
+                disp('WARN: Failed to load the model.');
+                disp(['Error: ', ME.message]);
+            end
+        end
+
+        %----------------------------------------
+        % Fitting 
+        %----------------------------------------
+        timeStart = tic;
+        pred = ssSol(mdl, data.te, para);
+        pred.testTime = toc(timeStart);
+
+        %----------------------------------------
+        % Formatting 
+        %----------------------------------------
+        % Prediction
+        pred.y = pred.y(:,1);
+        pred.X = pred.X(:,1);
+        pred.r = pred.r(:,1);
+        pred.off = pred.off(:,1);
+
+        % Testing
+        grt.y = data.te.y(:,1);
+        grt.X = data.te.X(:,1);
+        grt.r = data.te.r(:,1);
+        grt.off = data.te.off(:,1);
+    end
 
     %===================================================
     % Transfer Model

@@ -61,6 +61,27 @@ function mdl = training(data, setup, para, path)
     %===================================================
     % State-Space Model
     %===================================================
+    if setup.selSS == 1
+        %----------------------------------------
+        % Fitting 
+        %----------------------------------------
+        timeStart = tic;
+        mdl.sys = ssFit(data.tr, data.vl, para);
+        mdl.timeTrain = toc(timeStart);
+
+        %----------------------------------------
+        % Model Size 
+        %----------------------------------------
+        mdl.size = numel(mdl.sys.A) + numel(mdl.sys.B) + ...
+                   numel(mdl.sys.C) + numel(mdl.sys.D);
+
+        %----------------------------------------
+        % Saving
+        %----------------------------------------
+        mdlName = 'mdl_ss_' + setup.name + '.mat';
+        filename = fullfile(path.mdl, mdlName);
+        save(filename, 'mdl');
+    end
 
     %===================================================
     % Transfer Model

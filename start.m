@@ -172,19 +172,17 @@ setup.ref = ["R1", "R2", "R3"];                                             % li
 % Model
 %===================================================
 %----------------------------------------
-% 1D Models
+% Analytical 1D Models
 %----------------------------------------
 % Single-Input Single-Output (SISO)
 setup.selRC = 1;                                                            % RC-Model (Foster) 0) de-activated, 1) activated
 
 % Multiple-Input Multiple-Output (MIMO)
-setup.selSS = 0;                                                            % RC-Model (Foster) 0) de-activated, 1) activated
-setup.selTF = 0;                                                            % RC-Model (Foster) 0) de-activated, 1) activated
-setup.selAR = 0;                                                            % RC-Model (Foster) 0) de-activated, 1) activated
-setup.selSF = 0;                                                            % RC-Model (Foster) 0) de-activated, 1) activated
+setup.selSS = 0;                                                            % SS-Model (State-Space) 0) de-activated, 1) activated
+setup.selSF = 0;                                                            % SF-Model (Structure-Function) 0) de-activated, 1) activated
 
 %----------------------------------------
-% 2D Models
+% Analytical 2D Models
 %----------------------------------------
 setup.selPO = 0;
 

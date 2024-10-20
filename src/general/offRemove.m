@@ -68,10 +68,10 @@ function out = offRemove(data, para)
         %----------------------------------------
         if length(size(data.y)) == 3
             initVal = data.y(1,:,:);
-            off = initVal * ones(size(data.y));
+            off = ones(size(data.y)) .* initVal;
         else
             initVal = data.y(1,:);
-            off = initVal * ones(size(data.y));
+            off = ones(size(data.y)) .* initVal;
         end
 
         %----------------------------------------
