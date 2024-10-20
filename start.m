@@ -184,12 +184,12 @@ setup.selSF = 0;                                                            % SF
 %----------------------------------------
 % Analytical 2D Models
 %----------------------------------------
-setup.selPO = 0;
+setup.selPO = 0;                                                            % PO-Model (Proper-Orthogonal) 0) de-activated, 1) activated
 
 %----------------------------------------
 % Machine Learning
 %----------------------------------------
-setup.selML = 0;
+setup.selML = 0;                                                            % ML-Model (Machine Learning) 0) de-activated, 1) KNN, 2) RF, 3) SVR
 
 %----------------------------------------
 % Deep Learning

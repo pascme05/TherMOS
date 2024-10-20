@@ -29,18 +29,12 @@ function out = offRemove(data, para)
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     disp("START: Offset removal output data")
-
+    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Data
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Pre-Processing
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    Ny = length(data.Out);                                                  % Number of outputs data elements
+    N = length(data.y2);                                                    % Number of structured data element
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -52,7 +46,11 @@ function out = offRemove(data, para)
         %----------------------------------------
         % Define Offset
         %----------------------------------------
-        off = zeros(size(data.y));
+        % Unstructured
+        off = zeros(Ny, 1);
+
+        % Structured
+        off2 = zeros(Ny, N);
 
         %----------------------------------------
         % Msg
@@ -66,18 +64,26 @@ function out = offRemove(data, para)
         %----------------------------------------
         % Define Offset
         %----------------------------------------
-        if length(size(data.y)) == 3
-            initVal = data.y(1,:,:);
-            off = ones(size(data.y)) .* initVal;
-        else
-            initVal = data.y(1,:);
-            off = ones(size(data.y)) .* initVal;
+        % Unstructured
+        initVal = data.y(1,:);
+        off = ones(size(data.y)) .* initVal;
+
+        % Structured
+        off2 = zeros(Ny, N);
+        for i = 1:N
+            off2(:,i) = data.y2{1,i}(1,:);
         end
 
         %----------------------------------------
         % Removal
         %----------------------------------------
+        % Unstructured
         data.y = data.y - off;
+
+        % Structured
+        for i = 1:N
+            data.y2{1,i} = data.y2{1,i} - ones(size(data.y)) .* off2(:,i);
+        end
 
         %----------------------------------------
         % Msg
@@ -92,11 +98,15 @@ function out = offRemove(data, para)
         % Define Offset
         %----------------------------------------
         off = data.r;
+        off2 = data.r2;
 
         %----------------------------------------
         % Removal
         %----------------------------------------
+        % Unstructured
         data.y = data.y - off;
+
+        % Structured
 
         %----------------------------------------
         % Msg
@@ -119,6 +129,7 @@ function out = offRemove(data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     out = data;
     out.off = off;
+    out.off2 = off2;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
