@@ -47,10 +47,13 @@ function out = offRemove(data, para)
         % Define Offset
         %----------------------------------------
         % Unstructured
-        off = zeros(Ny, 1);
+        off = zeros(size(data.y));
 
         % Structured
-        off2 = zeros(Ny, N);
+        off2 = cell(1,N);
+        for i = 1:N
+            off2{1,i} = zeros(size(data.y2{1,i}));
+        end
 
         %----------------------------------------
         % Msg
@@ -69,9 +72,9 @@ function out = offRemove(data, para)
         off = ones(size(data.y)) .* initVal;
 
         % Structured
-        off2 = zeros(Ny, N);
+        off2 = cell(1,N);
         for i = 1:N
-            off2(:,i) = data.y2{1,i}(1,:);
+            off2{1,i} = ones(size(data.y2{1,i})) .* data.y2{1,i}(1,:);
         end
 
         %----------------------------------------
@@ -82,7 +85,7 @@ function out = offRemove(data, para)
 
         % Structured
         for i = 1:N
-            data.y2{1,i} = data.y2{1,i} - ones(size(data.y)) .* off2(:,i);
+            data.y2{1,i} = data.y2{1,i} - off2{1,i};
         end
 
         %----------------------------------------
@@ -107,6 +110,9 @@ function out = offRemove(data, para)
         data.y = data.y - off;
 
         % Structured
+        for i = 1:N
+            data.y2{1,i} = data.y2{1,i} - data.r2{1,i};
+        end
 
         %----------------------------------------
         % Msg

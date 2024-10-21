@@ -281,7 +281,7 @@ function [] = main(setup, path)
     data.tr = offAdd(data.tr, para);
     data.te = offAdd(data.te, para);
     data.vl = offAdd(data.vl, para);
-    data.pr = offAdd(data.pr, para);
+    % data.pr = offAdd(data.pr, para);
     fprintf('\n');
 
     %===================================================
