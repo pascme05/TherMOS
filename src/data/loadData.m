@@ -41,7 +41,7 @@ function data = loadData(para, setup)
     % Data Loader
     %===================================================
     loader = DataLoader(para.Exp.gen.Ts, setup.format, setup.datDim, ...
-                        para.Dat.gen.sep, para.Exp.gen.samp, setup.inp, ...
+                        setup.datSep, para.Exp.gen.samp, setup.inp, ...
                         setup.out);
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -76,7 +76,7 @@ function data = loadData(para, setup)
     %----------------------------------------
     % File based
     %----------------------------------------
-    if para.Dat.gen.sep == 1
+    if setup.datSep == 1
         for i = 1:length(setup.trFile)
             % Data
             temp = loader.loadData(setup.trFile(i), setup.trSheet(1), ...
@@ -95,7 +95,7 @@ function data = loadData(para, setup)
     %----------------------------------------
     % Sheet based
     %----------------------------------------
-    elseif para.Dat.gen.sep == 2
+    elseif setup.datSep == 2
         for i = 1:length(setup.trSheet)
             % Data
             temp = loader.loadData(setup.trFile(1), setup.trSheet(i), ...
@@ -158,7 +158,7 @@ function data = loadData(para, setup)
     %----------------------------------------
     % File based
     %----------------------------------------
-    if para.Dat.gen.sep == 1
+    if setup.datSep == 1
         for i = 1:length(setup.teFile)
             % Data
             temp = loader.loadData(setup.teFile(i), setup.teSheet(1), ...
@@ -177,7 +177,7 @@ function data = loadData(para, setup)
     %----------------------------------------
     % Sheet based
     %----------------------------------------
-    elseif para.Dat.gen.sep == 2
+    elseif setup.datSep == 2
         for i = 1:length(setup.teSheet)
             % Data
             temp = loader.loadData(setup.teFile(1), setup.teSheet(i), ...
@@ -240,7 +240,7 @@ function data = loadData(para, setup)
     %----------------------------------------
     % File based
     %----------------------------------------
-    if para.Dat.gen.sep == 1
+    if setup.datSep == 1
         for i = 1:length(setup.vlFile)
             % Data
             temp = loader.loadData(setup.vlFile(i), setup.vlSheet(1), ...
@@ -259,7 +259,7 @@ function data = loadData(para, setup)
     %----------------------------------------
     % Sheet based
     %----------------------------------------
-    elseif para.Dat.gen.sep == 2
+    elseif setup.datSep == 2
         for i = 1:length(setup.vlSheet)
             % Data
             temp = loader.loadData(setup.vlFile(1), setup.vlSheet(i), ...

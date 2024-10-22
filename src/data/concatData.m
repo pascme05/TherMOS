@@ -107,7 +107,7 @@ function out = concatData(data, setup, para)
     %===================================================
     % Total Time
     %===================================================
-    out.t = 0:Ts:length(out.y)/Ts-Ts;
+    out.t = 0:Ts:length(out.y)*Ts-Ts;
     out.t = out.t';
     
     %===================================================

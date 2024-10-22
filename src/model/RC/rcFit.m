@@ -73,14 +73,14 @@ function mdl = rcFit(data, val, para)
     %----------------------------------------
     Pv = [];                                                                % power losses (W)
     T = [];                                                                 % temperature response (°C)
-    t = 0:Ts:Nt-1;                                                          % input time vector (sec)
+    t = 0:Ts:Nt*Ts-Ts;                                                      % input time vector (sec)
     
     %----------------------------------------
     % Validation
     %----------------------------------------
     Pv_vl = [];                                                             % power losses (W)
     T_vl = [];                                                              % temperature response (°C)
-    t_vl = 0:Ts:Nt_vl-1;                                                    % input time vector (sec)
+    t_vl = 0:Ts:Nt_vl*Ts-Ts;                                                % input time vector (sec)
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing

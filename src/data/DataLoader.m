@@ -114,11 +114,11 @@ classdef DataLoader
             % Selecting Data
             %----------------------------------------
             % File and Sheet based
-            if para.Dat.gen.sep == 1 || para.Dat.gen.sep == 2
+            if setup.datSep == 1 || setup.datSep == 2
                 disp('INFO: File and sheet based data');
 
             % ID based
-            elseif para.Dat.gen.sep == 3
+            elseif setup.datSep == 3
                 obj.Data = obj.Data(obj.Data.id == ID, :);
                 disp('INFO: ID based data');
 
@@ -179,11 +179,11 @@ classdef DataLoader
             % Selecting Data
             %----------------------------------------
             % File and Sheet based
-            if para.Dat.gen.sep == 1 || para.Dat.gen.sep == 2
+            if setup.datSep == 1 || setup.datSep == 2
                 disp('INFO: File and sheet based data');
 
             % ID based
-            elseif para.Dat.gen.sep == 3
+            elseif setup.datSep == 3
                 obj.Data = obj.Data(obj.Data.id == ID, :);
                 disp('INFO: ID based data');
 

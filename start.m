@@ -136,8 +136,9 @@ setup.test = 1;                                                             % 0)
 %----------------------------------------
 % Format and Dimension
 %----------------------------------------
-setup.format = 'xlsx';                                                      % input data format: "xlsx" or "mat"
+setup.format = 'mat';                                                       % input data format: "xlsx" or "mat"
 setup.datDim = 1;                                                           % input data dimension: 1) 1D data, 2) 2D data, 3) 3D data
+setup.datSep = 1;                                                           % input data separation: 1) File based, 2) Sheet based, 3) ID based, 4) Ratio based
 
 %----------------------------------------
 % Training and Testing Selection

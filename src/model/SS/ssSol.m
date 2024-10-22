@@ -17,10 +17,11 @@
 % This function calculates the temperature response for a State-Space
 % system
 %
-%  dT = (2 * tau - Ts) / (2 * tau + Ts) * Tc + (Rth * dt) / (tau + dt)* Pv
+%                     dx/dt = A*x + B*u,
+%                         y = C*x + D*u,    
 %
-% where tau=Rth*Cth is the time constant, dT is the sampling time and Pv 
-% are the power losses.
+% where x is the state vector, u is the input vector, y is the output 
+% vector, and A, B, C, D are matrices defining the system.  
 % -------------------------------------------------------------------------
 % Inp:  1) mdl:     Fitted model parameters
 %       2) data:    Testing input data struct
@@ -66,7 +67,6 @@ function out = ssSol(mdl, data, para)
     % Initial Conditions
     %===================================================
     x0 = zeros(size(mdl.sys.A, 1), 1);
-    opt = compareOptions();
  
     %===================================================
     % Scaling Function

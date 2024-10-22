@@ -51,7 +51,7 @@ function [] = plotMdl(data, mdl, setup)
         Z_t = zeros(size(t));                                               % Initialize Z(t)
         
         %----------------------------------------
-        % Calcuation
+        % Calculation
         %----------------------------------------
         for i = 1:length(Rth)
             Z_t = Z_t + Rth(i) * (1 - exp(-t / tau(i)));
@@ -96,7 +96,68 @@ function [] = plotMdl(data, mdl, setup)
     %===================================================
     % SS-Model
     %===================================================
+    if setup.selSS == 1
+        %----------------------------------------
+        % Init
+        %----------------------------------------
+        A = mdl.sys.A;
+        B = mdl.sys.B;
+        C = mdl.sys.C;
+        D = mdl.sys.D;
+
+        %----------------------------------------
+        % Plotting
+        %----------------------------------------
+        % Create figure
+        figure;
+        
+        % Set figure size
+        set(gcf, 'Position', [100, 100, 800, 600]);
     
+        % Load and display the image (RC network schematic)
+        subplot(2, 1, 1); % Top subplot for image and table
+        axis off; % No axis for the image and table
+        
+        % Load the image (image_file is the path to your image file)
+        img = imread("ssMdl.png");
+
+        % Display the image in the top half of the figure
+        axes('Position', [0.25, 0.7, 0.5, 0.2]);
+        imshow(img);
+        axis off;
+        
+        % Determine the number of matrices to be displayed
+        num_tables = 4;
+        
+        % Define the width each table should take up (assuming equal width for each)
+        table_width = 1 / num_tables;
+        
+        % Define the vertical position and height for all tables (they are aligned horizontally)
+        table_height = 0.1;
+        table_vert_pos = 0.55;
+        
+        % Convert the state-space matrices to display in uitables side by side
+        uitable('Data', A, 'ColumnName', arrayfun(@(x) ['A', num2str(x)], 1:size(A, 2), 'UniformOutput', false), ...
+                'RowName', arrayfun(@(x) ['A', num2str(x)], 1:size(A, 1), 'UniformOutput', false), ...
+                'Units', 'normalized', 'Position', [0, table_vert_pos, table_width, table_height]);
+        
+        uitable('Data', B, 'ColumnName', arrayfun(@(x) ['B', num2str(x)], 1:size(B, 2), 'UniformOutput', false), ...
+                'RowName', arrayfun(@(x) ['B', num2str(x)], 1:size(B, 1), 'UniformOutput', false), ...
+                'Units', 'normalized', 'Position', [table_width, table_vert_pos, table_width, table_height]);
+        
+        uitable('Data', C, 'ColumnName', arrayfun(@(x) ['C', num2str(x)], 1:size(C, 2), 'UniformOutput', false), ...
+                'RowName', arrayfun(@(x) ['C', num2str(x)], 1:size(C, 1), 'UniformOutput', false), ...
+                'Units', 'normalized', 'Position', [2 * table_width, table_vert_pos, table_width, table_height]);
+        
+        uitable('Data', D, 'ColumnName', arrayfun(@(x) ['D', num2str(x)], 1:size(D, 2), 'UniformOutput', false), ...
+                'RowName', arrayfun(@(x) ['D', num2str(x)], 1:size(D, 1), 'UniformOutput', false), ...
+                'Units', 'normalized', 'Position', [3 * table_width, table_vert_pos, table_width, table_height]);
+    
+        % Plot the transient thermal impedance in the lower half of the figure
+        subplot(2, 1, 2);
+        step(mdl.sys);
+    end
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -163,6 +163,7 @@ function [] = plotResults1D(data, results, setup)
     % Testing Data
     %----------------------------------------
     subplot(1,3,3);
+    yyaxis left
     plot(time, data.te.X);
     xlabel('time (sec)');
     ylabel('losses (W)');
