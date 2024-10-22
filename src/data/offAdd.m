@@ -34,6 +34,8 @@ function out = offAdd(data, para)
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     off = data.off;
+    off2 = data.off2;
+    N = length(data.y2);                                                    % Number of structured data element
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -45,7 +47,13 @@ function out = offAdd(data, para)
         %----------------------------------------
         % Adding
         %----------------------------------------
+        % Unstructured
         data.y = data.y + off;
+
+        % Structured
+        for i = 1:N
+            data.y2{1,i} = data.y2{1,i} + off2{1,i};
+        end
 
         %----------------------------------------
         % Msg
@@ -59,7 +67,13 @@ function out = offAdd(data, para)
         %----------------------------------------
         % Adding
         %----------------------------------------
+        % Unstructured
         data.y = data.y + off;
+        
+        % Structured
+        for i = 1:N
+            data.y2{1,i} = data.y2{1,i} + off2{1,i};
+        end
 
         %----------------------------------------
         % Msg
@@ -73,7 +87,13 @@ function out = offAdd(data, para)
         %----------------------------------------
         % Adding
         %----------------------------------------
+        % Unstructured
         data.y = data.y + off;
+        
+        % Structured
+        for i = 1:N
+            data.y2{1,i} = data.y2{1,i} + off2{1,i};
+        end
 
         %----------------------------------------
         % Msg

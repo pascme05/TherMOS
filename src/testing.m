@@ -113,16 +113,16 @@ function [pred, grt] = testing(mdl, data, setup, para, path)
         % Formatting 
         %----------------------------------------
         % Prediction
-        pred.y = pred.y(:,1);
-        pred.X = pred.X(:,1);
-        pred.r = pred.r(:,1);
-        pred.off = pred.off(:,1);
+        pred.y = pred.y;
+        pred.X = pred.X;
+        pred.r = pred.r;
+        pred.off = pred.off;
 
         % Testing
-        grt.y = data.te.y(:,1);
-        grt.X = data.te.X(:,1);
-        grt.r = data.te.r(:,1);
-        grt.off = data.te.off(:,1);
+        grt.y = data.te.y;
+        grt.X = data.te.X;
+        grt.r = data.te.r;
+        grt.off = data.te.off;
     end
 
     %===================================================

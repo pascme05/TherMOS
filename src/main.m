@@ -165,7 +165,7 @@ function [] = main(setup, path)
     % Calc
     %----------------------------------------
     data.tr = padData(data.tr, para);
-    data.te = padData(data.te, para);
+    % data.te = padData(data.te, para);
     data.vl = padData(data.vl, para);
     fprintf('\n');
 

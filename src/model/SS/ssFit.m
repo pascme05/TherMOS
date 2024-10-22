@@ -142,8 +142,10 @@ function mdl = ssFit(data, ~, para)
     %===================================================
     % Fitting
     %===================================================
-    disp("INFO: State-Space Parameters");
-    disp(sys);
+    disp("INFO: State-Space Parameters A, B, C");
+    disp(sys.A);
+    disp(sys.B);
+    disp(sys.C);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output

@@ -60,7 +60,11 @@ function [] = plotResults1D(data, results, setup)
     %===================================================
     % Feature Ranking
     %===================================================
-    [~, weights] = relieff(data.tr.X,data.tr.y,10);
+    weights = zeros(length(namesInp), length(namesOut));
+    for i = 1:Ny
+        [~, weights(:,i)] = relieff(data.tr.X,data.tr.y(:,i),10);
+    end
+    weights = mean(weights,2);
 
     %===================================================
     % Correlation Analysis
@@ -75,8 +79,8 @@ function [] = plotResults1D(data, results, setup)
     %===================================================
     % Error Metric
     %===================================================
-    errTot = [results.err.tot.MAE, results.err.tot.RMSE, results.err.tot.MAX];
-    errSS = [results.err.ss.MAE, results.err.ss.RMSE, results.err.ss.MAX];
+    errTot = [results.err.tot.MAE; results.err.tot.RMSE; results.err.tot.MAX];
+    errSS = [results.err.ss.MAE; results.err.ss.RMSE; results.err.ss.MAX];
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation

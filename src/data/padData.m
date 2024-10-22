@@ -34,15 +34,8 @@ function data = padData(data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     pad = para.Exp.gen.pad;                                                 % padding length (samples)
     Ts = data.Ts;                                                           % sampling time of the data (sec)
+    N = length(data.y2);                                                    % Number of structured data element
 
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Data
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Pre-Processing
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -53,13 +46,25 @@ function data = padData(data, para)
         fprintf('INFO: Adding padding samples %d\n', pad);
 
         %===================================================
-        % Padding
+        % Padding Unstructured
         %===================================================
         data.X = [zeros(pad, size(data.X,2)); data.X];
         data.y = [zeros(pad, size(data.y,2)); data.y];
         data.r = [zeros(pad, size(data.r,2)); data.r];
         data.id = [zeros(pad, size(data.id,2)); data.id];
-        data.t2 = [zeros(pad, size(data.t2,2)); data.t2];       
+        data.t = [zeros(pad, 1); data.t];  
+        data.off = [zeros(pad, size(data.off,2)); data.off];
+
+        %===================================================
+        % Padding Structured
+        %===================================================
+        for i = 1:N
+            data.X2{1,i} = [zeros(pad, size(data.X2{1,i},2)); data.X2{1,i}];
+            data.y2{1,i} = [zeros(pad, size(data.y2{1,i},2)); data.y2{1,i}];
+            data.r2{1,i} = [zeros(pad, size(data.r2{1,i},2)); data.r2{1,i}];
+            data.t2{i,1} = [zeros(1,pad), data.t2{i,1}];  
+            data.off2{1,i} = [zeros(pad, size(data.off2{1,i},2)); data.off2{1,i}];
+        end
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -68,10 +73,6 @@ function data = padData(data, para)
     data.t = 0:Ts:length(data.y)/Ts-Ts;
     data.t = data.t';
 
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Output
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

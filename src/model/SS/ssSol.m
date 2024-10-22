@@ -65,7 +65,8 @@ function out = ssSol(mdl, data, para)
     %===================================================
     % Initial Conditions
     %===================================================
-    x0 = zeros(size(mdl.sys.A, 1), 1); 
+    x0 = zeros(size(mdl.sys.A, 1), 1);
+    opt = compareOptions();
  
     %===================================================
     % Scaling Function
