@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: ssFit                                                             %
+% File: sfFit                                                             %
 % Date: 13.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -14,14 +14,13 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function fits a state-space model capturing the system dynamics of
+% This function fits a structure function capturing the system dynamics of
 % the temperature response:
 %
-%                     dx/dt = A*x + B*u,
-%                         y = C*x + D*u,    
+%                       C*dT/dt = P(t) - G*T
 %
-% where x is the state vector, u is the input vector, y is the output 
-% vector, and A, B, C, D are matrices defining the system.                 
+% where T is the temperature vector, u is the loss vector, and C is the
+% thermal capacitance matrix 
 % -------------------------------------------------------------------------
 % Inp:  1) data:    Training input data struct
 %       2) val:     Validation input data struct
@@ -31,11 +30,11 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function mdl = ssFit(data, ~, para)
+function mdl = sfFit(data, setup, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Fitting State Space Model")
+    disp("START: Fitting thermal structure function")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
@@ -43,116 +42,105 @@ function mdl = ssFit(data, ~, para)
     %===================================================
     % General Parameter
     %===================================================
-    K = para.Mdl.ss.K;                                                      % model order state space
+    K = para.Mdl.sf.K;                                                      % model order structure function
     Ts = data.Ts;                                                           % sampling time (sec)
-    Kmax = para.Mdl.gen.Kmax;                                               % maximum state space order
+    Kmax = para.Mdl.gen.Kmax;                                               % maximum model order
     
     %===================================================
-    % Model Parameter
+    % Solver Parameter
     %===================================================
-    dis = para.Mdl.ss.dis;
-    noise = para.Mdl.ss.noise;
-    init = para.Mdl.ss.init;
-    sta = para.Mdl.ss.sta;
+
+    %===================================================
+    % Variables
+    %===================================================
+    Pv = data.X;
+    T = data.y;
+    t = data.t;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %===================================================
-    % Solver Options
-    %===================================================
-    opt = ssestOptions;
+    opt = optimoptions('fminunc', 'Algorithm', 'quasi-newton', 'Display', 'iter');
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Solver Options
+    % Init Parameter
     %===================================================
     %----------------------------------------
-    % Discretization type
+    % Get the number of nodes
     %----------------------------------------
-    if dis == 1
-        opt.Focus = 'simulation';
-    else
-        opt.Focus = 'prediction';
-    end
+    [Nt, M] = size(Pv);  
+    [~, N] = size(T); 
+
+    %----------------------------------------
+    % Define initial guesses for C and G
+    %----------------------------------------
+    C0 = ones(M, N); 
+    G0 = ones(M, N);
+    init = [C0(:); G0(:)];
+
+    %===================================================
+    % Solve
+    %===================================================
+    [params_opt, fval] = fminunc(@(params) costFnc(params, Pv, T, t, M, N), init, opt);
+
     
-    %----------------------------------------
-    % Solver initial conditions
-    %----------------------------------------
-    if init == 1
-        opt.InitialState = 'zero';
-    else
-        opt.InitialState = 'estimate';
-    end
     
-    %----------------------------------------
-    % Stability constraint
-    %----------------------------------------
-    if sta == 2
-        opt.EnforceStability = true;
-    else
-        opt.EnforceStability = false;
-    end
-
-    %===================================================
-    % Fitting
-    %===================================================
-    %----------------------------------------
-    % Optimal Moder Order
-    %----------------------------------------
-    if K == -1
-        % Noise
-        if noise == 2
-            sys = ssest(data.idData, 1:Kmax, 'DisturbanceModel','estimate', opt, 'Ts', Ts);
-        
-        % No Noise
-        else
-            sys = ssest(data.idData, 1:Kmax, 'DisturbanceModel','none', opt, 'Ts', Ts);
-        end
-
-    %----------------------------------------
-    % Fixed Model Order 
-    %----------------------------------------
-    else
-        % Noise
-        if noise == 2
-            sys = ssest(data.idData, K, opt, 'DisturbanceModel','estimate', 'Ts', Ts);
-        
-        % No Noise
-        else
-            sys = ssest(data.idData, K, opt, 'DisturbanceModel','none', 'Ts', Ts);
-        end
-    end
-
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Convert to continuous
+    % Extract Values
     %===================================================
-    if dis == 2
-        sys = d2c(sys, 'foh');
-    end
 
     %===================================================
-    % Fitting
+    % Solve
     %===================================================
-    disp("INFO: State-Space Parameters A, B, C");
-    disp(sys.A);
-    disp(sys.B);
-    disp(sys.C);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    mdl = sys;
-
+    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Fitting State Space Model")
+    disp("DONE: Fitting thermal structure function")
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Additional Functions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%===================================================
+% Cost Function
+%===================================================
+function error = costFnc(params, P, T_true, time, M, L)
+    % Extract C and G from the parameter vector and reshape them to MxL matrices
+    C = reshape(params(1:M*L), M, L); 
+    G = reshape(params(M*L+1:end), M, L);
+
+    % Solve the differential equation using ode45 for each node
+    T0 = T_true(1, :);
+    
+    % Define the differential equation
+    ode_fun = @(t, T) (P_interp(t, P, time) - T * G') ./ C'; 
+
+    % Solve the ODE system using ode45
+    [~, T_model] = ode45(ode_fun, time, T0);
+
+    % Interpolate model output to match measured data size
+    T_mdl_int = interp1(time, T_model, time);
+
+    % Calculate the mean squared error between model and measured data
+    error = sum((T_true - T_mdl_int).^2, 'all');
+end
+
+%===================================================
+% Interpolation
+%===================================================
+function P_t = P_interp(t, P, time)
+    P_t = interp1(time, P, t);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
