@@ -42,9 +42,7 @@ function mdl = sfFit(data, setup, para)
     %===================================================
     % General Parameter
     %===================================================
-    K = para.Mdl.sf.K;                                                      % model order structure function
     Ts = data.Ts;                                                           % sampling time (sec)
-    Kmax = para.Mdl.gen.Kmax;                                               % maximum model order
     
     %===================================================
     % Solver Parameter

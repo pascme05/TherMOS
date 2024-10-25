@@ -84,13 +84,29 @@ function mdl = training(data, setup, para, path)
     end
 
     %===================================================
-    % Transfer Model
+    % Structure Function
     %===================================================
+    if setup.selSF == 1
+        %----------------------------------------
+        % Fitting 
+        %----------------------------------------
+        timeStart = tic;
+        mdl.sys = sfFit(data.tr, data.vl, para);
+        mdl.timeTrain = toc(timeStart);
 
-    %===================================================
-    % Arima Model
-    %===================================================
+        %----------------------------------------
+        % Model Size 
+        %----------------------------------------
+        mdl.size = numel(mdl.sys.Rth) + numel(mdl.sys.Cth);
 
+        %----------------------------------------
+        % Saving
+        %----------------------------------------
+        mdlName = 'mdl_sf_' + setup.name + '.mat';
+        filename = fullfile(path.mdl, mdlName);
+        save(filename, 'mdl');
+    end
+    
     %===================================================
     % POD Model
     %===================================================
