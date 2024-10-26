@@ -121,6 +121,7 @@ setup.config = "default";                                                   % na
 %----------------------------------------
 setup.plotOut = 1;                                                          % 0) model output is not plotted, 1) model output is plotted
 setup.plotMdl = 1;                                                          % 0) model structure is not plotted, 1) model structure is plotted
+setup.featRank = 0;                                                         % 0) No feature ranking, 1) feature ranking
 setup.save = 0;                                                             % 0) output data not saved, 1) output data saved
 
 %----------------------------------------
@@ -176,7 +177,7 @@ setup.ref = ["R1", "R2", "R3"];                                             % li
 % Analytical 1D Models
 %----------------------------------------
 % Single-Input Single-Output (SISO)
-setup.selRC = 1;                                                            % RC-Model (Foster) 0) de-activated, 1) activated
+setup.selRC = 0;                                                            % RC-Model (Foster) 0) de-activated, 1) activated
 
 % Multiple-Input Multiple-Output (MIMO)
 setup.selSS = 0;                                                            % SS-Model (State-Space) 0) de-activated, 1) activated
@@ -188,13 +189,9 @@ setup.selSF = 0;                                                            % SF
 setup.selPO = 0;                                                            % PO-Model (Proper-Orthogonal) 0) de-activated, 1) activated
 
 %----------------------------------------
-% Machine Learning
+% Machine/Deep Learning (tbi)
 %----------------------------------------
 setup.selML = 0;                                                            % ML-Model (Machine Learning) 0) de-activated, 1) KNN, 2) RF, 3) SVR
-
-%----------------------------------------
-% Deep Learning
-%----------------------------------------
 setup.selDL = 0;                                                            % DL-Model (Machine Learning) 0) de-activated, 1) DNN, 2) CNN, 3) LSTM
 
 

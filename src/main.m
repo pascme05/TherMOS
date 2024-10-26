@@ -232,7 +232,7 @@ function [] = main(setup, path)
     %----------------------------------------
     % Testing
     %----------------------------------------
-    [data.pr, data.te] = testing(mdl, data, setup, para, path);
+    [data.pr, data.te, mdl] = testing(mdl, data, setup, para, path);
     fprintf('\n');
     
 

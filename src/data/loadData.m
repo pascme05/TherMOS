@@ -116,17 +116,17 @@ function data = loadData(para, setup)
     %----------------------------------------
     else
         % Data
-        data.tr = loader.loadData(setup.trFile(1), setup.trSheet(1), ...
-                                  setup.trID, stat, para, setup);
+        temp = loader.loadData(setup.trFile(1), setup.trSheet(1), ...
+                               setup.trID, stat, para, setup);
 
         % Resample
-        [xOut, yOut, rOut, tOut] = resmpData(data.tr, para);
+        [xOut, yOut, rOut, tOut] = resmpData(temp, para);
 
         % Adapt
-        data.tr.X = xOut;
-        data.tr.y = yOut;
-        data.tr.r = rOut;
-        data.tr.t = tOut;
+        data.tr.X{1,1} = xOut;
+        data.tr.y{1,1} = yOut;
+        data.tr.r{1,1} = rOut;
+        data.tr.t{1,1} = tOut;
     end
 
     %===================================================
@@ -198,17 +198,17 @@ function data = loadData(para, setup)
     %----------------------------------------
     else
         % Data
-        data.te = loader.loadData(setup.teFile(1), setup.teSheet(1), ...
+        temp = loader.loadData(setup.teFile(1), setup.teSheet(1), ...
                                   setup.teID, stat, para, setup);
 
         % Resample
-        [xOut, yOut, rOut, tOut] = resmpData(data.tr, para);
+        [xOut, yOut, rOut, tOut] = resmpData(temp, para);
 
         % Adapt
-        data.te.X = xOut;
-        data.te.y = yOut;
-        data.te.r = rOut;
-        data.te.t = tOut;
+        data.te.X{1,1} = xOut;
+        data.te.y{1,1} = yOut;
+        data.te.r{1,1} = rOut;
+        data.te.t{1,1} = tOut;
     end
 
     %===================================================
@@ -280,17 +280,17 @@ function data = loadData(para, setup)
     %----------------------------------------
     else
         % Data
-        data.vl = loader.loadData(setup.vlFile(1), setup.vlSheet(1), ...
+        temp = loader.loadData(setup.vlFile(1), setup.vlSheet(1), ...
                                   setup.vlID, stat, para, setup);
 
         % Resample
         [xOut, yOut, rOut, tOut] = resmpData(temp, para);
 
         % Adapt
-        data.vl.X{i} = xOut;
-        data.vl.y{i} = yOut;
-        data.vl.r{i} = rOut;
-        data.vl.t{i} = tOut;
+        data.vl.X{1,1} = xOut;
+        data.vl.y{1,1} = yOut;
+        data.vl.r{1,1} = rOut;
+        data.vl.t{1,1} = tOut;
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -119,7 +119,17 @@ classdef DataLoader
 
             % ID based
             elseif setup.datSep == 3
-                obj.Data = obj.Data(obj.Data.id == ID, :);
+                if stat == 1
+                    ID = unique(obj.Data.id);
+                    ID = setdiff(ID, setup.teID);
+                    ID = setdiff(ID, setup.vlID);
+                elseif stat == 2
+                    ID = setup.teID;
+                else
+                    ID = setup.vlID;
+                end
+                rowsToKeep = ismember(obj.Data.id, ID);
+                obj.Data = obj.Data(rowsToKeep, :);
                 disp('INFO: ID based data');
 
             % Split based
@@ -184,7 +194,17 @@ classdef DataLoader
 
             % ID based
             elseif setup.datSep == 3
-                obj.Data = obj.Data(obj.Data.id == ID, :);
+                if stat == 1
+                    ID = unique(obj.Data.id);
+                    ID = setdiff(ID, setup.teID);
+                    ID = setdiff(ID, setup.vlID);
+                elseif stat == 2
+                    ID = setup.teID;
+                else
+                    ID = setup.vlID;
+                end
+                rowsToKeep = ismember(obj.Data.id, ID);
+                obj.Data = obj.Data(rowsToKeep, :);
                 disp('INFO: ID based data');
 
             % Split based
@@ -219,13 +239,13 @@ classdef DataLoader
             end
 
             % Output
-            obj.y = zeros(length(obj.t), length(setup.inp));
+            obj.y = zeros(length(obj.t), length(setup.out));
             for i = 1:length(setup.out)
                 obj.y(:, i) = obj.Data.(setup.out(i));
             end
 
             % Reference
-            obj.r = zeros(length(obj.t), length(setup.inp));
+            obj.r = zeros(length(obj.t), length(setup.out));
             for i = 1:length(setup.ref)
                 obj.r(:, i) = obj.Data.(setup.ref(i));
             end

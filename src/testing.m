@@ -22,12 +22,13 @@
 %       4) para:    All simulation parameters of the current simulation
 %       5) path:    Structure of all path variables
 % Out:  1) pred:    Predicted output
-%       2) grt:    Updated grt data
+%       2) grt:     Updated grt data
+%       3) mdl:     Loaded model
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [pred, grt] = testing(mdl, data, setup, para, path)
+function [pred, grt, mdl] = testing(mdl, data, setup, para, path)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -235,6 +236,69 @@ function [pred, grt] = testing(mdl, data, setup, para, path)
             grt.r = data.te.r(:,1);
             grt.off = data.te.off(:,1);
         end
+    end
+
+    %===================================================
+    % DL Model
+    %===================================================
+    if setup.selDL ~= 0
+        %----------------------------------------
+        % Name
+        %----------------------------------------
+        if setup.selDL == 1
+            name = 'mdl_dl_dnn_';
+        elseif setup.selDL == 2
+            name = 'mdl_dl_cnn_';
+        elseif setup.selDL == 3
+            name = 'mdl_dl_lstm_';
+        else
+            name = 'mdl_dl_dnn_';
+        end
+
+        %----------------------------------------
+        % Loading
+        %----------------------------------------
+        if isempty(mdl)
+            try
+                mdlName = name + setup.name + '.mat';
+                filename = fullfile(path.mdl, mdlName);
+                load(filename, 'mdl');
+                disp('INFO: Model loaded successfully.');
+            catch ME
+                disp('WARN: Failed to load the model.');
+                disp(['Error: ', ME.message]);
+            end
+        end
+
+        %----------------------------------------
+        % Fitting 
+        %----------------------------------------
+        timeStart = tic;
+        if setup.selDL == 1
+            pred = dnnSol(mdl, data.te, para);
+        elseif setup.selDL == 2
+            pred = cnnSol(mdl, data.te, para);
+        elseif setup.selDL == 3
+            pred = lstmSol(mdl, data.te, para);
+        else
+            pred = dnnSol(mdl, data.te, para);
+        end
+        pred.testTime = toc(timeStart);
+
+        %----------------------------------------
+        % Formatting 
+        %----------------------------------------
+        % Prediction
+        pred.y = pred.y;
+        pred.X = pred.X;
+        pred.r = pred.r;
+        pred.off = pred.off;
+
+        % Testing
+        grt.y = data.te.y;
+        grt.X = data.te.X;
+        grt.r = data.te.r;
+        grt.off = data.te.off;
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

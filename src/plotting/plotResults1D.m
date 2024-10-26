@@ -61,10 +61,12 @@ function [] = plotResults1D(data, results, setup)
     % Feature Ranking
     %===================================================
     weights = zeros(length(namesInp), length(namesOut));
-    for i = 1:Ny
-        [~, weights(:,i)] = relieff(data.tr.X,data.tr.y(:,i),10);
+    if setup.featRank == 1
+        for i = 1:Ny
+            [~, weights(:,i)] = relieff(data.tr.X,data.tr.y(:,i),10);
+        end
+        weights = mean(weights,2);
     end
-    weights = mean(weights,2);
 
     %===================================================
     % Correlation Analysis

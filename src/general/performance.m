@@ -129,13 +129,28 @@ function out = performance(dataTest, dataPred, para, mdl)
     %===================================================
     % Times
     %===================================================
-    out.time.train = mdl.timeTrain;
+    %----------------------------------------
+    % Training
+    %----------------------------------------
+    if isempty(mdl)
+        out.time.train = 0;
+    else
+        out.time.train = mdl.timeTrain;
+    end
+
+    %----------------------------------------
+    % Testing
+    %----------------------------------------
     out.time.test = dataPred.testTime;
 
     %===================================================
     % Memory
     %===================================================
-    out.mem = mdl.size;
+    if isempty(mdl)
+        out.mem = 0;
+    else
+        out.mem = mdl.size;
+    end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
