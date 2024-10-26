@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: ssFit                                                             %
+% File: dtFit                                                             %
 % Date: 13.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -14,14 +14,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function fits a state-space model capturing the system dynamics of
-% the temperature response:
-%
-%                     dx/dt = A*x + B*u,
-%                         y = C*x + D*u,    
-%
-% where x is the state vector, u is the input vector, y is the output 
-% vector, and A, B, C, D are matrices defining the system.                 
+% This function fits a decision tree model.                
 % -------------------------------------------------------------------------
 % Inp:  1) data:    Training input data struct
 %       2) val:     Validation input data struct
@@ -31,11 +24,11 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function mdl = ssFit(data, ~, para)
+function mdl = dtFit(data, val, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Fitting State Space Model")
+    disp("START: Fitting DT ML model")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
@@ -43,116 +36,99 @@ function mdl = ssFit(data, ~, para)
     %===================================================
     % General Parameter
     %===================================================
-    K = para.Mdl.ss.K;                                                      % model order state space
-    Ts = data.Ts;                                                           % sampling time (sec)
-    Kmax = para.Mdl.gen.Kmax;                                               % maximum state space order
+    Nt = min(data.Nt);                                                      % minimum number of training time steps
+    [~, N] = size(data.X2);                                                 % number of training datasets used for fitting
+    Nt_vl = min(val.Nt);                                                    % minimum number of validation time steps
+    [~, N_vl] = size(val.X2);                                               % number of validation datasets used for fitting
     
     %===================================================
     % Model Parameter
     %===================================================
-    dis = para.Mdl.ss.dis;
-    noise = para.Mdl.ss.noise;
-    init = para.Mdl.ss.init;
-    sta = para.Mdl.ss.sta;
+    leaf = para.Mdl.dt.leaf;
+    split = para.Mdl.dt.split;
+    parent = para.Mdl.dt.parent;
+
+    %===================================================
+    % Variables
+    %===================================================
+    Pv = data.X;
+    Pv_vl = val.X;
+    T = data.y;
+    T_vl = val.y;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Solver Options
+    % Averaging Losses
     %===================================================
-    opt = ssestOptions;
+    %----------------------------------------
+    % Training
+    %----------------------------------------
+    for i = 1:N
+        if i == 1
+            T = data.y2{1,i}(1:Nt,1);
+        else
+            T = T + data.y2{1,i}(1:Nt,1);
+        end
+    end
+    T = T / N;
+    
+    %----------------------------------------
+    % Validation
+    %----------------------------------------
+    for i = 1:N_vl
+        if i == 1
+            T_vl = val.y2{1,i}(1:Nt_vl,1);
+        else
+            T_vl = T_vl + val.y2{1,i}(1:Nt_vl,1);
+        end
+    end
+    T_vl = T_vl / N_vl;
+
+    %===================================================
+    % Init Value
+    %===================================================
+    T_vl = T_vl - T_vl(1);
+    T = T - T(1);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Solver Options
+    % Optimal Model
     %===================================================
-    %----------------------------------------
-    % Discretization type
-    %----------------------------------------
-    if dis == 1
-        opt.Focus = 'simulation';
-    else
-        opt.Focus = 'prediction';
-    end
-    
-    %----------------------------------------
-    % Solver initial conditions
-    %----------------------------------------
-    if init == 1
-        opt.InitialState = 'zero';
-    else
-        opt.InitialState = 'estimate';
-    end
-    
-    %----------------------------------------
-    % Stability constraint
-    %----------------------------------------
-    if sta == 2
-        opt.EnforceStability = true;
-    else
-        opt.EnforceStability = false;
-    end
-
-    %===================================================
-    % Fitting
-    %===================================================
-    %----------------------------------------
-    % Optimal Moder Order
-    %----------------------------------------
     if para.Mdl.gen.opt == 1
-        % Noise
-        if noise == 2
-            sys = ssest(data.idData, 1:Kmax, 'DisturbanceModel','estimate', opt, 'Ts', Ts);
+        %----------------------------------------
+        % Optimise
+        %----------------------------------------
+        mdl = fitrtree(Pv_vl,T_vl,'OptimizeHyperparameters','auto',...
+                                  'HyperparameterOptimizationOptions',...
+                                   struct('AcquisitionFunctionName', ...
+                                          'expected-improvement-plus'));
         
-        % No Noise
-        else
-            sys = ssest(data.idData, 1:Kmax, 'DisturbanceModel','none', opt, 'Ts', Ts);
-        end
-
-    %----------------------------------------
-    % Fixed Model Order 
-    %----------------------------------------
-    else
-        % Noise
-        if noise == 2
-            sys = ssest(data.idData, K, opt, 'DisturbanceModel','estimate', 'Ts', Ts);
-        
-        % No Noise
-        else
-            sys = ssest(data.idData, K, opt, 'DisturbanceModel','none', 'Ts', Ts);
-        end
-    end
-
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Post-Processing
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %===================================================
-    % Convert to continuous
-    %===================================================
-    if dis == 2
-        sys = d2c(sys, 'foh');
+        %----------------------------------------
+        % Extract Parameters
+        %----------------------------------------
+        leaf = mdl.ModelParameters.MinLeaf;
+        split = mdl.ModelParameters.MaxSplits;
+        parent = mdl.ModelParameters.MinParent;
     end
 
     %===================================================
-    % Fitting
+    % Fixed Order Model
     %===================================================
-    disp("INFO: State-Space Parameters A, B, C");
-    disp(sys.A);
-    disp(sys.B);
-    disp(sys.C);
-
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Output
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    mdl = sys;
+    mdl = fitrtree(Pv, T, ...
+                   'MinLeafSize', leaf, ...
+                   'MaxNumSplits', split, ...
+                   'MinParentSize', parent, ...
+                   'SplitCriterion', 'mse', ...
+                   'Prune', 'on');
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Fitting State Space Model")
+    disp("DONE: Fitting DT ML model")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

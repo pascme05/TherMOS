@@ -195,6 +195,8 @@ setup.selML = 0;                                                            % ML
 %----------------------------------------
 % Deep Learning
 %----------------------------------------
+setup.selDL = 0;                                                            % DL-Model (Machine Learning) 0) de-activated, 1) DNN, 2) CNN, 3) LSTM
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Calculation (do not change)

@@ -19,12 +19,13 @@
 % Inp:  1) data:    All simulation input data as well as prediction
 %       2) results: All obtained accuracy values and results
 %       3) setup:   All simulation setup parameters
+%       4) mdl:     All model parameters
 % Out:  1) None
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [] = printConsole(data, results, setup)
+function [] = printConsole(data, results, setup, mdl)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -36,7 +37,7 @@ function [] = printConsole(data, results, setup)
     %===================================================
     % Parameters
     %===================================================
-    [~, nY] = size(data.pr.y);
+    [Nt, nY] = size(data.pr.y);
     namesOut = setup.out;
  
 
@@ -139,11 +140,22 @@ function [] = printConsole(data, results, setup)
     %===================================================
     disp('================================================================================================================')
     disp('================================================================================================================')
+    
+    %===================================================
+    % Training and Testing Times
+    %===================================================
+    fprintf('Training time (sec): %5.2f \n', mdl.timeTrain);
+    fprintf('Inference time (us/sample): %5.2f \n', data.pr.testTime*1e6/Nt);
+
+    %===================================================
+    % Memory Requirements
+    %===================================================
+    fprintf('Number Model Parameters: %-5d \n', mdl.size);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Printing results on console")
+    disp("")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

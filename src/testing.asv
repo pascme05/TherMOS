@@ -222,7 +222,7 @@ function [pred, grt] = testing(mdl, data, setup, para, path)
     
             % Fitting 
             timeStart = tic;
-            pred = svrSol(mdl, data.te, para);
+            pred = dtSol(mdl, data.te, para);
             pred.testTime = toc(timeStart);
     
             % Formatting 

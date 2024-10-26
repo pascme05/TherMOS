@@ -111,6 +111,66 @@ function mdl = training(data, setup, para, path)
     % POD Model
     %===================================================
 
+    %===================================================
+    % Machine Learning
+    %===================================================
+    if setup.selML ~= 0
+        %----------------------------------------
+        % KNN 
+        %----------------------------------------
+        if setup.selML == 1
+            % Fitting
+            timeStart = tic;
+            mdl.sys = knnFit(data.tr, data.vl, para);
+            mdl.timeTrain = toc(timeStart);
+
+            % Model Size
+            mdl.size = mdl.sys.NumNeighbors;
+
+            % Saving
+            mdlName = 'mdl_ml_knn_' + setup.name + '.mat';
+            filename = fullfile(path.mdl, mdlName);
+            save(filename, 'mdl');
+        end
+
+        %----------------------------------------
+        % RF 
+        %----------------------------------------
+        if setup.selML == 2
+            % Fitting
+            timeStart = tic;
+            mdl.sys = dtFit(data.tr, data.vl, para);
+            mdl.timeTrain = toc(timeStart);
+
+            % Model Size
+            mdl.size = mdl.sys.ModelParameters.MinLeaf;
+
+            % Saving
+            mdlName = 'mdl_ml_dt_' + setup.name + '.mat';
+            filename = fullfile(path.mdl, mdlName);
+            save(filename, 'mdl');
+        end
+
+        %----------------------------------------
+        % SVR 
+        %----------------------------------------
+        if setup.selML == 3
+            % Fitting
+            timeStart = tic;
+            mdl.sys = svrFit(data.tr, data.vl, para);
+            mdl.timeTrain = toc(timeStart);
+
+            % Model Size
+            mdl.size = numel(mdl.sys.SupportVectors);
+
+            % Saving
+            mdlName = 'mdl_ml_svr_' + setup.name + '.mat';
+            filename = fullfile(path.mdl, mdlName);
+            save(filename, 'mdl');
+        end
+
+    end
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

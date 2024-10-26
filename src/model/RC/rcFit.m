@@ -180,7 +180,7 @@ function mdl = rcFit(data, val, para)
     %===================================================
     % Fitting Optimal Order
     %===================================================
-    if K == -1
+    if para.Mdl.gen.opt == 1
         for i = 1:Kmax
             %----------------------------------------
             % Init Fnc
