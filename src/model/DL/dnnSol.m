@@ -41,10 +41,13 @@ function out = dnnSol(mdl, data, para)
     Rslope = para.Par.loss.Rslope;                                          % slope specific resistance change (1/K)
     Tref = para.Par.loss.Tref;                                              % reference temperature losses (°C)
     eps = para.Par.gen.eps;                                                 % lower numerical bound
-    [~, N] = size(data.y);                                                  % number of samples Nt and temperature nodes N
+    [Nt, N] = size(data.y);                                                 % number of samples Nt and temperature nodes N
+    [~, F] = size(data.X);                                                  % number of features F
     errMax = para.Mdl.gen.err;
     err = Inf;
     maxSteps = para.Mdl.gen.nSub;
+    W = 96; % Length of each sequence (window size)
+    stride = 1; % Step size to slide the window
 
     %===================================================
     % Variables
@@ -58,9 +61,35 @@ function out = dnnSol(mdl, data, para)
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
+    % Padding Data
+    %===================================================
+    % Calculate the amount of padding needed
+    padding = W - 1;
+
+    % Pad the data along the time dimension
+    padPv = padarray(Pv', [0 padding 0], 'replicate', 'pre')';
+
+    %===================================================
+    % Window Data
+    %===================================================
+    % Init
+    testX = zeros(F, W, Nt);
+
+    % Calc
+    for i = 1:Nt
+        startIdx = (i - 1) * stride + 1;
+        endIdx = startIdx + W - 1;
+        testX(:, :, i) = padPv(startIdx:endIdx, :)';
+    end
+
+    %===================================================
     % Reshape Input
     %===================================================
-    testX = num2cell(Pv', 1);  
+    % testX = num2cell(Pv', 1); 
+    % testX = dlarray(Pv, 'TCB');
+    % testX = dlarray(testX, 'CBT');
+    testX = squeeze(mat2cell(testX, F, W, ones(1, Nt)));
+    % testX = dlarray(testX, 'CTB'); 
 
     %===================================================
     % Scaling Function
@@ -114,7 +143,13 @@ function out = dnnSol(mdl, data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    out.y = reshape([T_est{:}], N, [])' + Toff;
+    if N == 1
+        % out.y = extractdata(squeeze(T_est))';
+        out.y = T_est;
+    else
+        % out.y = extractdata(squeeze(T_est))';
+        out.y = T_est;
+    end
     out.X = Pv;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

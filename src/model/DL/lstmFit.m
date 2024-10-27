@@ -71,10 +71,16 @@ function mdl = lstmFit(data, val, para)
     %===================================================
     % Reshape Data
     %===================================================
-    trainX = num2cell(Pv', 1);  
-    trainY = num2cell(T', 1); 
-    valX = num2cell(Pv_vl', 1);  
-    valY = num2cell(T_vl', 1); 
+    % trainX = num2cell(Pv', 1);  
+    % trainY = num2cell(T', 1); 
+    % valX = num2cell(Pv_vl', 1);  
+    % valY = num2cell(T_vl', 1); 
+    % inputSize = size(Pv, 2);
+
+    trainX = dlarray(Pv, 'TCB');  
+    trainY = dlarray(T, 'TCB'); 
+    valX = dlarray(Pv_vl, 'TCB');  
+    valY = dlarray(T_vl, 'TCB'); 
     inputSize = size(Pv, 2);
     
     %===================================================
@@ -105,8 +111,8 @@ function mdl = lstmFit(data, val, para)
                               'LearnRateDropFactor', lrDropFa, ...
                               'ValidationData', {valX, valY}, ...
                               'ValidationFrequency', valFreq, ...
-                              'Verbose', 0, ...
-                              'Plots', 'training-progress');
+                              'Verbose', 1, ...
+                              'Plots', 'none');
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -116,21 +122,17 @@ function mdl = lstmFit(data, val, para)
     %===================================================
     layers = [ ...
             sequenceInputLayer(inputSize)
-            lstmLayer(128, 'OutputMode', 'sequence')
+            lstmLayer(32, 'OutputMode', 'sequence')
             reluLayer
-            fullyConnectedLayer(64)
+            fullyConnectedLayer(32)
             reluLayer
-            fullyConnectedLayer(64)
-            reluLayer
-            fullyConnectedLayer(64)
-            reluLayer
-            fullyConnectedLayer(N)
-            regressionLayer];
+            fullyConnectedLayer(N)];
 
     %===================================================
     % Fitting
     %===================================================
-    mdl = trainNetwork(trainX, trainY, layers, options);
+    mdl = trainnet(trainX, trainY,layers,"mse",options);
+    % mdl = trainNetwork(trainX, trainY, layers, options);
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output

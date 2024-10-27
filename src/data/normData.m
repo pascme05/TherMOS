@@ -43,26 +43,47 @@ function [data, para] = normData(data, para, sel)
     %===================================================
     % Extract Input
     %===================================================
-    minX = min(data.y);
-    maxX = max(data.y);
-    avgX = mean(data.y);
-    stdX = std(data.y);
+    if sel == 3
+        maxX = para.Dat.normVal.X.max;
+        minX = para.Dat.normVal.X.min;
+        avgX = para.Dat.normVal.X.avg;
+        stdX = para.Dat.normVal.X.std;
+    else
+        minX = min(data.X);
+        maxX = max(data.X);
+        avgX = mean(data.X);
+        stdX = std(data.X);
+    end
 
     %===================================================
     % Extract Output
     %===================================================
-    minY = min(data.X);
-    maxY = max(data.X);
-    avgY = mean(data.X);
-    stdY = std(data.X);
+    if sel == 3
+        maxY = para.Dat.normVal.y.max;
+        minY = para.Dat.normVal.y.min;
+        avgY = para.Dat.normVal.y.avg;
+        stdY = para.Dat.normVal.y.std;
+    else
+        minY = min(data.y);
+        maxY = max(data.y);
+        avgY = mean(data.y);
+        stdY = std(data.y);
+    end
 
     %===================================================
     % Extract Reference
     %===================================================
-    minR = min(data.r);
-    maxR = max(data.r);
-    avgR = mean(data.r);
-    stdR = std(data.r);
+    if sel == 3
+        maxR = para.Dat.normVal.r.max;
+        minR = para.Dat.normVal.r.min;
+        avgR = para.Dat.normVal.r.avg;
+        stdR = para.Dat.normVal.r.std;
+    else
+        minR = min(data.r);
+        maxR = max(data.r);
+        avgR = mean(data.r);
+        stdR = std(data.r);
+    end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -82,11 +103,11 @@ function [data, para] = normData(data, para, sel)
     elseif para.Par.gen.normX == 2
         % Inv Norm
         if sel == 3
-            data.X = (data.X - minX) / (maxX - minX);
+            data.X = data.X .* (maxX - minX) + minX;
 
         % Norm
         else
-            data.X = data.X * (maxX - minX) + minX;
+            data.X = (data.X - minX) ./ (maxX - minX);
         end
 
         % Msg
@@ -98,11 +119,11 @@ function [data, para] = normData(data, para, sel)
     elseif para.Par.gen.normX == 3
         % Inv Norm
         if sel == 3
-            data.X = (data.X - avgX) / (maxX - minX);
+            data.X = data.X .* (maxX - minX) + avgX;
 
         % Norm
         else
-            data.X = data.X * (maxX - minX) + avgX;
+            data.X = (data.X - avgX) ./ (maxX - minX);
         end
 
         % Msg
@@ -114,11 +135,11 @@ function [data, para] = normData(data, para, sel)
     elseif para.Par.gen.normX == 4
         % Inv Norm
         if sel == 3
-            data.X = (data.X - avgX) / sigX;
+            data.X = data.X .* stdX + avgX;
 
         % Norm
         else
-            data.X = data.X * sigX + avgX;
+            data.X = (data.X - avgX) ./ stdX;
         end
 
         % Msg
@@ -146,11 +167,11 @@ function [data, para] = normData(data, para, sel)
     elseif para.Par.gen.normY == 2
         % Inv Norm
         if sel == 3
-            data.y = (data.y - minY) / (maxY - minY);
+            data.y = data.y .* (maxY - minY) + minY;
 
         % Norm
         else
-            data.y = data.y * (maxY - minY) + minY;
+            data.y = (data.y - minY) ./ (maxY - minY);
         end
 
         % Msg
@@ -162,11 +183,11 @@ function [data, para] = normData(data, para, sel)
     elseif para.Par.gen.normY == 3
         % Inv Norm
         if sel == 3
-            data.y = (data.y - avgY) / (maxY - minY);
+            data.y = data.y .* (maxY - minY) + avgY;
 
         % Norm
         else
-            data.y = data.y * (maxY - minY) + avgY;
+            data.y = (data.y - avgY) ./ (maxY - minY);
         end
 
         % Msg
@@ -178,11 +199,11 @@ function [data, para] = normData(data, para, sel)
     elseif para.Par.gen.normY == 4
         % Inv Norm
         if sel == 3
-            data.y = (data.y - avgY) / sigY;
+            data.y = data.y .* stdY + avgY;
 
         % Norm
         else
-            data.y = data.y * sigY + avgY;
+            data.y = (data.y - avgY) ./ stdY;
         end
 
         % Msg
@@ -213,11 +234,11 @@ function [data, para] = normData(data, para, sel)
     elseif para.Par.gen.normY == 2
         % Inv Norm
         if sel == 3
-            Tref = (Tref - minY) / (maxY - minY);
+            Tref = Tref .* (maxY - minY) + minY;
 
         % Norm
         else
-            Tref = Tref * (maxY - minY) + minY;
+            Tref = (Tref - minY) ./ (maxY - minY);
         end
 
         % Msg
@@ -229,11 +250,11 @@ function [data, para] = normData(data, para, sel)
     elseif para.Par.gen.normY == 3
         % Inv Norm
         if sel == 3
-            Tref = (Tref - avgY) / (maxY - minY);
+            Tref = Tref .* (maxY - minY) + avgY;
 
         % Norm
         else
-            Tref = Tref * (maxY - minY) + avgY;
+            Tref = (Tref - avgY) ./ (maxY - minY);
         end
 
         % Msg
@@ -245,11 +266,11 @@ function [data, para] = normData(data, para, sel)
     elseif para.Par.gen.normY == 4
         % Inv Norm
         if sel == 3
-            Tref = (Tref - avgY) / sigY;
+            Tref = Tref .* stdY + avgY;
 
         % Norm
         else
-            Tref = Tref * sigY + avgY;
+            Tref = (Tref - avgY) ./ stdY;
         end
 
         % Msg
@@ -272,18 +293,18 @@ function [data, para] = normData(data, para, sel)
         %----------------------------------------
         % Output
         %----------------------------------------
-        para.Dat.normVal.y.max = maxX;
-        para.Dat.normVal.y.min = minX;
-        para.Dat.normVal.y.avg = avgX;
-        para.Dat.normVal.y.std = stdX;
+        para.Dat.normVal.y.max = maxY;
+        para.Dat.normVal.y.min = minY;
+        para.Dat.normVal.y.avg = avgY;
+        para.Dat.normVal.y.std = stdY;
 
         %----------------------------------------
         % Input
         %----------------------------------------
-        para.Dat.normVal.X.max = maxY;
-        para.Dat.normVal.X.min = minY;
-        para.Dat.normVal.X.avg = avgY; 
-        para.Dat.normVal.X.std = stdY;
+        para.Dat.normVal.X.max = maxX;
+        para.Dat.normVal.X.min = minX;
+        para.Dat.normVal.X.avg = avgX; 
+        para.Dat.normVal.X.std = stdX;
 
         %----------------------------------------
         % Reference

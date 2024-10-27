@@ -60,7 +60,8 @@ function out = lstmSol(mdl, data, para)
     %===================================================
     % Reshape Input
     %===================================================
-    testX = num2cell(Pv', 1);  
+    % testX = num2cell(Pv', 1);
+    testX = dlarray(Pv, 'TCB');
 
     %===================================================
     % Scaling Function
@@ -114,7 +115,11 @@ function out = lstmSol(mdl, data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    out.y = reshape([T_est{:}], N, [])' + Toff;
+    if N == 1
+        out.y = extractdata(squeeze(T_est));
+    else
+        out.y = extractdata(squeeze(T_est))';
+    end
     out.X = Pv;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

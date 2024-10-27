@@ -192,7 +192,7 @@ setup.selPO = 0;                                                            % PO
 % Machine/Deep Learning (tbi)
 %----------------------------------------
 setup.selML = 0;                                                            % ML-Model (Machine Learning) 0) de-activated, 1) KNN, 2) RF, 3) SVR
-setup.selDL = 0;                                                            % DL-Model (Machine Learning) 0) de-activated, 1) DNN, 2) CNN, 3) LSTM
+setup.selDL = 1;                                                            % DL-Model (Machine Learning) 0) de-activated, 1) DNN, 2) CNN, 3) LSTM
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

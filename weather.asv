@@ -114,7 +114,7 @@ setup.name = "default";                                                     % na
 %----------------------------------------
 % Configuration
 %----------------------------------------
-setup.config = "motor";                                                     % name of the config file (string)
+setup.config = "weather";                                                   % name of the config file (string)
 
 %----------------------------------------
 % Plotting and Saving
@@ -137,27 +137,27 @@ setup.test = 1;                                                             % 0)
 %----------------------------------------
 % Format and Dimension
 %----------------------------------------
-setup.format = 'mat';                                                       % input data format: "xlsx" or "mat"
+setup.format = 'xlsx';                                                       % input data format: "xlsx" or "mat"
 setup.datDim = 1;                                                           % input data dimension: 1) 1D data, 2) 2D data, 3) 3D data
-setup.datSep = 3;                                                           % input data separation: 1) File based, 2) Sheet based, 3) ID based, 4) Ratio based
+setup.datSep = 2;                                                           % input data separation: 1) File based, 2) Sheet based, 3) ID based, 4) Ratio based
 
 %----------------------------------------
 % Training and Testing Selection
 %----------------------------------------
 % File based
-setup.trFile = ["motorTemp"];                                               % list of training files (strings) at least one
-setup.teFile = "motorTemp";                                                 % testing file (string) exactly one
-setup.vlFile = ["motorTemp"];                                               % list of validation files (strings) at least one
+setup.trFile = ["weather"];                                                 % list of training files (strings) at least one
+setup.teFile = "weather";                                                   % testing file (string) exactly one
+setup.vlFile = ["weather"];                                                 % list of validation files (strings) at least one
 
 % Sheet based
-setup.trSheet = ["train-1", "train-2", "train-3"];                          % list of training sheets (strings) at least one
+setup.trSheet = ["train-1", "train-2"];                          % list of training sheets (strings) at least one
 setup.teSheet = "test";                                                     % testing sheet (string) exactly one
 setup.vlSheet = ["val"];                                                    % list of validation sheets (strings) at least one
 
 % ID based
 setup.trID = [];                                                            % list of training IDs (if empty all remaining ones are used)
-setup.teID = [60];                                                          % list of testing IDs
-setup.vlID = [10, 48, 63];                                                  % list of validation IDS
+setup.teID = [];                                                            % list of testing IDs
+setup.vlID = [];                                                            % list of validation IDS
 
 % Ratio based
 setup.rTr = 0.7;                                                            % percentag of training data (testing data is 1 - rTr)
@@ -166,9 +166,9 @@ setup.rVl = 0.2;                                                            % pe
 %----------------------------------------
 % Inputs and Output Mapping
 %----------------------------------------
-setup.inp = ["Ta", "Tc", "Us", "Is", "Tm", "Wm"];                           % list of input feature (strings)
-setup.out = ["T_sw"];                                                       % list of temperature outputs (strings) 
-setup.ref = ["Ta"];                                                         % list of reference temperatures (strings)
+setup.inp = ["Inp1", "Inp2", "Inp3"];                                             % list of input feature (strings)
+setup.out = ["Out1"];                                             % list of temperature outputs (strings) 
+setup.ref = ["Ref1"];                                             % list of reference temperatures (strings)
 
 %===================================================
 % Model
@@ -189,7 +189,7 @@ setup.selSF = 0;                                                            % SF
 setup.selPO = 0;                                                            % PO-Model (Proper-Orthogonal) 0) de-activated, 1) activated
 
 %----------------------------------------
-% Machine/Deep Learning
+% Machine/Deep Learning (tbi)
 %----------------------------------------
 setup.selML = 0;                                                            % ML-Model (Machine Learning) 0) de-activated, 1) KNN, 2) RF, 3) SVR
 setup.selDL = 1;                                                            % DL-Model (Machine Learning) 0) de-activated, 1) DNN, 2) CNN, 3) LSTM
