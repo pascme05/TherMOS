@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: cnnSol                                                            %
+% File: dnnSol                                                            %
 % Date: 13.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -14,7 +14,13 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function solves a deep learning model.
+% This function solves a deep learning model based on inputs (power losses),
+% X (NtxF) with Nt samples and F features, and outputs (temperatures) y
+% (NtxN) with Nt samples and N nodes using a regression function r()
+% parameterized by a set of free parameters.
+%
+%                              T = r(Pv)
+%
 % -------------------------------------------------------------------------
 % Inp:  1) mdl:     Fitted model parameters
 %       2) data:    Testing input data struct
@@ -24,11 +30,11 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function out = cnnSol(mdl, data, para)
+function out = dlSol(mdl, data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Solving a CNN")
+    disp("START: Solving a Deep Learning Model")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
@@ -41,10 +47,13 @@ function out = cnnSol(mdl, data, para)
     Rslope = para.Par.loss.Rslope;                                          % slope specific resistance change (1/K)
     Tref = para.Par.loss.Tref;                                              % reference temperature losses (°C)
     eps = para.Par.gen.eps;                                                 % lower numerical bound
-    [~, N] = size(data.y);                                                  % number of samples Nt and temperature nodes N
-    errMax = para.Mdl.gen.err;
-    err = Inf;
-    maxSteps = para.Mdl.gen.nSub;
+    [Nt, ~] = size(data.y);                                                 % number of samples Nt and temperature nodes N
+    [~, F] = size(data.X);                                                  % number of features F
+    errMax = para.Mdl.gen.err;                                              % error bound
+    err = Inf;                                                              % initial error
+    maxSteps = para.Mdl.gen.nSub;                                           % maximum amount of optimisation steps
+    W = para.Mdl.dl.W;                                                      % Length of each sequence (window size)
+    stride = para.Mdl.dl.stride;                                            % Step size to slide the windoww
 
     %===================================================
     % Variables
@@ -58,9 +67,28 @@ function out = cnnSol(mdl, data, para)
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
+    % Padding Data
+    %===================================================
+    padding = W - 1;
+    padPv = padarray(Pv', [0 padding 0], 'replicate', 'pre')';
+
+    %===================================================
+    % Window Data
+    %===================================================
+    % Init
+    testX = zeros(F, W, Nt);
+
+    % Calc
+    for i = 1:Nt
+        startIdx = (i - 1) * stride + 1;
+        endIdx = startIdx + W - 1;
+        testX(:, :, i) = padPv(startIdx:endIdx, :)';
+    end
+
+    %===================================================
     % Reshape Input
     %===================================================
-    testX = reshape(Pv', [size(Pv, 2), size(Pv, 1), 1]);
+    testX = squeeze(mat2cell(testX, F, W, ones(1, Nt)));
 
     %===================================================
     % Scaling Function
@@ -114,13 +142,13 @@ function out = cnnSol(mdl, data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    out.y = T_est' + Toff;
+    out.y = T_est;
     out.X = Pv;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Solving a CNN")
+    disp("DONE: Solving a Deep Learning Model")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -127,7 +127,7 @@ setup.save = 0;                                                             % 0)
 %----------------------------------------
 % Training and Testing
 %----------------------------------------
-setup.train = 1;                                                            % 0) no model training, 1) model training
+setup.train = 0;                                                            % 0) no model training, 1) model training
 setup.test = 1;                                                             % 0) no model testing, 1) model testing
 
 

@@ -243,24 +243,11 @@ function [pred, grt, mdl] = testing(mdl, data, setup, para, path)
     %===================================================
     if setup.selDL ~= 0
         %----------------------------------------
-        % Name
-        %----------------------------------------
-        if setup.selDL == 1
-            name = 'mdl_dl_dnn_';
-        elseif setup.selDL == 2
-            name = 'mdl_dl_cnn_';
-        elseif setup.selDL == 3
-            name = 'mdl_dl_lstm_';
-        else
-            name = 'mdl_dl_dnn_';
-        end
-
-        %----------------------------------------
         % Loading
         %----------------------------------------
         if isempty(mdl)
             try
-                mdlName = name + setup.name + '.mat';
+                mdlName = 'mdl_dl_' + setup.name + '.mat';
                 filename = fullfile(path.mdl, mdlName);
                 load(filename, 'mdl');
                 disp('INFO: Model loaded successfully.');
@@ -274,15 +261,7 @@ function [pred, grt, mdl] = testing(mdl, data, setup, para, path)
         % Fitting 
         %----------------------------------------
         timeStart = tic;
-        if setup.selDL == 1
-            pred = dnnSol(mdl, data.te, para);
-        elseif setup.selDL == 2
-            pred = cnnSol(mdl, data.te, para);
-        elseif setup.selDL == 3
-            pred = lstmSol(mdl, data.te, para);
-        else
-            pred = dnnSol(mdl, data.te, para);
-        end
+        pred = dlSol(mdl, data.te, para);
         pred.testTime = toc(timeStart);
 
         %----------------------------------------

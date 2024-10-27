@@ -175,35 +175,16 @@ function mdl = training(data, setup, para, path)
     % Deep Learning
     %===================================================
     if setup.selDL ~= 0
-        % Name
-        if setup.selDL == 1
-            name = 'mdl_dl_dnn_';
-        elseif setup.selDL == 2
-            name = 'mdl_dl_cnn_';
-        elseif setup.selDL == 3
-            name = 'mdl_dl_lstm_';
-        else
-            name = 'mdl_dl_dnn_';
-        end
-
         % Fitting
         timeStart = tic;
-        if setup.selDL == 1
-            mdl.sys = dnnFit(data.tr, data.vl, para);
-        elseif setup.selDL == 2
-            mdl.sys = cnnFit(data.tr, data.vl, para);
-        elseif setup.selDL == 3
-            mdl.sys = lstmFit(data.tr, data.vl, para);
-        else
-            mdl.sys = dnnFit(data.tr, data.vl, para);
-        end
+        mdl.sys = dlFit(data.tr, data.vl, para);
         mdl.timeTrain = toc(timeStart);
 
         % Model Size
         mdl.size = 1;
 
         % Saving
-        mdlName = name + setup.name + '.mat';
+        mdlName = 'mdl_dl_' + setup.name + '.mat';
         filename = fullfile(path.mdl, mdlName);
         save(filename, 'mdl');
     end
