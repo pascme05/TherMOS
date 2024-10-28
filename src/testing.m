@@ -129,6 +129,44 @@ function [pred, grt, mdl] = testing(mdl, data, setup, para, path)
     %===================================================
     % SF Model
     %===================================================
+    if setup.selSF == 1
+        %----------------------------------------
+        % Loading
+        %----------------------------------------
+        if isempty(mdl)
+            try
+                mdlName = 'mdl_sf_' + setup.name + '.mat';
+                filename = fullfile(path.mdl, mdlName);
+                load(filename, 'mdl');
+                disp('INFO: Model loaded successfully.');
+            catch ME
+                disp('WARN: Failed to load the model.');
+                disp(['Error: ', ME.message]);
+            end
+        end
+
+        %----------------------------------------
+        % Fitting 
+        %----------------------------------------
+        timeStart = tic;
+        pred = sfSol(mdl, data.te, para);
+        pred.testTime = toc(timeStart);
+
+        %----------------------------------------
+        % Formatting 
+        %----------------------------------------
+        % Prediction
+        pred.y = pred.y;
+        pred.X = pred.X;
+        pred.r = pred.r;
+        pred.off = pred.off;
+
+        % Testing
+        grt.y = data.te.y;
+        grt.X = data.te.X;
+        grt.r = data.te.r;
+        grt.off = data.te.off;
+    end
 
     %===================================================
     % POD Model

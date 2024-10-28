@@ -119,8 +119,8 @@ setup.config = "default";                                                   % na
 %----------------------------------------
 % Plotting and Saving
 %----------------------------------------
-setup.plotOut = 1;                                                          % 0) model output is not plotted, 1) model output is plotted
-setup.plotMdl = 1;                                                          % 0) model structure is not plotted, 1) model structure is plotted
+setup.plotOut = 1;                                                          % 0) model output is not plotted, 1) model output is plotted, 2) plotting one figure per output
+setup.plotMdl = 0;                                                          % 0) model structure is not plotted, 1) model structure is plotted
 setup.featRank = 0;                                                         % 0) No feature ranking, 1) feature ranking
 setup.save = 0;                                                             % 0) output data not saved, 1) output data saved
 
@@ -180,7 +180,7 @@ setup.ref = ["R1", "R2", "R3"];                                             % li
 setup.selRC = 0;                                                            % RC-Model (Foster) 0) de-activated, 1) activated
 
 % Multiple-Input Multiple-Output (MIMO)
-setup.selSS = 0;                                                            % SS-Model (State-Space) 0) de-activated, 1) activated
+setup.selSS = 1;                                                            % SS-Model (State-Space) 0) de-activated, 1) activated
 setup.selSF = 0;                                                            % SF-Model (Structure-Function) 0) de-activated, 1) activated
 
 %----------------------------------------
@@ -191,7 +191,7 @@ setup.selPO = 0;                                                            % PO
 %----------------------------------------
 % Machine/Deep Learning (tbi)
 %----------------------------------------
-setup.selML = 3;                                                            % ML-Model (Machine Learning) 0) de-activated, 1) KNN, 2) RF, 3) SVR
+setup.selML = 0;                                                            % ML-Model (Machine Learning) 0) de-activated, 1) KNN, 2) RF, 3) SVR
 setup.selDL = 0;                                                            % DL-Model (Machine Learning) 0) de-activated, 1) activated
 
 

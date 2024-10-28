@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: sfFit                                                             %
+% File: sfSol                                                             %
 % Date: 13.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -14,143 +14,118 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function fits a structure function capturing the system dynamics of
-% the temperature response:
+% This function solves a structure function capturing the system dynamics 
+% of the temperature response:
 %
 %                       C*dT/dt = P(t) - G*T
 %
 % where T is the temperature vector, u is the loss vector, and C is the
 % thermal capacitance matrix 
 % -------------------------------------------------------------------------
-% Inp:  1) data:    Training input data struct
-%       2) val:     Validation input data struct
+% Inp:  1) mdl:     Fitted model parameters
+%       2) data:    Testing input data struct
 %       3) para:    All simulation parameters of the current simulation
-% Out:  1) mdl:     Trained model
+% Out:  1) out:     Predicted temperature response
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function mdl = sfFit(data, ~, para)
+function out = sfSol(mdl, data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Fitting thermal structure function")
+    disp("START: Solving thermal structure function")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % General Parameter
+    % Parameter
     %===================================================
-    [~, M] = size(data.y);                                                  % number of time samples Nt and temperature nodes M
-    [~, N] = size(data.X);                                                  % number of features N
-    
-    %===================================================
-    % Variables
-    %===================================================
-    maxIter = para.Mdl.gen.iterMax;                                         % maximum number of iterations
-    tol = para.Mdl.gen.eps;                                                 % tolerance for optimisation
+    Rcon = para.Par.loss.Rcon;                                              % contact resistance (Ohm)
+    Rohm = para.Par.loss.Rohm;                                              % conduction resistance (Ohm)
+    Rslope = para.Par.loss.Rslope;                                          % slope specific resistance change (1/K)
+    Tref = para.Par.loss.Tref;                                              % reference temperature losses (°C)
+    eps = para.Par.gen.eps;                                                 % lower numerical bound
 
     %===================================================
     % Variables
     %===================================================
-    Pv = data.X;
-    T = data.y;
     t = data.t;
-
+    Pv = data.X;                                                            % power losses input (W)
+    Toff = data.r;                                                          % temperature offset/reference (°C)
+    T_est = zeros(size(data.y));                                            % init nodes temperatures
+    out = data;     
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Define Function
+    % Extract Model Parameters
     %===================================================
-    fun = @(x) objective_dgl(x, t, Pv, T, M, N);
+    Cth = mdl.Cth;
+    Gth = mdl.Gth;
 
     %===================================================
-    % Optimisation options
+    % Scaling Function
     %===================================================
-    opt = optimoptions('lsqnonlin', 'Display', 'iter', 'TolFun', tol, 'MaxIter', maxIter);
-    
+    if Rohm == 0
+        theta = @(T) 1;
+    else
+        theta = @(T) (Rcon + Rohm*Rslope*(T-Tref)) / (Rcon + Rohm + eps);
+    end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Init Parameter
+    % Feedthrough
     %===================================================
-    x0 = [ones(M*N, 1); ones(M*N, 1)];
+    for i = 2:length(t)
+        %----------------------------------------
+        % Update power
+        %----------------------------------------
+        Pv(i,:) = Pv(i,:) .* theta(T_est(i-1,:) + Toff(i-1,:));
+
+        
+        %----------------------------------------
+        % Solve Nodes
+        %----------------------------------------
+        T_est(i, :) = calcT(t, Pv(i,:), Cth, Gth, T_est(i-1, :));
+    end
 
     %===================================================
-    % Solve
+    % Correcting Offset
     %===================================================
-    [x_opt, ~, ~, ~, ~] = lsqnonlin(fun, x0, [], [], opt);
-
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Post-Processing
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %===================================================
-    % Extract Values
-    %===================================================
-    Cth = reshape(x_opt(1:M*N), [M, N]);
-    Gth = reshape(x_opt(M*N+1:end), [M, N]);
-    Rth = 1./Gth;
-
-    %===================================================
-    % Fitting
-    %===================================================
-    disp("INFO: Thermal resistance Rth and capacitance Cth");
-    disp(Rth);
-    disp(Cth);
+    T_est = T_est + Toff;
 
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    mdl.Rth = Rth;
-    mdl.Gth = Gth;
-    mdl.Cth = Cth;
-
+    out.y = T_est;
+    out.X = Pv;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Fitting thermal structure function")
+    disp("DONE: Solving thermal structure function")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Additional Functions
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %===================================================
-% Cost Function
-%===================================================
-function error = objective_dgl(x, t, P, T_true, M, N)
-    % Extract parameters from x
-    Cth = reshape(x(1:M*N), [M, N]);
-    Gth = reshape(x(M*N+1:end), [M, N]);
-
-    % Predict temperatures using the current parameters
-    T_pred = calcT(t, P, Cth, Gth);
-
-    % Compute the error (sum of squared differences)
-    error = (T_true - T_pred).^2;
-end
-
-%===================================================
 % Calc Temperature
 %===================================================
-function T_pred = calcT(t, P, Cth, Gth)
-    Nt = length(t);
+function Tnew = calcT(t, P, Cth, Gth, Told)
     dt = t(2) - t(1);
     M = size(Cth, 1);
     N = size(Cth, 2);
-    T_pred = zeros(Nt, M);
+    Tnew = zeros(1, M);
     for i = 1:M
-        for k = 2:Nt
-            for j = 1:N
-                T_pred(k, i) = T_pred(k-1, i) + (dt / Cth(i, j)) * (P(k-1, j) - Gth(i, j) * T_pred(k-1, i));
-            end
+        for j = 1:N
+            Tnew(1, i) = Told(i) + (dt / Cth(i, j)) * (P(j) - Gth(i, j) * Told(i));
         end
     end
 end

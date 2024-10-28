@@ -368,7 +368,7 @@ function [] = main(setup, path)
     %----------------------------------------
     % Plot Results
     %----------------------------------------
-    if setup.plotOut == 1
+    if setup.plotOut ~= 0
         % 1D Output
         plotResults1D(data, results, setup);
 

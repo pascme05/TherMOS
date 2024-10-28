@@ -193,6 +193,7 @@ function [] = plotResults1D(data, results, setup)
     xlim([0 1])
     ylim([0 1])
     grid on;
+    legend(namesOut, 'Location','northwest');
 
     %----------------------------------------
     % Error Distribution
@@ -225,60 +226,118 @@ function [] = plotResults1D(data, results, setup)
     grid on;
 
     %===================================================
-    % Plotting Predictions
+    % Plotting Predictions (One Figure)
     %===================================================
-    %----------------------------------------
-    % Init
-    %----------------------------------------
-    figure;
-    sgtitle('Predicted Temperature and Error for Testing Data');
-
-    %----------------------------------------
-    % Predictions
-    %----------------------------------------
-    % Init
-    subplot(2,1,1);
-    hold on
-
-    % Prediction
-    set(gca,'ColorOrderIndex',1);
-    for i = 1:Ny
-        set(gca,'ColorOrderIndex',i);
-        plot(time, yTest(:,i));
-        set(gca,'ColorOrderIndex',i);
-        plot(time, yPred(:,i),'--');
+    if setup.plotOut == 1
+        %----------------------------------------
+        % Init
+        %----------------------------------------
+        figure;
+        sgtitle('Predicted Temperature and Error for Testing Data');
+    
+        %----------------------------------------
+        % Predictions
+        %----------------------------------------
+        % Init
+        subplot(2,1,1);
+        hold on
+    
+        % Prediction
+        set(gca,'ColorOrderIndex',1);
+        for i = 1:Ny
+            set(gca,'ColorOrderIndex',i);
+            plot(time, yTest(:,i));
+            set(gca,'ColorOrderIndex',i);
+            plot(time, yPred(:,i),'--');
+        end
+        
+        % Reference
+        plot(time,rTest,'k--');
+    
+        % Labels
+        xlabel('time (sec)');
+        ylabel('temperature (°C)');
+        title('Temperature Prediction');
+        grid on;
+        
+        %----------------------------------------
+        % Error
+        %----------------------------------------
+        % Init
+        subplot(2,1,2);
+        hold on
+    
+        % Prediction
+        set(gca,'ColorOrderIndex',1);
+        for i = 1:Ny
+            set(gca,'ColorOrderIndex',i);
+            yErr = yTest(:,i) - yPred(:,i);
+            plot(time, yErr);
+        end
+    
+        % Labels
+        xlabel('time (sec)');
+        ylabel('error (K)');
+        title('Temperature Prediction Error');
+        grid on;
+        legend(namesOut, 'Location','southeast', 'NumColumns', Ny);
     end
     
-    % Reference
-    plot(time,rTest,'k--');
-
-    % Labels
-    xlabel('time (sec)');
-    ylabel('temperature (°C)');
-    title('Temperature Prediction');
-    grid on;
+    %===================================================
+    % Plotting Predictions (Multi Figure)
+    %===================================================
+    if setup.plotOut == 2
+        for i = 1:Ny
+            %----------------------------------------
+            % Init
+            %----------------------------------------
+            figure;
+            txt = 'Predicted Temperature and Error for Testing Data of Signal ' + namesOut(i);
+            sgtitle(txt);
+        
+            %----------------------------------------
+            % Predictions
+            %----------------------------------------
+            % Init
+            subplot(2,1,1);
+            hold on
+        
+            % Prediction
+            set(gca,'ColorOrderIndex',1);
+            plot(time, yTest(:,i));
+            set(gca,'ColorOrderIndex',1);
+            plot(time, yPred(:,i),'--');
+            
+            % Reference
+            plot(time,rTest,'k--');
+        
+            % Labels
+            xlabel('time (sec)');
+            ylabel('temperature (°C)');
+            title('Temperature Prediction');
+            grid on;
+            
+            %----------------------------------------
+            % Error
+            %----------------------------------------
+            % Init
+            subplot(2,1,2);
+            hold on
+        
+            % Prediction
+            set(gca,'ColorOrderIndex',1);
+            yErr = yTest(:,i) - yPred(:,i);
+            plot(time, yErr);
     
-    %----------------------------------------
-    % Error
-    %----------------------------------------
-    % Init
-    subplot(2,1,2);
-    hold on
-
-    % Prediction
-    set(gca,'ColorOrderIndex',1);
-    for i = 1:Ny
-        set(gca,'ColorOrderIndex',i);
-        yErr = yTest(:,i) - yPred(:,i);
-        plot(time, yErr);
+            % Labels
+            xlabel('time (sec)');
+            ylabel('error (K)');
+            title('Temperature Prediction Error');
+            grid on;
+            legend(namesOut, 'Location','southeast', 'NumColumns', length(namesOut));
+        end
     end
 
-    % Labels
-    xlabel('time (sec)');
-    ylabel('error (K)');
-    title('Temperature Prediction Error');
-    grid on;
-    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

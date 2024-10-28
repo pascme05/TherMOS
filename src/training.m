@@ -91,13 +91,13 @@ function mdl = training(data, setup, para, path)
         % Fitting 
         %----------------------------------------
         timeStart = tic;
-        mdl.sys = sfFit(data.tr, data.vl, para);
+        mdl = sfFit(data.tr, data.vl, para);
         mdl.timeTrain = toc(timeStart);
 
         %----------------------------------------
         % Model Size 
         %----------------------------------------
-        mdl.size = numel(mdl.sys.Rth) + numel(mdl.sys.Cth);
+        mdl.size = numel(mdl.Rth) + numel(mdl.Cth);
 
         %----------------------------------------
         % Saving
