@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: svrFit                                                            %
+% File: mlFit                                                             %
 % Date: 13.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -14,21 +14,22 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function fits a support vector model.                
+% This function fits a machine learning model.                
 % -------------------------------------------------------------------------
 % Inp:  1) data:    Training input data struct
 %       2) val:     Validation input data struct
 %       3) para:    All simulation parameters of the current simulation
+%       4) setup:   All setup files for the simulation
 % Out:  1) mdl:     Trained model
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function mdl = svrFit(data, val, para)
+function mdl = mlFit(data, val, para, setup)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Fitting SVM ML model")
+    disp("START: Fitting Machine Learning model")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
@@ -36,22 +37,67 @@ function mdl = svrFit(data, val, para)
     %===================================================
     % General Parameter
     %===================================================
-    C = para.Mdl.svm.C;
-    eps = para.Mdl.svm.eps;
     Nt = min(data.Nt);                                                      % minimum number of training time steps
     [~, N] = size(data.X2);                                                 % number of training datasets used for fitting
     Nt_vl = min(val.Nt);                                                    % minimum number of validation time steps
     [~, N_vl] = size(val.X2);                                               % number of validation datasets used for fitting
     
     %===================================================
-    % General Parameter
+    % Model Parameter
+    %===================================================
+    %----------------------------------------
+    % K-Nearest Neigbours
+    %----------------------------------------
+    K = para.Mdl.knn.K;                                                     % number of neighbors
+
+    %----------------------------------------
+    % Random Forest
+    %----------------------------------------
+    leaf = para.Mdl.dt.leaf;                                                % number of leaves in the tree
+    split = para.Mdl.dt.split;                                              % maximum number of splits
+    parent = para.Mdl.dt.parent;                                            % maximum number of parents
+
+    %----------------------------------------
+    % Support Vector Machines
+    %----------------------------------------
+    C = para.Mdl.svm.C;                                                     % Box constraint SVM
+    eps = para.Mdl.svm.eps;                                                 % Epsilon SVM
+
+    %===================================================
+    % Variables
     %===================================================
     Pv = data.X;
     Pv_vl = val.X;
+    T = data.y;
+    T_vl = val.y;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Optimiser
+    %===================================================
+    if para.Mdl.knn.ns == 1
+        NSMethod = 'exhaustive';
+    else
+        NSMethod = 'kdtree';
+    end
+
+    %===================================================
+    % Distance Metric
+    %===================================================
+    if para.Mdl.knn.dist == 1
+        Distance = 'cityblock';
+    elseif para.Mdl.knn.dist == 2
+        Distance = 'chebychev';
+    elseif para.Mdl.knn.dist == 3
+        Distance = 'euclidean';
+    elseif para.Mdl.knn.dist == 4
+        Distance = 'minkowski';
+    else
+        Distance = 'euclidean';
+    end
+    
     %===================================================
     % Kernel Method
     %===================================================
@@ -91,7 +137,7 @@ function mdl = svrFit(data, val, para)
         end
     end
     T_vl = T_vl / N_vl;
-    
+
     %===================================================
     % Init Value
     %===================================================
@@ -106,25 +152,84 @@ function mdl = svrFit(data, val, para)
     %===================================================
     if para.Mdl.gen.opt == 1
         %----------------------------------------
-        % Optimise
+        % K-Nearest Neigbours
         %----------------------------------------
-        mdl = fitrsvm(Pv_vl,T_vl,'OptimizeHyperparameters','auto',...
+        if setup.selML == 1
+            % Optimise
+            mdl = fitcknn(Pv_vl,T_vl,'OptimizeHyperparameters','auto',...
                                  'HyperparameterOptimizationOptions',...
                                   struct('AcquisitionFunctionName', ...
                                          'expected-improvement-plus'));
+
+            % Parameter
+            K = mdl.NumNeighbors;
+
+        %----------------------------------------
+        % Random Forest
+        %----------------------------------------
+        elseif setup.selML == 2
+            % Optimise
+            mdl = fitrtree(Pv_vl,T_vl,'OptimizeHyperparameters','auto',...
+                                  'HyperparameterOptimizationOptions',...
+                                   struct('AcquisitionFunctionName', ...
+                                          'expected-improvement-plus'));
+
+            % Parameter
+            leaf = mdl.ModelParameters.MinLeaf;
+            split = mdl.ModelParameters.MaxSplits;
+            parent = mdl.ModelParameters.MinParent;
+    
+        %----------------------------------------
+        % Support Vector Machines
+        %----------------------------------------
+        elseif setup.selML == 3
+            % Optimise
+            mdl = fitrsvm(Pv_vl,T_vl,'OptimizeHyperparameters','auto',...
+                                 'HyperparameterOptimizationOptions',...
+                                  struct('AcquisitionFunctionName', ...
+                                         'expected-improvement-plus'));
+
+            % Parameter
+            C = max(mdl.BoxConstraints);
+            eps = mdl.Epsilon;
+            kernel = mdl.KernelParameters.Function;
         
         %----------------------------------------
-        % Extract Parameters
+        % Invalid
         %----------------------------------------
-        C = max(mdl.BoxConstraints);
-        eps = mdl.Epsilon;
-        kernel = mdl.KernelParameters.Function;
+        else
+            disp("ERROR: Invalid model for optimisation")
+        end
     end
 
     %===================================================
     % Fixed Order Model
     %===================================================
-    mdl = fitrsvm(Pv, T, ...
+    %----------------------------------------
+    % K-Nearest Neigbours
+    %----------------------------------------
+    if setup.selML == 1
+        mdl = fitcknn(Pv,T,'NumNeighbors',K,...
+                       'NSMethod',NSMethod, ...
+                       'Distance',Distance,...
+                       'Standardize',1);
+    
+    %----------------------------------------
+    % Random Forest
+    %----------------------------------------
+    elseif setup.selML == 2
+        mdl = fitrtree(Pv, T, ...
+                       'MinLeafSize', leaf, ...
+                       'MaxNumSplits', split, ...
+                       'MinParentSize', parent, ...
+                       'SplitCriterion', 'mse', ...
+                       'Prune', 'on');
+
+    %----------------------------------------
+    % Support Vector Machines
+    %----------------------------------------
+    elseif setup.selML == 3
+        mdl = fitrsvm(Pv, T, ...
                   'KernelFunction', kernel, ...
                   'KernelScale', 'auto', ...
                   'BoxConstraint', C, ...
@@ -132,11 +237,18 @@ function mdl = svrFit(data, val, para)
                   'Standardize', true, ...
                   'Solver', 'SMO', ...
                   'Verbose', 1);
+    
+    %----------------------------------------
+    % Invalid
+    %----------------------------------------
+    else
+        disp("ERROR: Invalid model for machine learning")
+    end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Fitting SVM ML model")
+    disp("DONE: Fitting Machine Learning model")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

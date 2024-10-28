@@ -139,103 +139,41 @@ function [pred, grt, mdl] = testing(mdl, data, setup, para, path)
     %===================================================
     if setup.selML ~= 0
         %----------------------------------------
-        % KNN 
+        % Loading
         %----------------------------------------
-        if setup.selML == 1
-            % Loading
-            if isempty(mdl)
-                try
-                    mdlName = 'mdl_ml_knn_' + setup.name + '.mat';
-                    filename = fullfile(path.mdl, mdlName);
-                    load(filename, 'mdl');
-                    disp('INFO: Model loaded successfully.');
-                catch ME
-                    disp('WARN: Failed to load the model.');
-                    disp(['Error: ', ME.message]);
-                end
+        if isempty(mdl)
+            try
+                mdlName = 'mdl_ml_' + setup.name + '.mat';
+                filename = fullfile(path.mdl, mdlName);
+                load(filename, 'mdl');
+                disp('INFO: Model loaded successfully.');
+            catch ME
+                disp('WARN: Failed to load the model.');
+                disp(['Error: ', ME.message]);
             end
-    
-            % Fitting 
-            timeStart = tic;
-            pred = knnSol(mdl, data.te, para);
-            pred.testTime = toc(timeStart);
-    
-            % Formatting 
-            pred.y = pred.y(:,1);
-            pred.X = pred.X(:,1);
-            pred.r = pred.r(:,1);
-            pred.off = pred.off(:,1);
-            grt.y = data.te.y(:,1);
-            grt.X = data.te.X(:,1);
-            grt.r = data.te.r(:,1);
-            grt.off = data.te.off(:,1);
         end
 
         %----------------------------------------
-        % DT 
+        % Fitting 
         %----------------------------------------
-        if setup.selML == 2
-            % Loading
-            if isempty(mdl)
-                try
-                    mdlName = 'mdl_ml_dt_' + setup.name + '.mat';
-                    filename = fullfile(path.mdl, mdlName);
-                    load(filename, 'mdl');
-                    disp('INFO: Model loaded successfully.');
-                catch ME
-                    disp('WARN: Failed to load the model.');
-                    disp(['Error: ', ME.message]);
-                end
-            end
-    
-            % Fitting 
-            timeStart = tic;
-            pred = dtSol(mdl, data.te, para);
-            pred.testTime = toc(timeStart);
-    
-            % Formatting 
-            pred.y = pred.y(:,1);
-            pred.X = pred.X(:,1);
-            pred.r = pred.r(:,1);
-            pred.off = pred.off(:,1);
-            grt.y = data.te.y(:,1);
-            grt.X = data.te.X(:,1);
-            grt.r = data.te.r(:,1);
-            grt.off = data.te.off(:,1);
-        end
+        timeStart = tic;
+        pred = mlSol(mdl, data.te, para);
+        pred.testTime = toc(timeStart);
 
         %----------------------------------------
-        % SVR 
+        % Formatting 
         %----------------------------------------
-        if setup.selML == 3
-            % Loading
-            if isempty(mdl)
-                try
-                    mdlName = 'mdl_ml_svm_' + setup.name + '.mat';
-                    filename = fullfile(path.mdl, mdlName);
-                    load(filename, 'mdl');
-                    disp('INFO: Model loaded successfully.');
-                catch ME
-                    disp('WARN: Failed to load the model.');
-                    disp(['Error: ', ME.message]);
-                end
-            end
-    
-            % Fitting 
-            timeStart = tic;
-            pred = svrSol(mdl, data.te, para);
-            pred.testTime = toc(timeStart);
-    
-            % Formatting 
-            pred.y = pred.y(:,1);
-            pred.X = pred.X(:,1);
-            pred.r = pred.r(:,1);
-            pred.off = pred.off(:,1);
-            grt.y = data.te.y(:,1);
-            grt.X = data.te.X(:,1);
-            grt.r = data.te.r(:,1);
-            grt.off = data.te.off(:,1);
-        end
+        % Prediction
+        pred.y = pred.y(:,1);
+        pred.X = pred.X(:,1);
+        pred.r = pred.r(:,1);
+        pred.off = pred.off(:,1);
+
+        % Testing
+        grt.y = data.te.y(:,1);
+        grt.X = data.te.X(:,1);
+        grt.r = data.te.r(:,1);
+        grt.off = data.te.off(:,1);
     end
 
     %===================================================

@@ -116,59 +116,23 @@ function mdl = training(data, setup, para, path)
     %===================================================
     if setup.selML ~= 0
         %----------------------------------------
-        % KNN 
+        % Fitting 
         %----------------------------------------
-        if setup.selML == 1
-            % Fitting
-            timeStart = tic;
-            mdl.sys = knnFit(data.tr, data.vl, para);
-            mdl.timeTrain = toc(timeStart);
-
-            % Model Size
-            mdl.size = mdl.sys.NumNeighbors;
-
-            % Saving
-            mdlName = 'mdl_ml_knn_' + setup.name + '.mat';
-            filename = fullfile(path.mdl, mdlName);
-            save(filename, 'mdl');
-        end
+        timeStart = tic;
+        mdl.sys = mlFit(data.tr, data.vl, para, setup);
+        mdl.timeTrain = toc(timeStart);
 
         %----------------------------------------
-        % RF 
+        % Model Size 
         %----------------------------------------
-        if setup.selML == 2
-            % Fitting
-            timeStart = tic;
-            mdl.sys = dtFit(data.tr, data.vl, para);
-            mdl.timeTrain = toc(timeStart);
-
-            % Model Size
-            mdl.size = mdl.sys.ModelParameters.MinLeaf;
-
-            % Saving
-            mdlName = 'mdl_ml_dt_' + setup.name + '.mat';
-            filename = fullfile(path.mdl, mdlName);
-            save(filename, 'mdl');
-        end
+        mdl.size = 1;
 
         %----------------------------------------
-        % SVR 
+        % Saving
         %----------------------------------------
-        if setup.selML == 3
-            % Fitting
-            timeStart = tic;
-            mdl.sys = svrFit(data.tr, data.vl, para);
-            mdl.timeTrain = toc(timeStart);
-
-            % Model Size
-            mdl.size = numel(mdl.sys.SupportVectors);
-
-            % Saving
-            mdlName = 'mdl_ml_svr_' + setup.name + '.mat';
-            filename = fullfile(path.mdl, mdlName);
-            save(filename, 'mdl');
-        end
-
+        mdlName = 'mdl_ml_' + setup.name + '.mat';
+        filename = fullfile(path.mdl, mdlName);
+        save(filename, 'mdl');
     end
 
     %===================================================

@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: knnFit                                                            %
+% File: mlSol                                                             %
 % Date: 13.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -14,132 +14,88 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function fits a k-nearest-neighbor model.                
+% This function solves a Machine Learning model.   
 % -------------------------------------------------------------------------
-% Inp:  1) data:    Training input data struct
-%       2) val:     Validation input data struct
+% Inp:  1) mdl:     Fitted model parameters
+%       2) data:    Testing input data struct
 %       3) para:    All simulation parameters of the current simulation
-% Out:  1) mdl:     Trained model
+% Out:  1) out:     Predicted temperature response
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function mdl = knnFit(data, val, para)
+function out = mlSol(mdl, data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Fitting KNN ML model")
+    disp("START: Solving Machine Learning model")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % General Parameter
+    % Parameter
     %===================================================
-    K = para.Mdl.knn.K;                                                     % number of neighbors
-    Nt = min(data.Nt);                                                      % minimum number of training time steps
-    [~, N] = size(data.X2);                                                 % number of training datasets used for fitting
-    Nt_vl = min(val.Nt);                                                    % minimum number of validation time steps
-    [~, N_vl] = size(val.X2);                                               % number of validation datasets used for fitting
-    
+    Rcon = para.Par.loss.Rcon;                                              % contact resistance (Ohm)
+    Rohm = para.Par.loss.Rohm;                                              % conduction resistance (Ohm)
+    Rslope = para.Par.loss.Rslope;                                          % slope specific resistance change (1/K)
+    Tref = para.Par.loss.Tref;                                              % reference temperature losses (°C)
+    eps = para.Par.gen.eps;                                                 % lower numerical bound
+    Nt = length(data.X(:,1));                                               % number of time steps
+
     %===================================================
-    % General Parameter
+    % Variables
     %===================================================
-    Pv = data.X;
-    Pv_vl = val.X;
+    Pv = data.X;                                                            % power losses input (W)
+    Toff = data.r(:,1);                                                     % temperature offset/reference (°C)
+    Tj_est = zeros(Nt,1);                                                   % init junction temperature
+    out = data;                                                             % init output struct
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Optimiser
+    % Scaling Function
     %===================================================
-    if para.Mdl.knn.ns == 1
-        NSMethod = 'exhaustive';
+    if Rohm == 0
+        theta = @(T) 1;
     else
-        NSMethod = 'kdtree';
+        theta = @(T) (Rcon + Rohm*Rslope*(T-Tref)) / (Rcon + Rohm + eps);
     end
-
-    %===================================================
-    % Distance Metric
-    %===================================================
-    if para.Mdl.knn.dist == 1
-        Distance = 'cityblock';
-    elseif para.Mdl.knn.dist == 2
-        Distance = 'chebychev';
-    elseif para.Mdl.knn.dist == 3
-        Distance = 'euclidean';
-    elseif para.Mdl.knn.dist == 4
-        Distance = 'minkowski';
-    else
-        Distance = 'euclidean';
-    end
-
-    %===================================================
-    % Averaging Losses
-    %===================================================
-    %----------------------------------------
-    % Training
-    %----------------------------------------
-    for i = 1:N
-        if i == 1
-            T = data.y2{1,i}(1:Nt,1);
-        else
-            T = T + data.y2{1,i}(1:Nt,1);
-        end
-    end
-    T = T / N;
-    
-    %----------------------------------------
-    % Validation
-    %----------------------------------------
-    for i = 1:N_vl
-        if i == 1
-            T_vl = val.y2{1,i}(1:Nt_vl,1);
-        else
-            T_vl = T_vl + val.y2{1,i}(1:Nt_vl,1);
-        end
-    end
-    T_vl = T_vl / N_vl;
-    
-    %===================================================
-    % Init Value
-    %===================================================
-    T_vl = T_vl - T_vl(1);
-    T = T - T(1);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Optimal Model
+    % Fitting Parameters
     %===================================================
-    if para.Mdl.gen.opt == 1
+    for i = 2:Nt
         %----------------------------------------
-        % Optimise
+        % Update power
         %----------------------------------------
-        mdl = fitcknn(Pv_vl,T_vl,'OptimizeHyperparameters','auto',...
-                                 'HyperparameterOptimizationOptions',...
-                                  struct('AcquisitionFunctionName', ...
-                                         'expected-improvement-plus'));
+        Pv(i, :) = Pv(i, :) .* theta(Tj_est(i-1) + Toff(i-1));
+        
         %----------------------------------------
-        % Extract Parameters
+        % Solve Junction
         %----------------------------------------
-        K = mdl.NumNeighbors;
+        Tj_est(i) = predict(mdl.sys, Pv(i, :));
     end
-
+    
     %===================================================
-    % Fixed Order Model
+    % Correcting Offset
     %===================================================
-    mdl = fitcknn(Pv,T,'NumNeighbors',K,...
-                       'NSMethod',NSMethod, ...
-                       'Distance',Distance,...
-                       'Standardize',1);
+    Tj_est = Tj_est + Toff;
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Output
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    out.y = Tj_est;
+    out.X = Pv;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Fitting KNN ML model")
+    disp("DONE: Solving Machine Learning model")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
