@@ -183,3 +183,8 @@ set(gca, 'FontSize', 12);
 fprintf('Maximum Relative L2 Error: %.4f at time t = %.2f seconds.\n', max_error, time(max_idx));
 
 % Optionally, plot the error over time as a single plot with
+
+%% Step 7: Optionally, plot the error over time as a single plot with
+figure;
+plot(T_full_k);
+plot(T_reduced_k);
