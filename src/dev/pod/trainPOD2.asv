@@ -1,0 +1,345 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Titel: Model Order Reduction (MOR)
+% File: trainPOD
+% Author: P. Schirmer
+% Department: ES-641
+% Version: v.1.2
+% Date: 17.06.2024
+% Copyright: BMW AG, Munich
+% Comments: comparing different MORs for thermal modeling
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Description
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% This functions fits a proper orthogonal decomposed (POD) model with a 
+% fixed model order.
+% Input:
+%       - data:     input training data
+%       - setup:    all setup variables for the simulation
+% Output:
+%       - mdl:      trained pod model
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% FNC
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function mdl = trainPOD2(data, setup)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% MSG In
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+disp('INFO: Start training POD Model');
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Init
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% ----------------------------------------------------
+% Parameter
+% ----------------------------------------------------
+[Nt, Ny, Nx] = size(data.y{1});
+dx = data.dx;
+dy = data.dy;
+Kmax = setup.mdl.pod.Kmax;
+Emax = setup.mdl.pod.Emax;
+E = 0;
+err = setup.mdl.hyp.err;
+k = data.Mat2D.k;
+rho = data.Mat2D.rho;
+Cp = data.Mat2D.Cp;
+alpha = k ./ (rho.*Cp);
+
+% ----------------------------------------------------
+% Variables
+% ----------------------------------------------------
+U = data.y{1};
+T = zeros(size(U));
+Q = data.X{1};
+T0 = squeeze(U(1, :, :));
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Pre-processing
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% ----------------------------------------------------
+% Mean Centering
+% ----------------------------------------------------
+Tavg = squeeze(mean(U, 1));
+for i = 1:Nt
+    T(i, :, :) = U(i, :, :) - mean(U, 1);
+end
+
+% ----------------------------------------------------
+% Snapshots 
+% ----------------------------------------------------
+T_snap = reshape(T,Nt,Nx*Ny);
+T_snap_mean = mean(T_snap, 1);
+T_snap = T_snap - T_snap_mean;
+
+% ----------------------------------------------------
+% Eigenvalue Decomposition 
+% ----------------------------------------------------
+% Snap Based
+[~,S,Phi] = svd(T_snap/sqrt(Nt-0));
+lam = diag(S);
+
+% Number of Eigenvalues
+fprintf('Overall numbers of eigenvalues: %i \n', length(lam));
+
+% ----------------------------------------------------
+% Cummulative Correlation Energy 
+% ----------------------------------------------------
+% Init
+n = 1;
+
+% Energy
+if setup.mdl.pod.modes == 1
+    while E < Emax && n < Kmax
+        E = sum(abs(lam(1:n))) / sum(abs(lam));
+        n = n + 1;
+    end
+    K = n;
+
+% Opti
+elseif setup.mdl.pod.modes == 2
+    E = sum(abs(lam(1:setup.mdl.pod.K))) / sum(abs(lam));
+    K = setup.mdl.pod.K;
+
+% Default (fixed)
+else
+    E = sum(abs(lam(1:setup.mdl.pod.K))) / sum(abs(lam));
+    K = setup.mdl.pod.K;
+end
+
+% Msg
+fprintf('Number of used eigenvalues (model order) K: %i \n', K);
+fprintf('Cumulative correlation energy Em: %f \n', E)
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Calculation
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% ----------------------------------------------------
+% Init
+% ----------------------------------------------------
+Id = zeros(K, K);
+dPhidx = zeros(Ny, Nx, K);
+dPhidy = zeros(Ny, Nx, K);
+theta = zeros(Nt, K);
+
+% ----------------------------------------------------
+% Spatial Modes
+% ----------------------------------------------------
+% POD modes
+Phi = Phi(:,1:K);
+phi = reshape(Phi, [Ny, Nx, K]);
+
+% Orthogonal Matrix
+for i = 1:K
+    for ii = 1:K
+        Id(i, ii) = trapz(dy, trapz(dx, phi(:, :, i) .* phi(:, :, ii), 1), 2) / dx / dy;
+    end
+end
+
+if abs(norm(eye(K) - Id)) > err
+    disp('ERROR: POD modes are not orthonormal');
+end
+
+% ----------------------------------------------------
+% Temporal Modes
+% ----------------------------------------------------
+for i = 1:K
+    for ii = 1:Nt
+        theta(ii,i) = trapz(dx, trapz(dy, squeeze(phi(:, :, i)) .* squeeze(T(ii, :, :)), 1), 2) / dx / dy;
+    end
+end
+
+% ----------------------------------------------------
+% Spatial Gradients
+% ----------------------------------------------------
+for i = 1:K
+    [dPhidx(:, :, i), dPhidy(:, :, i)] = gradient(phi(:, :, i), dx, dy);
+end
+[dT0dx, dT0dy] = gradient(squeeze(T(1, :, :)), dx, dy);
+
+% ----------------------------------------------------
+% Initial Coniditions
+% ----------------------------------------------------
+for i = 1:K
+    g0(1, i) = trapz(dx, trapz(dy, T0 .* phi(:, :, i), 1), 2) / ...
+               trapz(dx, trapz(dy, phi(:, :, i) .* phi(:, :, i), 1), 2);
+end
+
+% ----------------------------------------------------
+% System Matrices
+% ----------------------------------------------------
+% Init
+Cth = zeros(K, K);
+Gth = zeros(K, K);
+Gx = zeros(K, K);
+Gy = zeros(K, K);
+
+% System Matrices
+for i = 1:K
+    for ii = 1:K
+        % Mass Matrix
+        Cth(i, ii) = trapz(dx, trapz(dy, phi(:, :, ii) .* phi(:, :, i), 1), 2) / dx / dy;
+
+        % Stiffness Matrix (interior contributions)
+        Gth(i, ii) = trapz(dx, trapz(dy, alpha .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), 1), 2) / dx / dy;
+
+        % Boundary Terms for Neumann conditions (Y-direction)
+        tempY = alpha .* phi(:, :, ii) .* dPhidx(:, :, i);
+        Gy(i, ii) = trapz(dy, tempY(:, end) - tempY(:, 1), 1) / dy;
+
+        % Boundary Terms for Neumann conditions (X-direction)
+        tempX = alpha .* phi(:, :, ii) .* dPhidy(:, :, i);
+        Gx(i, ii) = trapz(dx, tempX(end, :) -  tempX(1, :), 2) / dx;
+    end
+end
+Gth = Gth - (Gy + Gx);
+
+% Boundary Conditions
+for i = 1:K
+    % Interior contributions
+    c(i) = trapz(dx, trapz(dy, alpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy), 1), 2) / dx / dy;
+    
+    % Boundary contributions in Y-direction
+    tempY = alpha .* phi(:, :, i) .* dT0dx;
+    cy(i) = trapz(dy, tempY(:, end) - tempY(:, 1), 1) / dy;
+    
+    % Boundary contributions in X-direction
+    tempX = alpha .* phi(:, :, i) .* dT0dy;
+    cx(i) = trapz(dx, tempX(end, :) - tempX(1, :), 2) / dx;
+end
+c = c - (cx + cy);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Post-processing
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% ----------------------------------------------------
+% Optimize Cth and Gth
+% ----------------------------------------------------
+% Init
+initial_guess = [Cth(1,1); Gth(:)];
+dt = data.Ts{1};
+
+% Heat Generation
+for i = 1:Nt
+    for ii = 1:K
+        q(ii, i) = trapz(dx, trapz(dy, alpha ./ k .* squeeze(Q(i, :, :)) .* squeeze(phi(:, :, ii)), 1), 2) / dx / dy;
+    end
+end
+
+% Source Term
+for i = 1:Nt
+    F(:, i) = (q(:, i) + c');
+end
+
+% Objective Function
+objective = @(x) objective_function(x, theta', T, phi, F, Nt, dt);
+options = optimoptions('fminunc', 'Algorithm', 'quasi-newton', 'Display', 'iter', 'FiniteDifferenceType', 'central', 'MaxIterations', 30);
+
+try
+    opt_params = fminunc(objective, initial_guess, options);
+    Cth_opt = reshape(opt_params(1:numel(Cth)), size(Cth));
+    Gth_opt = reshape(opt_params(numel(Cth)+1:end), size(Gth));
+catch 
+    Cth_opt = Cth;
+    Gth_opt = Gth;
+end
+Cth = Cth_opt;
+Gth = Gth_opt;
+
+% Stiffness Matrices
+GC = Gth / Cth;
+
+% ----------------------------------------------------
+% Make Mass Orthogonal
+% ----------------------------------------------------
+% Decayrates
+[beta,decay] = eig(Gth,Cth);
+decay = diag(decay); 
+
+% % Orthogonality
+% R = chol(beta.'*Cth*beta);
+% beta = beta/R;
+% phi = Phi*beta;
+% phi = reshape(phi, [Ny, Nx, K]);
+% Cth = (Cth+Cth.')/2;
+% Gth = (Gth+Gth.')/2;
+
+% ----------------------------------------------------
+% Model
+% ----------------------------------------------------
+mdl.phi = phi;
+mdl.theta = theta;
+mdl.dPhidx = dPhidx;
+mdl.dPhidy = dPhidy;
+mdl.Gth = Gth;
+mdl.Cth = Cth;
+mdl.lam = lam;
+mdl.decay = decay;
+mdl.beta = beta;
+mdl.E = E;
+mdl.GC = GC;
+mdl.K = K;
+mdl.Tavg = Tavg;
+mdl.T0 = T0;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% MSG In
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+disp('INFO: Done training POD Model');
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% References
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function loss = objective_function(params, a_true, T_true, phi, F, nt, dt)
+    % Reshape the parameters into A and B matrices
+    n_modes = size(F, 1);
+    % Cth = reshape(params(1:n_modes^2), n_modes, n_modes);
+    % Gth = reshape(params(n_modes^2+1:end), n_modes, n_modes);
+
+    assert(numel(params) == 1 + n_modes^2, 'Invalid number of parameters');
+    diag_value = params(1); % Single value for the diagonal
+    Cth = diag(repmat(diag_value, n_modes, 1)); % Diagonal matrix with this value
+    Gth = reshape(params(2:end), n_modes, n_modes); % Remaining params for Gth
+    
+    % Variables
+    tlist = linspace(0, nt*dt-dt, nt)';
+    tspan = [0, nt*dt-dt];
+    g0 = a_true(:, 1);
+    
+    % Solver
+    odeoptions = odeset('Mass', Cth, 'JConstant', 'on', ...
+                        'RelTol', 1e-3, 'AbsTol', 1e-5, ...
+                        'Jacobian', -Gth);
+    
+    odefun = @(t, y) odefnc(t, y, GC, F', qt, K);
+    [t_solve,y_solve] = rk6(odefun, tspan, g0, dt);
+    theta = interp1(t_solve,y_solve,qt);
+
+    % ----------------------------------------------------
+    % Solve
+    % ----------------------------------------------------
+    sol = ode15s(@(t,y) odefnc2(t,y,Gth,F',tlist),tlist,g0,odeoptions);
+    a_pred = deval(sol,tlist);
+
+    % Reconstruct
+    T_hat = zeros(size(T_true));
+    for i = 1:n_modes
+        for ii = 1:nt
+            T_hat(ii, :, :) = squeeze(T_hat(ii, :, :)) + a_pred(i, ii) * phi(:, :, i);
+        end
+    end
+    
+    % Compute the loss as the mean squared error between a_true and a_pred
+    err = (T_true(:) - T_hat(:)).^2;
+    err = err(isfinite(err));
+    loss = mean(err);
+    if ~isfinite(loss)
+        loss = 1e9;
+    end
+end
+
