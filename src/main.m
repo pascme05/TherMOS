@@ -112,7 +112,11 @@ function [] = main(setup, path)
     %----------------------------------------
     % Calc
     %----------------------------------------
-    [data, para] = updLoss(data, para);
+    if para.Par.loss.fw ~= 0 || para.Par.loss.bw ~= 0
+        [data, para] = updLoss(data, para);
+    else
+        disp("INFO: Loss update deactivated")
+    end
     fprintf('\n');
     
     %===================================================
@@ -128,9 +132,13 @@ function [] = main(setup, path)
     %----------------------------------------
     % Calc
     %----------------------------------------
-    data.tr = offRemove(data.tr, para);
-    data.te = offRemove(data.te, para);
-    data.vl = offRemove(data.vl, para);
+    if para.Exp.gen.init ~= 1
+        data.tr = offRemove(data.tr, para);
+        data.te = offRemove(data.te, para);
+        data.vl = offRemove(data.vl, para);
+    else
+        disp("INFO: Offset removal deactivated")
+    end
     fprintf('\n');
 
     %===================================================
@@ -146,9 +154,13 @@ function [] = main(setup, path)
     %----------------------------------------
     % Calc
     %----------------------------------------
-    [data.tr, para] = normData(data.tr, para, 1);
-    [data.te, ~] = normData(data.te, para, 2);
-    [data.vl, ~] = normData(data.vl, para, 2);
+    if para.Par.gen.normX ~= 1 || para.Par.gen.normY ~= 1 
+        [data.tr, para] = normData(data.tr, para, 1);
+        [data.te, ~] = normData(data.te, para, 2);
+        [data.vl, ~] = normData(data.vl, para, 2);
+    else
+        disp("INFO: Data normalistion deactivated")
+    end
     fprintf('\n');
 
     %===================================================
@@ -164,9 +176,12 @@ function [] = main(setup, path)
     %----------------------------------------
     % Calc
     %----------------------------------------
-    data.tr = padData(data.tr, para);
-    % data.te = padData(data.te, para);
-    data.vl = padData(data.vl, para);
+    if para.Exp.gen.pad ~= 0
+        data.tr = padData(data.tr, para);
+        data.vl = padData(data.vl, para);
+    else
+        disp("INFO: Padding deactivated")
+    end
     fprintf('\n');
 
     %===================================================
@@ -182,7 +197,9 @@ function [] = main(setup, path)
     %----------------------------------------
     % Calc
     %----------------------------------------
-    data = dimData(data, setup, para);
+    data.tr = dimData(data.tr, setup, para);
+    data.vl = dimData(data.vl, setup, para);
+    data.te = dimData(data.te, setup, para);
     fprintf('\n');
 
 
@@ -259,10 +276,14 @@ function [] = main(setup, path)
     %----------------------------------------
     % Calc
     %----------------------------------------
-    [data.tr, ~] = normData(data.tr, para, 3);
-    [data.te, ~] = normData(data.te, para, 3);
-    [data.vl, ~] = normData(data.vl, para, 3);
-    [data.pr, ~] = normData(data.pr, para, 3);
+    if para.Par.gen.normX ~= 1 || para.Par.gen.normY ~= 1 
+        [data.tr, ~] = normData(data.tr, para, 3);
+        [data.te, ~] = normData(data.te, para, 3);
+        [data.vl, ~] = normData(data.vl, para, 3);
+        [data.pr, ~] = normData(data.pr, para, 3);
+    else
+        disp("INFO: Normalisation deactivated")
+    end
     fprintf('\n');
 
     %===================================================
@@ -278,10 +299,13 @@ function [] = main(setup, path)
     %----------------------------------------
     % Calc
     %----------------------------------------
-    data.tr = offAdd(data.tr, para);
-    data.te = offAdd(data.te, para);
-    data.vl = offAdd(data.vl, para);
-    % data.pr = offAdd(data.pr, para);
+    if para.Exp.gen.init ~= 1
+        data.tr = offAdd(data.tr, para);
+        data.te = offAdd(data.te, para);
+        data.vl = offAdd(data.vl, para);
+    else
+        disp("INFO: Offset removal deactivated")
+    end
     fprintf('\n');
 
     %===================================================

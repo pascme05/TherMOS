@@ -84,8 +84,8 @@ thermalIC(thermalmodel,Tinit);
 % Adiabatic
 thermalBC(thermalmodel,"Edge",[1,2,3],'Temperature',20);
         
-% % Constant Temperature
-% thermalBC(thermalmodel,"Edge",4,'Temperature',20); 
+% Constant Temperature
+thermalBC(thermalmodel,"Edge",4,'Temperature',20); 
 
 % % Convection
 % thermalBC(thermalmodel,"Edge",4,'ConvectionCoefficient',1000, ...
@@ -130,9 +130,9 @@ geo = results.Mesh.Nodes';
 k = matK * ones(length(T),1);
 Lx = 2*l;
 Ly = 2*h;
-r = Tinit * ones(size(T));
+r = Tinit * ones(size(T))';
 rho = matRho * ones(length(T),1);
-t = tlist';
+t = tlist;
 Ts = dt;
 X = q * ones(size(T))';
 y = T';

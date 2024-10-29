@@ -59,27 +59,27 @@ classdef DataLoader
         %===================================================
         % General Loading
         %===================================================
-        function data = loadData(obj, FileName, SheetName, ID, stat, para, setup)
+        function data = loadData(obj, FileName, SheetName, stat, setup)
             %----------------------------------------
             % 1D Xlsx
             %----------------------------------------
             if obj.Type == "xlsx"
                 % Loading
-                data = loadXlsx(obj, FileName, SheetName, ID, stat, para, setup);
+                data = loadXlsx(obj, FileName, SheetName, stat, setup);
 
             %----------------------------------------
             % 1D Mat
             %----------------------------------------
             elseif obj.Type == "mat" && obj.Dim == 1
                 % Loading
-                data = loadMat1D(obj, FileName, ID, stat, para, setup);
+                data = loadMat1D(obj, FileName, stat, setup);
 
             %----------------------------------------
             % 2D Mat
             %----------------------------------------
             elseif obj.Type == "mat" && obj.Dim >= 2
                 % Loading
-                obj = loadXlsx(obj, FileName, SheetName, ID, stat, para, setup);
+                data = loadMat2D(obj, FileName);
 
             %----------------------------------------
             % Error Handling
@@ -92,7 +92,7 @@ classdef DataLoader
         %===================================================
         % Load xlsx Data
         %===================================================
-        function obj = loadXlsx(obj, FileName, SheetName, ID, stat, para, setup)
+        function obj = loadXlsx(obj, FileName, SheetName, stat, setup)
             %----------------------------------------
             % Loading Data
             %----------------------------------------
@@ -166,7 +166,7 @@ classdef DataLoader
         %===================================================
         % Load Matlab 1D Data
         %===================================================
-        function obj = loadMat1D(obj, FileName, ID, stat, para, setup)
+        function obj = loadMat1D(obj, FileName, stat, setup)
             %----------------------------------------
             % Loading Data
             %----------------------------------------
@@ -259,8 +259,29 @@ classdef DataLoader
         %===================================================
         % Load Matlab 2D Data
         %===================================================
-        function r = loadMat2D(obj,n)
-            r = [obj.Value] * n;
+        function obj = loadMat2D(obj, FileName)
+            %----------------------------------------
+            % Loading Data
+            %----------------------------------------
+            if isempty(FileName)
+                error('ERROR: FileName is not set. Please set the FileName property');
+            end
+            
+            %----------------------------------------
+            % Loading
+            %----------------------------------------
+            try
+                obj.Data = load(FileName, "-mat");
+                obj.r = obj.Data.r;
+                obj.t = obj.Data.t;
+                obj.Ts = obj.Data.Ts;
+                obj.X = obj.Data.X;
+                obj.y = obj.Data.y;
+                disp('INFO: 2D Matlab data successfully loaded');
+            catch ME
+                disp('INFO: Failed to load data');
+                rethrow(ME);
+            end
         end
 
         %===================================================

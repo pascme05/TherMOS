@@ -33,7 +33,9 @@ function out = dimData(data, setup, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    dim = length(size(data.tr.y));                                          % dimension of raw data input
+    Ts = data.Ts;                                                           % sampling time (sec)
+    [~, N] = size(data.y2);                                                 % number of profiles in data
+    dim = length(size(data.y));                                             % dimension of raw data input
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
@@ -72,10 +74,26 @@ function out = dimData(data, setup, para)
         %----------------------------------------
         % Get positions
         %----------------------------------------
+        [~,idInp] = min(sum(abs(data.Data.geo - [para.Dat.gen.inpX, para.Dat.gen.inpY, para.Dat.gen.inpZ]),2));
+        [~,idOut] = min(sum(abs(data.Data.geo - [para.Dat.gen.outX, para.Dat.gen.outY, para.Dat.gen.outZ]),2));
 
         %----------------------------------------
-        % Reduce data
+        % Reduce Unstructured Data
         %----------------------------------------
+        data.X = data.X(:,idInp);
+        data.y = data.y(:,idOut);
+        data.r = data.r(:,idOut);
+        data.off = data.off(:,idOut);
+
+        %----------------------------------------
+        % Reduce Structured Data
+        %----------------------------------------
+        for i = 1:N
+            data.X2{1,i} = data.X2{1,i}(:,idInp);
+            data.y2{1,i} = data.y2{1,i}(:,idOut);
+            data.r2{1,i} = data.r2{1,i}(:,idOut);
+            data.off2{1,i} = data.off2{1,i}(:,idOut);
+        end
 
         %----------------------------------------
         % Msg
@@ -89,10 +107,26 @@ function out = dimData(data, setup, para)
         %----------------------------------------
         % Get positions
         %----------------------------------------
+        [~,idInp] = min(sum(abs(data.Data.geo - [para.Dat.gen.inpX, para.Dat.gen.inpY]),2));
+        [~,idOut] = min(sum(abs(data.Data.geo - [para.Dat.gen.outX, para.Dat.gen.outY]),2));
 
         %----------------------------------------
-        % Reduce data
+        % Reduce Unstructured Data
         %----------------------------------------
+        data.X = data.X(:,idInp);
+        data.y = data.y(:,idOut);
+        data.r = data.r(:,idOut);
+        data.off = data.off(:,idOut);
+
+        %----------------------------------------
+        % Reduce Structured Data
+        %----------------------------------------
+        for i = 1:N
+            data.X2{1,i} = data.X2{1,i}(:,idInp);
+            data.y2{1,i} = data.y2{1,i}(:,idOut);
+            data.r2{1,i} = data.r2{1,i}(:,idOut);
+            data.off2{1,i} = data.off2{1,i}(:,idOut);
+        end
 
         %----------------------------------------
         % Msg
@@ -111,6 +145,46 @@ function out = dimData(data, setup, para)
     %===================================================
     else
         disp("WARN: Reduction invalid, check data dimensions");
+    end
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Post-Processing
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % ID Data 1D 
+    %===================================================
+    if para.Dat.gen.dOut == 1
+        for i = 1:N
+            if i == 1
+                out.idData = iddata(data.y2{1,i},data.X2{1,i},Ts);
+            else
+                temp = iddata(data.y2{1,i},data.X2{1,i},Ts);
+                out.idData = merge(out.idData,temp);
+            end
+        end
+
+    %===================================================
+    % ID Data 2D 
+    %===================================================
+    else
+        % Find Minimum
+        if data.Dim == 2
+            [~,idInp] = min(sum(abs(data.Data.geo - [para.Dat.gen.inpX, para.Dat.gen.inpY]),2));
+            [~,idOut] = min(sum(abs(data.Data.geo - [para.Dat.gen.outX, para.Dat.gen.outY]),2));
+        else
+            [~,idInp] = min(sum(abs(data.Data.geo - [para.Dat.gen.inpX, para.Dat.gen.inpY, para.Dat.gen.inpZ]),2));
+            [~,idOut] = min(sum(abs(data.Data.geo - [para.Dat.gen.outX, para.Dat.gen.outY, para.Dat.gen.outZ]),2));
+        end
+
+        % Extract Data
+        for i = 1:N
+            if i == 1
+                out.idData = iddata(data.y2{1,i}(:,idOut),data.X2{1,i}(:,idInp),Ts);
+            else
+                temp = iddata(data.y2{1,i}(:,idOut),data.X2{1,i}(:,idInp),Ts);
+                out.idData = merge(out.idData,temp);
+            end
+        end
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

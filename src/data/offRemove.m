@@ -129,14 +129,14 @@ function out = offRemove(data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    for i = 1:N
-        if i == 1
-            data.idData = iddata(data.y2{1,i},data.X2{1,i},Ts);
-        else
-            temp = iddata(data.y2{1,i},data.X2{1,i},Ts);
-            data.idData = merge(data.idData,temp);
-        end
-    end
+    % for i = 1:N
+    %     if i == 1
+    %         data.idData = iddata(data.y2{1,i},data.X2{1,i},Ts);
+    %     else
+    %         temp = iddata(data.y2{1,i},data.X2{1,i},Ts);
+    %         data.idData = merge(data.idData,temp);
+    %     end
+    % end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output

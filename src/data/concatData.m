@@ -37,6 +37,7 @@ function out = concatData(data, setup, para)
     % Parameters
     %===================================================
     [~, N] = size(data.y);                                                  % number of profiles in data
+    [Nt,~] = size(data.y{1,1});                                             % number of timesteps
     Ts = data.Ts;                                                           % sampling time data (sec)
      
     %===================================================
@@ -107,7 +108,7 @@ function out = concatData(data, setup, para)
     %===================================================
     % Total Time
     %===================================================
-    out.t = 0:Ts:length(out.y)*Ts-Ts;
+    out.t = 0:Ts:Nt*Ts-Ts;
     out.t = out.t';
     
     %===================================================
@@ -118,12 +119,40 @@ function out = concatData(data, setup, para)
     %===================================================
     % ID Data
     %===================================================
-    for i = 1:N
-        if i == 1
-            out.idData = iddata(data.y{1,i},data.X{1,i},Ts);
+    %----------------------------------------
+    % 1D Data
+    %----------------------------------------
+    if setup.datDim == 1
+        for i = 1:N
+            if i == 1
+                out.idData = iddata(data.y{1,i},data.X{1,i},Ts);
+            else
+                temp = iddata(data.y{1,i},data.X{1,i},Ts);
+                out.idData = merge(out.idData,temp);
+            end
+        end
+
+    %----------------------------------------
+    % 2D Data
+    %----------------------------------------
+    else
+        % Find Minimum
+        if data.Dim == 2
+            [~,idInp] = min(sum(abs(data.Data.geo - [para.Dat.gen.inpX, para.Dat.gen.inpY]),2));
+            [~,idOut] = min(sum(abs(data.Data.geo - [para.Dat.gen.outX, para.Dat.gen.outY]),2));
         else
-            temp = iddata(data.y{1,i},data.X{1,i},Ts);
-            out.idData = merge(out.idData,temp);
+            [~,idInp] = min(sum(abs(data.Data.geo - [para.Dat.gen.inpX, para.Dat.gen.inpY, para.Dat.gen.inpZ]),2));
+            [~,idOut] = min(sum(abs(data.Data.geo - [para.Dat.gen.outX, para.Dat.gen.outY, para.Dat.gen.outZ]),2));
+        end
+
+        % Extract Data
+        for i = 1:N
+            if i == 1
+                out.idData = iddata(data.y{1,i}(:,idOut),data.X{1,i}(:,idInp),Ts);
+            else
+                temp = iddata(data.y{1,i}(:,idOut),data.X{1,i}(:,idInp),Ts);
+                out.idData = merge(out.idData,temp);
+            end
         end
     end
 

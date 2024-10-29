@@ -64,8 +64,8 @@ function data = loadData(para, setup)
     stat = 1;                                                           
 
     % Load
-    data.tr = loader.loadData(setup.trFile(1), setup.trSheet(1), ...
-                              setup.trID, stat, para, setup);
+    data.tr = loader.loadData(setup.trFile(1), setup.trSheet(1), stat, ...
+                              setup);
 
     % Clear data
     data.tr.X = [];
@@ -80,7 +80,7 @@ function data = loadData(para, setup)
         for i = 1:length(setup.trFile)
             % Data
             temp = loader.loadData(setup.trFile(i), setup.trSheet(1), ...
-                                   setup.trID, stat, para, setup);
+                                   stat, setup);
             
             % Resample
             [xOut, yOut, rOut, tOut] = resmpData(temp, para);
@@ -99,7 +99,7 @@ function data = loadData(para, setup)
         for i = 1:length(setup.trSheet)
             % Data
             temp = loader.loadData(setup.trFile(1), setup.trSheet(i), ...
-                                   setup.trID, stat, para, setup);
+                                   stat, setup);
 
             % Resample
             [xOut, yOut, rOut, tOut] = resmpData(temp, para);
@@ -117,7 +117,7 @@ function data = loadData(para, setup)
     else
         % Data
         temp = loader.loadData(setup.trFile(1), setup.trSheet(1), ...
-                               setup.trID, stat, para, setup);
+                               stat, setup);
 
         % Resample
         [xOut, yOut, rOut, tOut] = resmpData(temp, para);
@@ -147,7 +147,7 @@ function data = loadData(para, setup)
 
     % Load
     data.te = loader.loadData(setup.teFile(1), setup.teSheet(1), ...
-                              setup.teID, stat, para, setup);
+                              stat, setup);
 
     % Clear data
     data.te.X = [];
@@ -162,7 +162,7 @@ function data = loadData(para, setup)
         for i = 1:length(setup.teFile)
             % Data
             temp = loader.loadData(setup.teFile(i), setup.teSheet(1), ...
-                                   setup.teID, stat, para, setup);
+                                   stat, setup);
             
             % Resample
             [xOut, yOut, rOut, tOut] = resmpData(temp, para);
@@ -181,7 +181,7 @@ function data = loadData(para, setup)
         for i = 1:length(setup.teSheet)
             % Data
             temp = loader.loadData(setup.teFile(1), setup.teSheet(i), ...
-                                   setup.teID, stat, para, setup);
+                                   stat, setup);
             
             % Resample
             [xOut, yOut, rOut, tOut] = resmpData(temp, para);
@@ -199,7 +199,7 @@ function data = loadData(para, setup)
     else
         % Data
         temp = loader.loadData(setup.teFile(1), setup.teSheet(1), ...
-                                  setup.teID, stat, para, setup);
+                               stat, setup);
 
         % Resample
         [xOut, yOut, rOut, tOut] = resmpData(temp, para);
@@ -229,7 +229,7 @@ function data = loadData(para, setup)
 
     % Load
     data.vl = loader.loadData(setup.vlFile(1), setup.vlSheet(1), ...
-                              setup.vlID, stat, para, setup);
+                              stat, setup);
 
     % Clear data
     data.vl.X = [];
@@ -244,7 +244,7 @@ function data = loadData(para, setup)
         for i = 1:length(setup.vlFile)
             % Data
             temp = loader.loadData(setup.vlFile(i), setup.vlSheet(1), ...
-                                   setup.vlID, stat, para, setup);
+                                   stat, setup);
             
             % Resample
             [xOut, yOut, rOut, tOut] = resmpData(temp, para);
@@ -263,7 +263,7 @@ function data = loadData(para, setup)
         for i = 1:length(setup.vlSheet)
             % Data
             temp = loader.loadData(setup.vlFile(1), setup.vlSheet(i), ...
-                                   setup.vlID, stat, para, setup);
+                                   stat, setup);
 
             % Resample
             [xOut, yOut, rOut, tOut] = resmpData(temp, para);
@@ -281,7 +281,7 @@ function data = loadData(para, setup)
     else
         % Data
         temp = loader.loadData(setup.vlFile(1), setup.vlSheet(1), ...
-                                  setup.vlID, stat, para, setup);
+                               stat, setup);
 
         % Resample
         [xOut, yOut, rOut, tOut] = resmpData(temp, para);
