@@ -52,30 +52,30 @@ function out = dimData(data, setup, para)
     %===================================================
     % Get Axis for Removal
     %===================================================
-    %----------------------------------------
-    % X-Axis
-    %----------------------------------------
-    if ax == 1
-        diffX = 0;
-        diffY = 0;
-        diffZ = pos;
-    
-    %----------------------------------------
-    % Y-Axis
-    %----------------------------------------
-    elseif ax == 2
-        selX = pos;
-        selY = 0;
-        selZ = 0;
-    
-    %----------------------------------------
-    % Z-Axis
-    %----------------------------------------
-    else
-        selX = 1;
-        selY = 2;
-        selZ = 3;
-    end
+    % %----------------------------------------
+    % % X-Axis
+    % %----------------------------------------
+    % if ax == 1
+    %     diffX = 0;
+    %     diffY = 0;
+    %     diffZ = pos;
+    % 
+    % %----------------------------------------
+    % % Y-Axis
+    % %----------------------------------------
+    % elseif ax == 2
+    %     selX = pos;
+    %     selY = 0;
+    %     selZ = 0;
+    % 
+    % %----------------------------------------
+    % % Z-Axis
+    % %----------------------------------------
+    % else
+    %     selX = 1;
+    %     selY = 2;
+    %     selZ = 3;
+    % end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -102,6 +102,11 @@ function out = dimData(data, setup, para)
     %===================================================
     elseif setup.datDim == 3 && para.Dat.gen.dOut == 1
         %----------------------------------------
+        % Init
+        %----------------------------------------
+        out = data;
+
+        %----------------------------------------
         % Get positions
         %----------------------------------------
         [~,idInp] = min(sum(abs(data.Data.geo - [para.Dat.gen.inpX, para.Dat.gen.inpY, para.Dat.gen.inpZ]),2));
@@ -110,19 +115,19 @@ function out = dimData(data, setup, para)
         %----------------------------------------
         % Reduce Unstructured Data
         %----------------------------------------
-        data.X = data.X(:,idInp);
-        data.y = data.y(:,idOut);
-        data.r = data.r(:,idOut);
-        data.off = data.off(:,idOut);
+        out.X = data.X(:,idInp);
+        out.y = data.y(:,idOut);
+        out.r = data.r(:,idOut);
+        out.off = data.off(:,idOut);
 
         %----------------------------------------
         % Reduce Structured Data
         %----------------------------------------
         for i = 1:N
-            data.X2{1,i} = data.X2{1,i}(:,idInp);
-            data.y2{1,i} = data.y2{1,i}(:,idOut);
-            data.r2{1,i} = data.r2{1,i}(:,idOut);
-            data.off2{1,i} = data.off2{1,i}(:,idOut);
+            out.X2{1,i} = data.X2{1,i}(:,idInp);
+            out.y2{1,i} = data.y2{1,i}(:,idOut);
+            out.r2{1,i} = data.r2{1,i}(:,idOut);
+            out.off2{1,i} = data.off2{1,i}(:,idOut);
         end
 
         %----------------------------------------
@@ -135,6 +140,11 @@ function out = dimData(data, setup, para)
     %===================================================
     elseif setup.datDim == 2 && para.Dat.gen.dOut == 1
         %----------------------------------------
+        % Init
+        %----------------------------------------
+        out = data;
+
+        %----------------------------------------
         % Get positions
         %----------------------------------------
         [~,idInp] = min(sum(abs(data.Data.geo - [para.Dat.gen.inpX, para.Dat.gen.inpY]),2));
@@ -143,19 +153,19 @@ function out = dimData(data, setup, para)
         %----------------------------------------
         % Reduce Unstructured Data
         %----------------------------------------
-        data.X = data.X(:,idInp);
-        data.y = data.y(:,idOut);
-        data.r = data.r(:,idOut);
-        data.off = data.off(:,idOut);
+        out.X = data.X(:,idInp);
+        out.y = data.y(:,idOut);
+        out.r = data.r(:,idOut);
+        out.off = data.off(:,idOut);
 
         %----------------------------------------
         % Reduce Structured Data
         %----------------------------------------
         for i = 1:N
-            data.X2{1,i} = data.X2{1,i}(:,idInp);
-            data.y2{1,i} = data.y2{1,i}(:,idOut);
-            data.r2{1,i} = data.r2{1,i}(:,idOut);
-            data.off2{1,i} = data.off2{1,i}(:,idOut);
+            out.X2{1,i} = data.X2{1,i}(:,idInp);
+            out.y2{1,i} = data.y2{1,i}(:,idOut);
+            out.r2{1,i} = data.r2{1,i}(:,idOut);
+            out.off2{1,i} = data.off2{1,i}(:,idOut);
         end
 
         %----------------------------------------

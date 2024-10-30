@@ -110,6 +110,26 @@ function mdl = training(data, setup, para, path)
     %===================================================
     % POD Model
     %===================================================
+    if setup.selPO == 1
+        %----------------------------------------
+        % Fitting 
+        %----------------------------------------
+        timeStart = tic;
+        mdl = poFit(data.tr, data.vl, para);
+        mdl.timeTrain = toc(timeStart);
+
+        %----------------------------------------
+        % Model Size 
+        %----------------------------------------
+        mdl.size = numel(mdl.Phi) + numel(mdl.GC);
+
+        %----------------------------------------
+        % Saving
+        %----------------------------------------
+        mdlName = 'mdl_sf_' + setup.name + '.mat';
+        filename = fullfile(path.mdl, mdlName);
+        save(filename, 'mdl');
+    end
 
     %===================================================
     % Machine Learning
