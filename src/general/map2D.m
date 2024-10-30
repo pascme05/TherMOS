@@ -14,78 +14,61 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function maps a snapshot quantity
+% This function maps a snapshot quantity to a 2D field variable
 % -------------------------------------------------------------------------
-% Inp:  1) Input-1
-%       2) Input-2
-% Out:  1) Output-1
-%       2) Output-2
+% Inp:  1) Tin:         Input snapshot matrix NtxN
+%       2) xInp/yInp:   Spatial input variables
+%       3) xOut/yOut:   Spatial output variables
+% Out:  1) Tout:        Output 2D temperature field 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [] = map2D(T_snap, x_snap, y_snap, x_2D, y_2D)
+function Tout = map2D(Tin, xInp, yInp, xOut, yOut)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Data
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % New spatial positions (x_new, y_new) for interpolation
-    x_new = linspace(min(x_orig), max(x_orig), Nx_new);
-    y_new = linspace(min(y_orig), max(y_orig), Ny_new);
-    
-    % Create meshgrids for the original and new spatial positions
-    [X_orig, Y_orig] = meshgrid(x_orig, y_orig);
-    [X_new, Y_new] = meshgrid(x_new, y_new);
-    
-    % Initialize the 3D matrix T2
-    T2 = zeros(Nt, Nx_new, Ny_new);
-    
-    % Loop through each snapshot
-    for i = 1:Nt
-        % Reshape the i-th row of T into a Nx x Ny matrix
-        T_snapshot = reshape(T(i, :), [Nx, Ny]);
-        
-        % Interpolate the data to the new grid
-        T_snapshot_interp = griddata(X_orig, Y_orig, T_snapshot, X_new, Y_new, 'linear');
-        
-        % Store the interpolated snapshot in the 3D matrix T2
-        T2(i, :, :) = T_snapshot_interp;
-    end
+    %===================================================
+    % Parameters
+    %===================================================
+    [Nt, ~] = size(Tin);                                                    % number of samples Nt and spatial points N
+    x_min = min(xInp);
+    x_max = max(xInp);
+    y_min = min(yInp);
+    y_max = max(yInp);
+    Nx = length(xOut);
+    Ny = length(yOut);
+    Tout = zeros(Nt, Ny, Nx);
+
+    %===================================================
+    % Variables
+    %===================================================
+    x_grid = linspace(x_min, x_max, Nx);
+    y_grid = linspace(y_min, y_max, Ny);
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    [x_flat, y_flat] = meshgrid(xInp, yInp);                          
+    x_flat = x_flat(:);
+    y_flat = y_flat(:);
+    
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Section I
+    % Create the new target grid
     %===================================================
-    %----------------------------------------
-    % Sub-Section I
-    %----------------------------------------
-    % Sub-Sub Section I
-    
-    % Sub-Sub Section II
-    
-    % Sub-Sub Section III
-    
-    %----------------------------------------
-    % Sub-Section II
-    %----------------------------------------
-    
+    [Xq, Yq] = meshgrid(x_grid, y_grid);
+
     %===================================================
-    % Sub-Heading II
+    % Interpolation
     %===================================================
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Post-Processing
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
+    for i = 1:Nt
+        Tout(i,:,:) = griddata(x_flat, y_flat, Tin(i,:), Xq, Yq, 'cubic');
+    end
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

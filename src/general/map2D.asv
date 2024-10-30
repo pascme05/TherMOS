@@ -24,19 +24,37 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [] = map2D(T_snap, x_sna)
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Message Input
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Running Function Template")
-
+function Tout = map2D(Tin, xInp, yInp, xOut, yOut)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    üNt
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Data
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % New spatial positions (x_new, y_new) for interpolation
+    x_new = linspace(min(x_orig), max(x_orig), Nx_new);
+    y_new = linspace(min(y_orig), max(y_orig), Ny_new);
+    
+    % Create meshgrids for the original and new spatial positions
+    [X_orig, Y_orig] = meshgrid(x_orig, y_orig);
+    [X_new, Y_new] = meshgrid(x_new, y_new);
+    
+    % Initialize the 3D matrix T2
+    T2 = zeros(Nt, Nx_new, Ny_new);
+    
+    % Loop through each snapshot
+    for i = 1:Nt
+        % Reshape the i-th row of T into a Nx x Ny matrix
+        T_snapshot = reshape(T(i, :), [Nx, Ny]);
+        
+        % Interpolate the data to the new grid
+        T_snapshot_interp = griddata(X_orig, Y_orig, T_snapshot, X_new, Y_new, 'linear');
+        
+        % Store the interpolated snapshot in the 3D matrix T2
+        T2(i, :, :) = T_snapshot_interp;
+    end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
@@ -72,11 +90,6 @@ function [] = map2D(T_snap, x_sna)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Message Output
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Running Function Template")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
