@@ -60,14 +60,22 @@ function mdl = poFit(data, ~, para)
     %===================================================
     % Variables
     %===================================================
-    x = 0:dx:Lx-dx;                                                         % x vector (m)
-    y = 0:dy:Ly-dy;                                                         % y vector (m)
+    xInp = data.Data.geo(:,1);                                              % sampled input values x (m)
+    yInp = data.Data.geo(:,2);                                              % sampled input values y (m)
+    x = 0:dx:Lx;                                                            % x vector (m)
+    y = 0:dy:Ly;                                                            % y vector (m)
     T = data.y;                                                             % temperature snapshots NtxN (°C)
     Q = data.X;                                                             % volumetric heat generation (W/m³)
+    
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Mean Centering
+    %===================================================
+    k2D = squeeze(map2D(k', xInp, yInp, x, y));
+
     %===================================================
     % Mean Centering
     %===================================================
@@ -124,22 +132,66 @@ function mdl = poFit(data, ~, para)
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
+    % Init
+    %===================================================
+    dPhidx = zeros(length(y), length(x), K);
+    dPhidy = zeros(length(y), length(x), K);
+    Cth = zeros(K, K);
+    Gth = zeros(K, K);
+    Gx = zeros(K, K);
+    Gy = zeros(K, K);
+
+    %===================================================
     % Extract Modes
     %===================================================
     %----------------------------------------
-    % Spatial
+    % Spatial Modes
     %----------------------------------------
+    % Reduction
     rPhi = Phi(:,1:K);
     
+    % Compute Orthogonal Matrix
+    Id = rPhi'*rPhi;
+    
+    % Check Orthogonal Matrix
+    if abs(norm(eye(K) - Id)) > eps
+        disp('ERROR: POD modes are not orthonormal');
+    end
+
+    % Reshape
+    sPhi = map2D(rPhi', xInp, yInp, x, y);
+    sPhi = reshape(sPhi, [length(y), length(x), K]);
+
     %----------------------------------------
-    % Temporal
+    % Temporal Modes
     %----------------------------------------
     theta = rPhi' * T';
 
     %===================================================
-    % Extract Temporal Modes
+    % Gradients
     %===================================================
+    for i = 1:K
+        [dPhidx(:, :, i), dPhidy(:, :, i)] = gradient(sPhi(:, :, i), dx, dy);
+    end
+
+    %===================================================
+    % System Matrices
+    %===================================================
+    % Compute Thermal Capacitance Matrix (Cth)
+    for i = 1:K
+        for j = 1:K
+            Cth(i, j) = sum(sum(rho .* Cp .* rPhi(:, i) .* rPhi(:, j) * dx * dy));
+        end
+    end
     
+    % Compute Thermal Conductance Matrix (Gth)
+    for i = 1:K
+        for j = 1:K
+            Gx(i, j) = sum(sum(k2D .* dPhidx(:, :, i) .* dPhidx(:, :, j) * dx * dy));
+            Gy(i, j) = sum(sum(k2D .* dPhidy(:, :, i) .* dPhidy(:, :, j) * dx * dy));
+            Gth(i, j) = Gx(i, j) + Gy(i, j);
+        end
+    end
 
     %===================================================
     % Section I
@@ -168,7 +220,22 @@ function mdl = poFit(data, ~, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
+    mdl.rPhi = rPhi;
+    mdl.sPhi = sPhi;
+    mdl.theta = theta;
+    mdl.dPhidx = dPhidx;
+    mdl.dPhidy = dPhidy;
+    mdl.Gth = Gth;
+    mdl.Cth = Cth;
+    mdl.lam = lam;
+    mdl.decay = decay;
+    mdl.beta = beta;
+    mdl.E = E;
+    mdl.GC = GC;
+    mdl.K = K;
+    mdl.Tavg = Tavg;
+    mdl.T0 = T0;
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -46,13 +46,6 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut)
     x_grid = linspace(x_min, x_max, Nx);
     y_grid = linspace(y_min, y_max, Ny);
     
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Pre-Processing
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    [x_flat, y_flat] = meshgrid(xInp, yInp);                          
-    x_flat = x_flat(:);
-    y_flat = y_flat(:);
-    
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -66,7 +59,7 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut)
     % Interpolation
     %===================================================
     for i = 1:Nt
-        Tout(i,:,:) = griddata(x_flat, y_flat, Tin(i,:), Xq, Yq, 'cubic');
+        Tout(i,:,:) = griddata(xInp, yInp, Tin(i,:), Xq, Yq, 'linear');
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
