@@ -111,7 +111,7 @@ function out = poSol(mdl, data, para)
     % Temperatures
     %----------------------------------------
     % Reshape
-    sT0 = map2D(T0', xInp, yInp, x, y);
+    sT0 = map2D(T0, xInp, yInp, x, y);
     sT0 = reshape(sT0, [length(y), length(x)]);
 
     % Gradient
