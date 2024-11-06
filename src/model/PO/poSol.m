@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: poFit                                                             %
+% File: ssSol                                                             %
 % Date: 13.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -14,22 +14,27 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function solves for the system matrices Gth and Cth as well as the 
-% spatial modes of phi of the POD.
+% This function calculates the temperature response for a POD system
+%
+%                     T(x,t) ≈ Σ φ_i(x) * a_i(t)   
+%
+% where x is the spatial position, t is the time, φ are the spatial modes,
+% and a(t) are the temporal modes based on a PDE system with matrices Gth 
+% and Cth as extracted from the POD training.  
 % -------------------------------------------------------------------------
-% Inp:  1) data:    Training input data struct
-%       2) val:     Validation input data struct
+% Inp:  1) mdl:     Fitted model parameters
+%       2) data:    Testing input data struct
 %       3) para:    All simulation parameters of the current simulation
-% Out:  1) mdl:     Trained model
+% Out:  1) out:     Predicted temperature response
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function mdl = poFit(data, ~, para)
+function out = poSol(mdl, data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Fitting Proper Orthogonal Model")
+    disp("START: Solving Proper Orthogonal Model")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
@@ -67,180 +72,38 @@ function mdl = poFit(data, ~, para)
     y = 0:dy:Ly;                                                            % y vector (m)
     T = data.y;                                                             % temperature snapshots NtxN (°C)
     Q = data.X;                                                             % volumetric heat generation (W/m³)
-    
-    
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
     % Mean Centering
     %===================================================
-    k2D = squeeze(map2D(k', xInp, yInp, x, y));
-
-    %===================================================
-    % Mean Centering
-    %===================================================
     Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
     T = T - Tavg.*ones(Nt,N);                                               % mean centered observation matrix (°C)
-
+ 
     %===================================================
-    % Eigenvalues
+    % Scaling Function
     %===================================================
-    [~,S,Phi] = svd(T/sqrt(Nt-1), 'econ');
-    lam = diag(S);
-    
-    %===================================================
-    % Cumulative Correlation Energy
-    %===================================================
-    %----------------------------------------
-    % Init
-    %----------------------------------------
-    n = 1;
-
-    %----------------------------------------
-    % Energy
-    %----------------------------------------
-    if para.Mdl.pod.sel == 2
-        while E < Emax && n < Kmax
-            E = sum(abs(lam(1:n))) / sum(abs(lam));
-            n = n + 1;
-        end
-        K = n;
-
-    %----------------------------------------
-    % Opti
-    %----------------------------------------
-    elseif para.Mdl.pod.sel == 3
-        E = sum(abs(lam(1:para.Mdl.pod.K))) / sum(abs(lam));
-        K = setup.mdl.pod.K;
-
-    %----------------------------------------
-    % Fixed
-    %----------------------------------------
-    else
-        E = sum(abs(lam(1:para.Mdl.pod.K))) / sum(abs(lam));
-        K = para.Mdl.pod.K;
-
-    end
-
-    %----------------------------------------
-    % Msg
-    %----------------------------------------
-    fprintf('Number of used eigenvalues (model order) K: %i \n', K);
-    fprintf('Cumulative correlation energy Em: %f \n', E)
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %===================================================
-    % Init
-    %===================================================
-    dPhidx = zeros(length(y), length(x), K);
-    dPhidy = zeros(length(y), length(x), K);
-    Cth = zeros(K, K);
-    Gth = zeros(K, K);
-    Gx = zeros(K, K);
-    Gy = zeros(K, K);
 
-    %===================================================
-    % Extract Modes
-    %===================================================
-    %----------------------------------------
-    % Spatial Modes
-    %----------------------------------------
-    % Reduction
-    rPhi = Phi(:,1:K);
-    
-    % Compute Orthogonal Matrix
-    Id = rPhi'*rPhi;
-    
-    % Check Orthogonal Matrix
-    if abs(norm(eye(K) - Id)) > eps
-        disp('ERROR: POD modes are not orthonormal');
-    end
-
-    % Reshape
-    sPhi = map2D(rPhi', xInp, yInp, x, y);
-    sPhi = reshape(sPhi, [length(y), length(x), K]);
-
-    %----------------------------------------
-    % Temporal Modes
-    %----------------------------------------
-    theta = rPhi' * T';
-
-    %===================================================
-    % Gradients
-    %===================================================
-    for i = 1:K
-        [dPhidx(:, :, i), dPhidy(:, :, i)] = gradient(sPhi(:, :, i), dx, dy);
-    end
-
-    %===================================================
-    % System Matrices
-    %===================================================
-    % Compute Thermal Capacitance Matrix (Cth)
-    for i = 1:K
-        for j = 1:K
-            Cth(i, j) = sum(sum(rho .* Cp .* rPhi(:, i) .* rPhi(:, j) * dx * dy));
-        end
-    end
-    
-    % Compute Thermal Conductance Matrix (Gth)
-    for i = 1:K
-        for j = 1:K
-            Gx(i, j) = sum(sum(k2D .* dPhidx(:, :, i) .* dPhidx(:, :, j) * dx * dy));
-            Gy(i, j) = sum(sum(k2D .* dPhidy(:, :, i) .* dPhidy(:, :, j) * dx * dy));
-            Gth(i, j) = Gx(i, j) + Gy(i, j);
-        end
-    end
-
-    %===================================================
-    % Section I
-    %===================================================
-    %----------------------------------------
-    % Sub-Section I
-    %----------------------------------------
-    % Sub-Sub Section I
-    
-    % Sub-Sub Section II
-    
-    % Sub-Sub Section III
-    
-    %----------------------------------------
-    % Sub-Section II
-    %----------------------------------------
-    
-    %===================================================
-    % Sub-Heading II
-    %===================================================
-    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    mdl.rPhi = rPhi;
-    mdl.sPhi = sPhi;
-    mdl.theta = theta;
-    mdl.dPhidx = dPhidx;
-    mdl.dPhidy = dPhidy;
-    mdl.Gth = Gth;
-    mdl.Cth = Cth;
-    mdl.lam = lam;
-    mdl.decay = decay;
-    mdl.beta = beta;
-    mdl.E = E;
-    mdl.GC = GC;
-    mdl.K = K;
-    mdl.Tavg = Tavg;
-    mdl.T0 = T0;
+    out.y = T_est;
+    out.X = Pv;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Fitting Proper Orthogonal Model")
+    disp("DONE: Solving Proper Orthogonal Model")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
