@@ -18,8 +18,9 @@
 %
 %                     T(x,t) ≈ Σ φ_i(x) * a_i(t)   
 %
-% where x is the state vector, u is the input vector, y is the output 
-% vector, and A, B, C, D are matrices defining the system.  
+% where x is the spatial position, t is the time, φ are the spatial modes,
+% and a(t) are the temporal modes based on a PDE system with matrices Gth 
+% and Cth as extracted from the POD training.  
 % -------------------------------------------------------------------------
 % Inp:  1) mdl:     Fitted model parameters
 %       2) data:    Testing input data struct
@@ -29,86 +30,160 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function out = ssSol(mdl, data, para)
+function out = poSol(mdl, data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Solving State-Space system")
+    disp("START: Solving Proper Orthogonal Model")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Parameter
+    % Parameters
     %===================================================
-    Rcon = para.Par.loss.Rcon;                                              % contact resistance (Ohm)
-    Rohm = para.Par.loss.Rohm;                                              % conduction resistance (Ohm)
-    Rslope = para.Par.loss.Rslope;                                          % slope specific resistance change (1/K)
-    Tref = para.Par.loss.Tref;                                              % reference temperature losses (°C)
-    eps = para.Par.gen.eps;                                                 % lower numerical bound
-    Nt = length(data.X(:,1));                                               % number of time steps
-    K = length(size(mdl.sys.A));                                            % model order
+    %----------------------------------------
+    % General
+    %----------------------------------------
+    [Nt, N] = size(data.y);                                                 % number of time steps (Nt) and snapshots (N)
+    eps = para.Mdl.gen.eps;                                                 % numerical lower bound
+    Ts = data.Ts;                                                           % sampling time (sec)
+
+    %----------------------------------------
+    % Data
+    %----------------------------------------
+    dy = data.Data.dy;                                                      % numerical step-width y direction (m)
+    dx = data.Data.dx;                                                      % numerical step-width x direction
+    Ly = data.Data.Ly;                                                      % length in y direction (m)
+    Lx = data.Data.Lx;                                                      % length in x direction (m)
+    k = data.Data.k;                                                        % thermal conductivity (W/mK)
+    rho = data.Data.rho;                                                    % material density (kg/m³)
+    Cp = data.Data.Cp;                                                      % specific heat capacity (J/KgK)
+    alpha = k ./ (rho.*Cp);                                                 % Thermal diffusivity (m²/s)
+    
+    %----------------------------------------
+    % Model
+    %----------------------------------------
+    Cth = mdl.Cth;
+    Gth = mdl.Gth;
+    dPhidx = mdl.dPhidx;
+    dPhidy = mdl.dPhidy;
+    sPhi = mdl.sPhi;
+    rPhi = mdl.rPhi;
+    K = mdl.K;
 
     %===================================================
     % Variables
     %===================================================
-    t = data.t;
-    Pv = data.X;                                                            % power losses input (W)
-    Toff = data.r;                                                          % temperature offset/reference (°C)
-    T_est = zeros(Nt,K);                                                    % init nodes temperatures
-    out = data;     
+    %----------------------------------------
+    % Data
+    %----------------------------------------
+    xInp = data.Data.geo(:,1);                                              % sampled input values x (m)
+    yInp = data.Data.geo(:,2);                                              % sampled input values y (m)
+    x = 0:dx:Lx;                                                            % x vector (m)
+    y = 0:dy:Ly;                                                            % y vector (m)
+    T = data.y;                                                             % temperature snapshots NtxN (°C)
+    Q = data.X;                                                             % volumetric heat generation (W/m³)
+    
+    %----------------------------------------
+    % Init
+    %----------------------------------------
+    g0 = zeros(1, K);
+    c = zeros(1, K);
+    cy = zeros(1, K);
+    cx = zeros(1, K);
+    q = zeros(K, Nt);
+    F = zeros(K, Nt);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Initial Conditions
+    % Mean Centering
     %===================================================
-    x0 = zeros(size(mdl.sys.A, 1), 1);
+    Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
+    T0 = T(1,:) - Tavg;                                                     % initial temperature (°C)
  
     %===================================================
-    % Scaling Function
+    % Initial Conditions
     %===================================================
-    if Rohm == 0
-        theta = @(T) 1;
-    else
-        theta = @(T) (Rcon + Rohm*Rslope*(T-Tref)) / (Rcon + Rohm + eps);
+    %----------------------------------------
+    % Temperatures
+    %----------------------------------------
+    % Reshape
+    sT0 = map2D(T0, xInp, yInp, x, y);
+    sT0 = reshape(sT0, [length(y), length(x)]);
+
+    % Gradient
+    [dT0dx, dT0dy] = gradient(sT0, dx, dy);
+
+    %----------------------------------------
+    % Start Values
+    %----------------------------------------
+    for i = 1:K
+        g0(1, i) = trapz(dx, trapz(dy, T0 .* phi(:, :, i), 1), 2) / ...
+                   trapz(dx, trapz(dy, phi(:, :, i) .* phi(:, :, i), 1), 2);
+    end
+
+    %===================================================
+    % Source Terms
+    %===================================================
+    %----------------------------------------
+    % Boundary Term
+    %----------------------------------------
+    for i = 1:K
+        % Interior contributions
+        c(i) = trapz(dx, trapz(dy, alpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy), 1), 2) / dx / dy;
+        
+        % Boundary contributions in Y-direction
+        tempY = alpha .* phi(:, :, i) .* dT0dx;
+        cy(i) = trapz(dy, tempY(:, end) - tempY(:, 1), 1) / dy;
+        
+        % Boundary contributions in X-direction
+        tempX = alpha .* phi(:, :, i) .* dT0dy;
+        cx(i) = trapz(dx, tempX(end, :) - tempX(1, :), 2) / dx;
+    end
+    c = c - (cx + cy);
+
+    %----------------------------------------
+    % Heat Generation
+    %----------------------------------------
+    for i = 1:Nt
+        for ii = 1:K
+            q(ii, i) = trapz(dx, trapz(dy, alpha ./ k .* squeeze(s(i, :, :)) .* squeeze(phi(:, :, ii)), 1), 2) / dx / dy;
+        end
+    end
+
+    %----------------------------------------
+    % Source Term
+    %----------------------------------------
+    for i = 1:Nt
+        F(:, i) = (q(:, i) + c');
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Feedthrough
+    % Init
     %===================================================
-    if Rohm ~= 0
-        for i = 1:length(t)
-            %----------------------------------------
-            % Update power
-            %----------------------------------------
-            Pv(i,:) = Pv(i,:) .* theta(T_est(i-1,:) + Toff(i-1,:));
-
-            
-            %----------------------------------------
-            % Solve Nodes
-            %----------------------------------------
-            [T_est(i, :), ~, ~] = lsim(mdl.sys, Pv(i, :), t(i), x0);
-        end
+    % Variables
+    tlist = linspace(0, Nt*dt-dt, Nt)';
+    
+    % Solver
+    odeoptions = odeset('Mass', Cth, 'JConstant', 'on', ...
+                        'RelTol', 1e-3, 'AbsTol', 1e-5, ...
+                        'Jacobian', -Gth);
 
     %===================================================
-    % Feedback
+    % Solve
     %===================================================
-    else
-        [T_est, ~, ~] = lsim(mdl.sys, Pv, t, x0);
-    end
+    sol = ode15s(@(t,y) odefnc2(t,y,Gth,F',tlist),tlist,g0,odeoptions);
+    theta = deval(sol,tlist)';
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %===================================================
-    % Correcting Offset
-    %===================================================
-    T_est = T_est + Toff;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
@@ -119,8 +194,12 @@ function out = ssSol(mdl, data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Solving State-Space system")
+    disp("DONE: Solving Proper Orthogonal Model")
 end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Function
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% References

@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: poFit                                                             %
+% File: poFit2                                                            %
 % Date: 13.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -25,7 +25,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function mdl = poFit(data, ~, para)
+function mdl = poFit2(data, ~, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -193,9 +193,7 @@ function mdl = poFit(data, ~, para)
             Gth(i, j) = Gx(i, j) + Gy(i, j);
         end
     end
-    
-    % Stiffness Matrices
-    GC = Gth / Cth;
+
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
@@ -212,10 +210,13 @@ function mdl = poFit(data, ~, para)
     mdl.Gth = Gth;
     mdl.Cth = Cth;
     mdl.lam = lam;
+    mdl.decay = decay;
+    mdl.beta = beta;
     mdl.E = E;
     mdl.GC = GC;
     mdl.K = K;
     mdl.Tavg = Tavg;
+    mdl.T0 = T0;
     mdl.lam = lam;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

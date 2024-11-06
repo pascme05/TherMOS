@@ -40,9 +40,10 @@ matCp = 800;                                                                % Sp
 % Load Case 
 %---------------------------------------------------
 Tinit = 20;                                                                 % Initial temperature (degC)
+Tend = 2000;                                                                % end value time (sec)
 q = 1000000;                                                                % Volumetric heat generation (W/m3)
-dt = 1;                                                                     % sampling time (sec)
-tlist = 0:dt:500-dt;                                                        % time vector (sec)
+dt = 10;                                                                    % sampling time (sec)
+tlist = 0:dt:Tend-dt;                                                       % time vector (sec)
 
 %---------------------------------------------------
 % Settings

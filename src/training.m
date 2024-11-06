@@ -121,7 +121,7 @@ function mdl = training(data, setup, para, path)
         %----------------------------------------
         % Model Size 
         %----------------------------------------
-        mdl.size = numel(mdl.Phi) + numel(mdl.GC);
+        mdl.size = numel(mdl.sPhi) + numel(mdl.GC);
 
         %----------------------------------------
         % Saving
