@@ -132,13 +132,9 @@ function [] = main(setup, path)
     %----------------------------------------
     % Calc
     %----------------------------------------
-    if para.Exp.gen.init ~= 1
-        data.tr = offRemove(data.tr, para);
-        data.te = offRemove(data.te, para);
-        data.vl = offRemove(data.vl, para);
-    else
-        disp("INFO: Offset removal deactivated")
-    end
+    data.tr = offRemove(data.tr, para);
+    data.te = offRemove(data.te, para);
+    data.vl = offRemove(data.vl, para);
     fprintf('\n');
 
     %===================================================
@@ -394,9 +390,12 @@ function [] = main(setup, path)
     %----------------------------------------
     if setup.plotOut ~= 0
         % 1D Output
-        plotResults1D(data, results, setup);
+        if para.Dat.gen.dOut == 1
+            plotResults1D(data, results, setup);
 
         % 2D Output
+        else
+        end
     end
     fprintf('\n');
 

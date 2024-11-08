@@ -177,7 +177,7 @@ function [pred, grt, mdl] = testing(mdl, data, setup, para, path)
         % Fitting 
         %----------------------------------------
         timeStart = tic;
-        pred = poSol(mdl, data.te, para);
+        pred = poSol2(mdl, data.te, para);
         pred.testTime = toc(timeStart);
 
         %----------------------------------------

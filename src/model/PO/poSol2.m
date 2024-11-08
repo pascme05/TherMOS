@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: poFit                                                             %
+% File: ssSol                                                             %
 % Date: 13.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -14,22 +14,27 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function solves for the system matrices Gth and Cth as well as the 
-% spatial modes of phi of the POD.
+% This function calculates the temperature response for a POD system
+%
+%                     T(x,t) ≈ Σ φ_i(x) * a_i(t)   
+%
+% where x is the spatial position, t is the time, φ are the spatial modes,
+% and a(t) are the temporal modes based on a PDE system with matrices Gth 
+% and Cth as extracted from the POD training.  
 % -------------------------------------------------------------------------
-% Inp:  1) data:    Training input data struct
-%       2) val:     Validation input data struct
+% Inp:  1) mdl:     Fitted model parameters
+%       2) data:    Testing input data struct
 %       3) para:    All simulation parameters of the current simulation
-% Out:  1) mdl:     Trained model
+% Out:  1) out:     Predicted temperature response
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function mdl = poFit(data, ~, para)
+function out = poSol2(mdl, data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Fitting Proper Orthogonal Model")
+    disp("START: Solving Proper Orthogonal Model")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
@@ -41,11 +46,9 @@ function mdl = poFit(data, ~, para)
     % General
     %----------------------------------------
     [Nt, N] = size(data.y);                                                 % number of time steps (Nt) and snapshots (N)
-    Kmax = para.Mdl.gen.Kmax;                                               % maximum number of modes
-    Emax = para.Mdl.gen.Emax;                                               % maximum energy captured (%)
-    E = 0;                                                                  % captured energy by POD
     eps = para.Mdl.gen.eps;                                                 % numerical lower bound
-    
+    Ts = data.Ts;                                                           % sampling time (sec)
+
     %----------------------------------------
     % Data
     %----------------------------------------
@@ -56,78 +59,125 @@ function mdl = poFit(data, ~, para)
     k = data.Data.k;                                                        % thermal conductivity (W/mK)
     rho = data.Data.rho;                                                    % material density (kg/m³)
     Cp = data.Data.Cp;                                                      % specific heat capacity (J/KgK)
-    % alpha = k ./ (rho.*Cp);                                                 % Thermal diffusivity (m²/s)
+    alpha = k ./ (rho.*Cp);                                                 % Thermal diffusivity (m²/s)
+    
+    %----------------------------------------
+    % Model
+    %----------------------------------------
+    Cth = mdl.Cth;
+    Gth = mdl.Gth;
+    dPhidx = mdl.dPhidx;
+    dPhidy = mdl.dPhidy;
+    sPhi = mdl.sPhi;
+    rPhi = mdl.rPhi;
+    K = mdl.K;
 
     %===================================================
     % Variables
     %===================================================
+    %----------------------------------------
+    % Data
+    %----------------------------------------
     xInp = data.Data.geo(:,1);                                              % sampled input values x (m)
     yInp = data.Data.geo(:,2);                                              % sampled input values y (m)
     x = 0:dx:Lx;                                                            % x vector (m)
     y = 0:dy:Ly;                                                            % y vector (m)
     T = data.y;                                                             % temperature snapshots NtxN (°C)
-    % Q = data.X;                                                             % volumetric heat generation (W/m³)
+    Q = data.X;                                                             % volumetric heat generation (W/m³)
+    out = data;
     
-    
+    %----------------------------------------
+    % Init
+    %----------------------------------------
+    g0 = zeros(1, K);
+    c = zeros(1, K);
+    cy = zeros(1, K);
+    cx = zeros(1, K);
+    q = zeros(K, Nt);
+    F = zeros(K, Nt);
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
     % Mean Centering
     %===================================================
-    k2D = squeeze(map2D(k', xInp, yInp, x, y));
-
-    %===================================================
-    % Mean Centering
-    %===================================================
     Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
-    T = T - Tavg.*ones(Nt,N);                                               % mean centered observation matrix (°C)
-
-    %===================================================
-    % Eigenvalues
-    %===================================================
-    [~,S,Phi] = svd(T/sqrt(Nt-1), 'econ');
-    lam = diag(S);
+    T0 = T(1,:) - Tavg;                                                     % initial temperature (°C)
     
     %===================================================
-    % Cumulative Correlation Energy
+    % 2D Reshaping
     %===================================================
     %----------------------------------------
-    % Init
+    % Material Properties
     %----------------------------------------
-    n = 1;
+    sAlpha = map2D(alpha', xInp, yInp, x, y);
+    sAlpha = reshape(sAlpha, [length(y), length(x)]);
+    sK = map2D(k', xInp, yInp, x, y);
+    sK= reshape(sK, [length(y), length(x)]);
+    
+    %----------------------------------------
+    % Heat Generation
+    %----------------------------------------
+    sQ = map2D(Q, xInp, yInp, x, y);
 
     %----------------------------------------
-    % Energy
+    % Temperatures
     %----------------------------------------
-    if para.Mdl.pod.sel == 2
-        while E < Emax && n < Kmax
-            E = sum(abs(lam(1:n))) / sum(abs(lam));
-            n = n + 1;
+    sT0 = map2D(T0, xInp, yInp, x, y);
+    sT0 = reshape(sT0, [length(y), length(x)]);
+    
+    %===================================================
+    % Gradient
+    %===================================================
+    [dT0dx, dT0dy] = gradient(sT0, dx, dy);
+
+    %===================================================
+    % Init Values
+    %===================================================
+    g0 = T0 * rPhi;
+    % for i = 1:K
+    %     g0(1, i) = trapz(dx, trapz(dy, sT0 .* sPhi(:, :, i), 1), 2) / ...
+    %                trapz(dx, trapz(dy, sPhi(:, :, i) .* sPhi(:, :, i), 1), 2);
+    % end
+
+    %===================================================
+    % Source Terms
+    %===================================================
+    %----------------------------------------
+    % Boundary Term
+    %----------------------------------------
+    for i = 1:K
+        % Interior contributions
+        c(i) = trapz(dx, trapz(dy, sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy), 1), 2) / dx / dy;
+        
+        % Boundary contributions in Y-direction
+        tempY = sAlpha .* sPhi(:, :, i) .* dT0dx;
+        cy(i) = trapz(dy, tempY(:, end) - tempY(:, 1), 1) / dy;
+        
+        % Boundary contributions in X-direction
+        tempX = sAlpha .* sPhi(:, :, i) .* dT0dy;
+        cx(i) = trapz(dx, tempX(end, :) - tempX(1, :), 2) / dx;
+    end
+    c = c - (cx + cy);
+
+    %----------------------------------------
+    % Heat Generation
+    %----------------------------------------
+    % q = ((alpha ./ k .* Q')' * rPhi)';
+
+    for i = 1:Nt
+        for ii = 1:K
+            q(ii, i) = trapz(dx, trapz(dy, sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii)), 1), 2) / dx / dy;
         end
-        K = n;
-
-    %----------------------------------------
-    % Opti
-    %----------------------------------------
-    elseif para.Mdl.pod.sel == 3
-        E = sum(abs(lam(1:para.Mdl.pod.K))) / sum(abs(lam));
-        K = setup.mdl.pod.K;
-
-    %----------------------------------------
-    % Fixed
-    %----------------------------------------
-    else
-        E = sum(abs(lam(1:para.Mdl.pod.K))) / sum(abs(lam));
-        K = para.Mdl.pod.K;
-
     end
 
     %----------------------------------------
-    % Msg
+    % Source Term
     %----------------------------------------
-    fprintf('Number of used eigenvalues (model order) K: %i \n', K);
-    fprintf('Cumulative correlation energy Em: %f \n', E)
+    for i = 1:Nt
+        F(:, i) = (q(:, i) + c');
+    end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -135,94 +185,40 @@ function mdl = poFit(data, ~, para)
     %===================================================
     % Init
     %===================================================
-    dPhidx = zeros(length(y), length(x), K);
-    dPhidy = zeros(length(y), length(x), K);
-    Cth = zeros(K, K);
-    Gth = zeros(K, K);
-    Gx = zeros(K, K);
-    Gy = zeros(K, K);
+    % Variables
+    tlist = linspace(0, Nt*Ts-Ts, Nt)';
+    
+    % Solver
+    odeoptions = odeset('Mass', Cth, 'JConstant', 'on', ...
+                        'RelTol', 1e-3, 'AbsTol', 1e-5, ...
+                        'Jacobian', -Gth);
 
     %===================================================
-    % Extract Modes
+    % Solve
     %===================================================
-    %----------------------------------------
-    % Spatial Modes
-    %----------------------------------------
-    % Reduction
-    rPhi = Phi(:,1:K);
-    
-    % Compute Orthogonal Matrix
-    Id = rPhi'*rPhi;
-    
-    % Check Orthogonal Matrix
-    if abs(norm(eye(K) - Id)) > eps
-        disp('ERROR: POD modes are not orthonormal');
-    end
+    sol = ode15s(@(t,y) odefnc2(t,y,Gth,F',tlist),tlist,g0,odeoptions);
+    theta_hat = deval(sol,tlist)';
 
-    % Reshape
-    sPhi = map2D(rPhi', xInp, yInp, x, y);
-    sPhi = permute(sPhi, [2, 3, 1]);
-
-    %----------------------------------------
-    % Temporal Modes
-    %----------------------------------------
-    theta = rPhi' * T';
-
-    %===================================================
-    % Gradients
-    %===================================================
-    for i = 1:K
-        [dPhidx(:, :, i), dPhidy(:, :, i)] = gradient(sPhi(:, :, i), dx, dy);
-    end
-
-    %===================================================
-    % System Matrices
-    %===================================================
-    % Compute Thermal Capacitance Matrix (Cth)
-    for i = 1:K
-        for j = 1:K
-            Cth(i, j) = sum(sum(rho .* Cp .* rPhi(:, i) .* rPhi(:, j) * dx * dy));
-        end
-    end
-    
-    % Compute Thermal Conductance Matrix (Gth)
-    for i = 1:K
-        for j = 1:K
-            Gx(i, j) = sum(sum(k2D .* dPhidx(:, :, i) .* dPhidx(:, :, j) * dx * dy));
-            Gy(i, j) = sum(sum(k2D .* dPhidy(:, :, i) .* dPhidy(:, :, j) * dx * dy));
-            Gth(i, j) = Gx(i, j) + Gy(i, j);
-        end
-    end
-    
-    % Stiffness Matrices
-    GC = Gth / Cth;
-    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
+    T_est = theta_hat * rPhi' + Tavg.*ones(Nt,N);
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    mdl.rPhi = rPhi;
-    mdl.sPhi = sPhi;
-    mdl.theta = theta;
-    mdl.dPhidx = dPhidx;
-    mdl.dPhidy = dPhidy;
-    mdl.Gth = Gth;
-    mdl.Cth = Cth;
-    mdl.lam = lam;
-    mdl.E = E;
-    mdl.GC = GC;
-    mdl.K = K;
-    mdl.Tavg = Tavg;
-    mdl.lam = lam;
+    out.y = T_est;
+    out.X = Q;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Fitting Proper Orthogonal Model")
+    disp("DONE: Solving Proper Orthogonal Model")
 end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Function
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% References

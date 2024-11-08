@@ -37,7 +37,8 @@ function [] = printConsole(data, results, setup, mdl)
     %===================================================
     % Parameters
     %===================================================
-    [Nt, nY] = size(data.pr.y);
+    [Nt, ~] = size(data.pr.y);
+    nY = length(results.err.tot.MAE);
     namesOut = setup.out;
  
 

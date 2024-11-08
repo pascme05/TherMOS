@@ -71,6 +71,7 @@ function out = poSol(mdl, data, para)
     sPhi = mdl.sPhi;
     rPhi = mdl.rPhi;
     K = mdl.K;
+    theta = mdl.theta;
 
     %===================================================
     % Variables
@@ -103,27 +104,41 @@ function out = poSol(mdl, data, para)
     %===================================================
     Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
     T0 = T(1,:) - Tavg;                                                     % initial temperature (°C)
- 
+    
     %===================================================
-    % Initial Conditions
+    % 2D Reshaping
     %===================================================
+    %----------------------------------------
+    % Material Properties
+    %----------------------------------------
+    sAlpha = map2D(alpha', xInp, yInp, x, y);
+    sAlpha = reshape(sAlpha, [length(y), length(x)]);
+    sK = map2D(k', xInp, yInp, x, y);
+    sK= reshape(sK, [length(y), length(x)]);
+    
+    %----------------------------------------
+    % Heat Generation
+    %----------------------------------------
+    sQ = map2D(Q, xInp, yInp, x, y);
+
     %----------------------------------------
     % Temperatures
     %----------------------------------------
-    % Reshape
     sT0 = map2D(T0, xInp, yInp, x, y);
-    sT0 = reshape(sT0, [length(y), length(x)]);
-
+    
+    %===================================================
     % Gradient
+    %===================================================
     [dT0dx, dT0dy] = gradient(sT0, dx, dy);
 
-    %----------------------------------------
-    % Start Values
-    %----------------------------------------
-    for i = 1:K
-        g0(1, i) = trapz(dx, trapz(dy, T0 .* phi(:, :, i), 1), 2) / ...
-                   trapz(dx, trapz(dy, phi(:, :, i) .* phi(:, :, i), 1), 2);
-    end
+    %===================================================
+    % Init Values
+    %===================================================
+    g0 = T0 * rPhi;
+    % for i = 1:K
+    %     g0(1, i) = trapz(dx, trapz(dy, sT0 .* sPhi(:, :, i), 1), 2) / ...
+    %                trapz(dx, trapz(dy, sPhi(:, :, i) .* sPhi(:, :, i), 1), 2);
+    % end
 
     %===================================================
     % Source Terms
@@ -133,14 +148,14 @@ function out = poSol(mdl, data, para)
     %----------------------------------------
     for i = 1:K
         % Interior contributions
-        c(i) = trapz(dx, trapz(dy, alpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy), 1), 2) / dx / dy;
+        c(i) = trapz(dx, trapz(dy, sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy), 1), 2) / dx / dy;
         
         % Boundary contributions in Y-direction
-        tempY = alpha .* phi(:, :, i) .* dT0dx;
+        tempY = sAlpha .* sPhi(:, :, i) .* dT0dx;
         cy(i) = trapz(dy, tempY(:, end) - tempY(:, 1), 1) / dy;
         
         % Boundary contributions in X-direction
-        tempX = alpha .* phi(:, :, i) .* dT0dy;
+        tempX = sAlpha .* sPhi(:, :, i) .* dT0dy;
         cx(i) = trapz(dx, tempX(end, :) - tempX(1, :), 2) / dx;
     end
     c = c - (cx + cy);
@@ -148,9 +163,11 @@ function out = poSol(mdl, data, para)
     %----------------------------------------
     % Heat Generation
     %----------------------------------------
+    % q = ((alpha ./ k .* Q')' * rPhi)';
+
     for i = 1:Nt
         for ii = 1:K
-            q(ii, i) = trapz(dx, trapz(dy, alpha ./ k .* squeeze(s(i, :, :)) .* squeeze(phi(:, :, ii)), 1), 2) / dx / dy;
+            q(ii, i) = trapz(dx, trapz(dy, sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii)), 1), 2) / dx / dy;
         end
     end
 
@@ -168,7 +185,7 @@ function out = poSol(mdl, data, para)
     % Init
     %===================================================
     % Variables
-    tlist = linspace(0, Nt*dt-dt, Nt)';
+    tlist = linspace(0, Nt*Ts-Ts, Nt)';
     
     % Solver
     odeoptions = odeset('Mass', Cth, 'JConstant', 'on', ...
@@ -179,7 +196,7 @@ function out = poSol(mdl, data, para)
     % Solve
     %===================================================
     sol = ode15s(@(t,y) odefnc2(t,y,Gth,F',tlist),tlist,g0,odeoptions);
-    theta = deval(sol,tlist)';
+    theta_hat = deval(sol,tlist)';
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing

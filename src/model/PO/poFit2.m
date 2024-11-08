@@ -56,7 +56,7 @@ function mdl = poFit2(data, ~, para)
     k = data.Data.k;                                                        % thermal conductivity (W/mK)
     rho = data.Data.rho;                                                    % material density (kg/m³)
     Cp = data.Data.Cp;                                                      % specific heat capacity (J/KgK)
-    % alpha = k ./ (rho.*Cp);                                                 % Thermal diffusivity (m²/s)
+    alpha = k ./ (rho.*Cp);                                                 % Thermal diffusivity (m²/s)
 
     %===================================================
     % Variables
@@ -73,20 +73,22 @@ function mdl = poFit2(data, ~, para)
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Mean Centering
+    % Converting 2D
     %===================================================
     k2D = squeeze(map2D(k', xInp, yInp, x, y));
+    alpha2D = squeeze(map2D(alpha', xInp, yInp, x, y));
 
     %===================================================
     % Mean Centering
     %===================================================
     Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
     T = T - Tavg.*ones(Nt,N);                                               % mean centered observation matrix (°C)
+    T2D = squeeze(map2D(T, xInp, yInp, x, y));
 
     %===================================================
     % Eigenvalues
     %===================================================
-    [~,S,Phi] = svd(T/sqrt(Nt-1), 'econ');
+    [~,S,Phi] = svd(T/sqrt(Nt-1));
     lam = diag(S);
     
     %===================================================
@@ -120,7 +122,6 @@ function mdl = poFit2(data, ~, para)
     else
         E = sum(abs(lam(1:para.Mdl.pod.K))) / sum(abs(lam));
         K = para.Mdl.pod.K;
-
     end
 
     %----------------------------------------
@@ -161,12 +162,18 @@ function mdl = poFit2(data, ~, para)
 
     % Reshape
     sPhi = map2D(rPhi', xInp, yInp, x, y);
-    sPhi = reshape(sPhi, [length(y), length(x), K]);
+    sPhi = permute(sPhi, [2, 3, 1]);
 
     %----------------------------------------
     % Temporal Modes
     %----------------------------------------
-    theta = rPhi' * T';
+    theta = (rPhi' * T')';
+    
+    % for i = 1:K
+    %     for ii = 1:Nt
+    %         theta(ii,i) = trapz(dx, trapz(dy, squeeze(sPhi(:, :, i)) .* squeeze(T2D(ii, :, :)), 1), 2) / dx / dy;
+    %     end
+    % end
 
     %===================================================
     % Gradients
@@ -178,27 +185,65 @@ function mdl = poFit2(data, ~, para)
     %===================================================
     % System Matrices
     %===================================================
-    % Compute Thermal Capacitance Matrix (Cth)
+    % System Matrices
     for i = 1:K
-        for j = 1:K
-            Cth(i, j) = sum(sum(rho .* Cp .* rPhi(:, i) .* rPhi(:, j) * dx * dy));
-        end
-    end
+        for ii = 1:K
+            % Mass Matrix
+            Cth(i, ii) = trapz(dx, trapz(dy, sPhi(:, :, ii) .* sPhi(:, :, i), 1), 2) / dx / dy;
     
-    % Compute Thermal Conductance Matrix (Gth)
-    for i = 1:K
-        for j = 1:K
-            Gx(i, j) = sum(sum(k2D .* dPhidx(:, :, i) .* dPhidx(:, :, j) * dx * dy));
-            Gy(i, j) = sum(sum(k2D .* dPhidy(:, :, i) .* dPhidy(:, :, j) * dx * dy));
-            Gth(i, j) = Gx(i, j) + Gy(i, j);
+            % Stiffness Matrix (interior contributions)
+            Gth(i, ii) = trapz(dx, trapz(dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), 1), 2) / dx / dy;
+    
+            % Boundary Terms for Neumann conditions (Y-direction)
+            tempY = alpha2D .* sPhi(:, :, ii) .* dPhidx(:, :, i);
+            Gy(i, ii) = trapz(dy, tempY(:, end) - tempY(:, 1), 1) / dy;
+    
+            % Boundary Terms for Neumann conditions (X-direction)
+            tempX = alpha2D .* sPhi(:, :, ii) .* dPhidy(:, :, i);
+            Gx(i, ii) = trapz(dx, tempX(end, :) -  tempX(1, :), 2) / dx;
         end
     end
+    Gth = Gth - (Gy + Gx);
 
+    % % Compute Thermal Capacitance Matrix (Cth)
+    % for i = 1:K
+    %     for j = 1:K
+    %         Cth(i, j) = sum(sum(rho .* Cp .* rPhi(:, i) .* rPhi(:, j) * dx * dy));
+    %     end
+    % end
+    % 
+    % % Compute Thermal Conductance Matrix (Gth)
+    % for i = 1:K
+    %     for j = 1:K
+    %         Gx(i, j) = sum(sum(k2D .* dPhidx(:, :, i) .* dPhidx(:, :, j) * dx * dy));
+    %         Gy(i, j) = sum(sum(k2D .* dPhidy(:, :, i) .* dPhidy(:, :, j) * dx * dy));
+    %         Gth(i, j) = Gx(i, j) + Gy(i, j);
+    %     end
+    % end
+    
+    % Stiffness Matrices
+    GC = Gth / Cth;
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % ----------------------------------------------------
+    % Reconstruct
+    % ----------------------------------------------------
+    % Init
+    temp = zeros(Nt, length(y), length(x));
+    T_hat = zeros(Nt, length(y), length(x));
     
+    % Reconstruct
+    for i = 1:K
+        for ii = 1:Nt
+            temp(ii, :, :) = theta(ii, i) .* sPhi(:, :, i);
+        end
+        T_hat = T_hat + temp;
+    end
+    T_hat2 = squeeze(T_hat(:,21,21));
+    T2 = squeeze(T2D(:,21,21));
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -210,13 +255,10 @@ function mdl = poFit2(data, ~, para)
     mdl.Gth = Gth;
     mdl.Cth = Cth;
     mdl.lam = lam;
-    mdl.decay = decay;
-    mdl.beta = beta;
     mdl.E = E;
     mdl.GC = GC;
     mdl.K = K;
     mdl.Tavg = Tavg;
-    mdl.T0 = T0;
     mdl.lam = lam;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
