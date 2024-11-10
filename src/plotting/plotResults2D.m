@@ -18,13 +18,15 @@
 % -------------------------------------------------------------------------
 % Inp:  1) data:    All simulation input data as well as prediction
 %       2) results: All obtained accuracy values and results
-%       3) setup:   All simulation setup parameters
+%       3) mdl:     All model parameters
+%       4) setup:   All simulation setup parameters
+%       5) para:    All parameters
 % Out:  1) None
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [] = plotResults2D(data, results, setup)
+function [] = plotResults2D(data, results, mdl, setup, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -36,312 +38,496 @@ function [] = plotResults2D(data, results, setup)
     %===================================================
     % Parameters
     %===================================================
-    [~, Ny] = size(data.te.y);                                              % number of output samples
+    [Nt, Ny] = size(data.te.y);                                              % number of output samples
+    selX = para.Dat.gen.inpX;                                               % x-position for 1D temporal plots                           
+    selY = para.Dat.gen.inpY;                                               % y-position for 1D temporal plots
+    selT = -1;                                                              % temporal instant for 1D/2D spatial plots (if -1 last sample)
+    Ts = data.tr.Ts;
+    dx = data.tr.Data.dx;
+    dy = data.tr.Data.dy;
+    Ly = data.tr.Data.Ly;                                                      % length in y direction (m)
+    Lx = data.tr.Data.Lx;                                                      % length in x direction (m)
 
     %===================================================
     % Variables
     %===================================================
-    time = data.te.t;
-    yPred = data.pr.y;
-    yTest = data.te.y;
-    rTest = data.te.r;
+    %----------------------------------------
+    % Split Data
+    %----------------------------------------
+    train = data.tr;
+    test = data.te;
+    val = data.vl;
+    pred = data.pr;
+
+    %----------------------------------------
+    % Time
+    %----------------------------------------
+    t_train = train.t;
+    t_test = test.t;
+    t_val = val.t;
+    
+    %----------------------------------------
+    % Derived
+    %----------------------------------------
+    xInp = data.tr.Data.geo(:,1);                                              % sampled input values x (m)
+    yInp = data.tr.Data.geo(:,2);                                              % sampled input values y (m)
+    x = 0:dx:Lx;                                                            % x vector (m)
+    y = 0:dy:Ly;                                                            % y vector (m)
     
     %===================================================
-    % Names
+    % Model
     %===================================================
-    namesInp = setup.inp;
-    namesOut = setup.out;
-    names = [namesInp, namesOut];
-    metrics = ["MAE", "RMSE", "MAX"];
+    k = data.tr.Data.k;
+    rho = data.tr.Data.rho;
+    Cp = data.tr.Data.Cp;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Mapping 2D Space
+    % Mapping Position
     %===================================================
-
-
-    %===================================================
-    % Feature Ranking
-    %===================================================
-    weights = zeros(length(namesInp), length(namesOut));
-    if setup.featRank == 1
-        for i = 1:Ny
-            [~, weights(:,i)] = relieff(data.tr.X,data.tr.y(:,i),10);
-        end
-        weights = mean(weights,2);
+    %----------------------------------------
+    % Spatial
+    %----------------------------------------
+    [~, selX] = min(abs(x - selX));
+    [~, selY] = min(abs(x - selY));
+    
+    %----------------------------------------
+    % Temporal
+    %----------------------------------------
+    if selT == -1
+        selT = length(t_test);
     end
 
     %===================================================
-    % Correlation Analysis
+    % Mapping 2D Space
     %===================================================
-    vaCor = corr([data.tr.X, data.tr.y]);
+    %----------------------------------------
+    % Material
+    %----------------------------------------
+    k = squeeze(map2D(k', xInp, yInp, x, y));
+    rho = squeeze(map2D(rho', xInp, yInp, x, y));
+    Cp = squeeze(map2D(Cp', xInp, yInp, x, y));
 
-    %===================================================
-    % Residuals
-    %===================================================
-    err = yTest - yPred;
+    %----------------------------------------
+    % Input/Output
+    %----------------------------------------
+    % Train
+    train.X = squeeze(map2D(train.X, xInp, yInp, x, y));
+    train.y = squeeze(map2D(train.y, xInp, yInp, x, y));
 
-    %===================================================
-    % Error Metric
-    %===================================================
-    errTot = [results.err.tot.MAE; results.err.tot.RMSE; results.err.tot.MAX];
-    errSS = [results.err.ss.MAE; results.err.ss.RMSE; results.err.ss.MAX];
+    % Test
+    test.X = squeeze(map2D(test.X, xInp, yInp, x, y));
+    test.y = squeeze(map2D(test.y, xInp, yInp, x, y));
+
+    % Val
+    val.X = squeeze(map2D(val.X, xInp, yInp, x, y));
+    val.y = squeeze(map2D(val.y, xInp, yInp, x, y));
+
+    % Pred
+    pred.X = squeeze(map2D(pred.X, xInp, yInp, x, y));
+    pred.y = squeeze(map2D(pred.y, xInp, yInp, x, y));
+
+    %----------------------------------------
+    % Output
+    %----------------------------------------
+
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Input Features Analysis
+    % Material Properties
     %===================================================
     %----------------------------------------
     % Init
     %----------------------------------------
     figure;
-    sgtitle('Input Feature Analysis using Distribution, Heatmap, and Feature Ranking');
-
+    txt = 'Spatially Distributed Material data';
+    sgtitle(txt);
+    
     %----------------------------------------
-    % Boxplot
-    %----------------------------------------
-    subplot(2,2, [1, 2]);
-    boxplot(data.tr.X, namesInp);
-    ylabel('Input Features')
-    title('Boxplot of Training Input Features')
-    grid on;
-
-    %----------------------------------------
-    % Correlation
-    %----------------------------------------
-    subplot(2,2,3);
-    h = heatmap(vaCor,'MissingDataColor','w');
-    h.XDisplayLabels = names;
-    h.YDisplayLabels = names;
-    title('Pearson Correlation Input/Output')
-    grid on;
-
-    %----------------------------------------
-    % Feature Ranking
-    %----------------------------------------
-    subplot(2,2,4);
-    bar(namesInp,weights);
-    ylabel('Input Features')
-    title('Feature Ranking using ReliefF')
-    grid on;
-
-    %===================================================
-    % Plotting Input
-    %===================================================
-    %----------------------------------------
-    % Init
-    %----------------------------------------
-    figure;
-    sgtitle('Input Training/Validation/Testing Data (First Dataset only)');
-
-    %----------------------------------------
-    % Training Data
+    % Thermal Conductivity
     %----------------------------------------
     subplot(1,3,1);
-    yyaxis left
-    plot(data.tr.t2{1,1}, data.tr.X2{1,1});
-    xlabel('time (sec)');
-    ylabel('losses (W)');
-    yyaxis right
-    plot(data.tr.t2{1,1}, data.tr.y2{1,1});
-    title('Train Data-1');
-    ylabel('T (°C)');
-    grid on;
-
+    pcolor(x,y,k);
+    title("Thermal Conductivity k (W/mK)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    zlabel("k (W/mK)");
+    grid on
+    set(gca,'xtick',x)
+    set(gca,'ytick',y)
+    colorbar
+    
     %----------------------------------------
-    % Validation Data
+    % Specific Heat Capacity
     %----------------------------------------
     subplot(1,3,2);
-    yyaxis left
-    plot(data.vl.t2{1,1}, data.vl.X2{1,1});
-    xlabel('time (sec)');
-    ylabel('losses (W)');
-    yyaxis right
-    plot(data.vl.t2{1,1}, data.vl.y2{1,1});
-    title('Validation Data-1');
-    ylabel('T (°C)');
-    grid on;
-
+    pcolor(x,y,Cp);
+    title("Specific Heat Capacity Cp (J/kgK)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    zlabel("Cp (J/kgK)");
+    grid on
+    set(gca,'xtick',x)
+    set(gca,'ytick',y)
+    colorbar
+    
     %----------------------------------------
-    % Testing Data
+    % Mass Density
     %----------------------------------------
     subplot(1,3,3);
-    yyaxis left
-    plot(time, data.te.X);
-    xlabel('time (sec)');
-    ylabel('losses (W)');
-    yyaxis right
-    plot(time, data.te.y);
-    title('Testing Data-1');
-    ylabel('T (°C)');
-    grid on;
+    pcolor(x,y,rho);
+    title("Mass Density Rho (kg/m³)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    zlabel("Rho (kg/m³)");
+    grid on
+    set(gca,'xtick',x)
+    set(gca,'ytick',y)
+    colorbar
 
     %===================================================
-    % Average Accuracies
+    % Inputs
     %===================================================
     %----------------------------------------
-    % Correlation
+    % Spatial Inputs
     %----------------------------------------
+    % Init
     figure;
-    subplot(2,2,1);
+    txt = 'Spatial Input Data for Training (1), Testing, and Validation for t=' + string(selT*Ts - Ts) + 'sec';
+    sgtitle(txt);
+    
+    % Training
+    subplot(2,3,1);
+    pcolor(x,y,squeeze(train.X(end, :, :)));
+    title("Heat Generation (Train)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    zlabel("q (W/m³)");
+    set(gca,'xtick',x)
+    set(gca,'ytick',y)
+    colorbar
+    subplot(2,3,4);
+    pcolor(x,y,squeeze(train.y(end, :, :)));
+    title("Temperatures (Train)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    zlabel("T (°C)");
+    grid on
+    set(gca,'xtick',x)
+    set(gca,'ytick',y)
+    colorbar
+    
+    % Testing 
+    subplot(2,3,2);
+    pcolor(x,y,squeeze(test.X(end, :, :)));
+    title("Heat Generation (Test)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    zlabel("q (W/m³)");
+    grid on
+    set(gca,'xtick',x)
+    set(gca,'ytick',y)
+    colorbar
+    subplot(2,3,5);
+    pcolor(x,y,squeeze(test.y(end, :, :)));
+    title("Temperatures (Test)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    zlabel("T (°C)");
+    grid on
+    set(gca,'xtick',x)
+    set(gca,'ytick',y)
+    colorbar
+    
+    % Validaton 
+    subplot(2,3,3);
+    pcolor(x,y,squeeze(val.X(end, :, :)));
+    title("Heat Generation (Val)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    zlabel("q (W/m³)");
+    grid on
+    set(gca,'xtick',x)
+    set(gca,'ytick',y)
+    colorbar
+    subplot(2,3,6);
+    pcolor(x,y,squeeze(val.y(end, :, :)));
+    title("Temperatures (Val)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    zlabel("T (°C)");
+    grid on
+    set(gca,'xtick',x)
+    set(gca,'ytick',y)
+    colorbar
+    
+    
+    %----------------------------------------
+    % Temporal Inputs
+    %----------------------------------------
+    % Init
+    figure;
+    txt = 'Temporal Input Data for Training (1), Testing, and Validation for x=' + string(selX*dx-dx) + 'm and y=' + string(selY*dy-dy) + 'm';
+    sgtitle(txt);
+    
+    % Training
+    subplot(2,3,1);
+    plot(t_train, squeeze(train.X(:, selX, selY)));
+    title("Heat Generation (Train)")
+    xlabel("t (sec)");
+    ylabel("q (W/m³)");
+    grid on
+    subplot(2,3,4);
+    plot(t_train, squeeze(train.y(:, selX, selY)));
+    title("Temperatures (Train)")
+    xlabel("t (sec)");
+    ylabel("T (°C)");
+    grid on
+    
+    % Testing 
+    subplot(2,3,2);
+    plot(t_test, squeeze(test.X(:, selX, selY)));
+    title("Heat Generation (Test)")
+    xlabel("t (sec)");
+    ylabel("q (W/m³)");
+    grid on
+    subplot(2,3,5);
+    plot(t_test, squeeze(test.y(:, selX, selY)));
+    title("Temperatures (Test)")
+    xlabel("t (sec)");
+    zlabel("T (°C)");
+    grid on
+    
+    % Validaton 
+    subplot(2,3,3);
+    plot(t_val, squeeze(val.X(:, selX, selY)));
+    title("Heat Generation (Val)")
+    xlabel("t (sec)");
+    ylabel("q (W/m³)");
+    grid on
+    subplot(2,3,6);
+    plot(t_val, squeeze(val.y(:, selX, selY)));
+    title("Temperatures (Val)")
+    xlabel("t (sec)");
+    zlabel("T (°C)");
+    grid on
+
+    %===================================================
+    % Predictions
+    %===================================================
+    %----------------------------------------
+    % Plot Spatial Prediction X
+    %----------------------------------------
+    % Init
+    figure;
+    txt = 'Spatial Prediction and Prediction error for y=' + string(selY*dy-dy) + 'm and t=' + string(selT*Ts-Ts) + 'sec';
+    sgtitle(txt);
+    
+    % Model Prediction X Temperatures
+    subplot(2,3,1);
+    plot(x, squeeze(test.y(selT,selY,:)));
     hold on;
-    title('Scattering Prediction and Residuals');
-    for i = 1:Ny
-        scatter(yTest(:,i)/max(yTest(:,i)), yPred(:,i)/max(yPred(:,i)));
-        xlabel('True Values (p.u.)');
-        ylabel('Pred Values (p.u.)');
-    end
-    xlim([0 1])
-    ylim([0 1])
+    plot(x, squeeze(pred.y(selT,selY,:)));
+    title("Temperatures (X)")
+    xlabel("x (m)");
+    ylabel("T (°C)");
     grid on;
-    legend(namesOut, 'Location','northwest');
-
-    %----------------------------------------
-    % Error Distribution
-    %----------------------------------------
-    subplot(2,2,2);
+    legend('True','Pred');
+    subplot(2,3,4);
+    err = squeeze(test.y(selT,selY,:)) - squeeze(pred.y(selT,selY,:));
+    plot(x, err);
+    title("Temperatures Error (X)")
+    xlabel("x (m)");
+    ylabel("T (°C)");
+    grid on;
+    
+    % Model Prediction X Gradients
+    subplot(2,3,2);
+    plot(x, squeeze(test.q(selT,selY,:)));
     hold on;
-    title('Residual Distribution');
-    for i = 1:Ny
-        histogram(err(:,i),'Normalization','probability');
-        xlabel('Error (K)');
-        ylabel('Data Samples (%)');
-    end
+    plot(x, squeeze(pred.q(selT,selY,:)));
+    title("Gradient (X)")
+    xlabel("x (m)");
+    ylabel("dT (K/m)");
     grid on;
-
+    legend('True','Pred');
+    subplot(2,3,5);
+    err = squeeze(test.q(selT,selY,:)) - squeeze(pred.q(selT,selY,:));
+    plot(x, err);
+    title("Gradient Error (X)")
+    xlabel("x (m)");
+    ylabel("dT (K/m)");
+    grid on;
+    
+    % Model Prediction X Fluxes
+    subplot(2,3,3);
+    plot(x, squeeze(test.qk(selT,selY,:)));
+    hold on;
+    plot(x, squeeze(pred.qk(selT,selY,:)));
+    title("Flux (X)")
+    xlabel("x (m)");
+    ylabel("q (W/m²)");
+    grid on;
+    legend('True','Pred');
+    subplot(2,3,6);
+    err = squeeze(test.qk(selT,selY,:)) - squeeze(pred.qk(selT,selY,:));
+    plot(x, err);
+    title("Flux Error (W/m²)")
+    xlabel("x (m)");
+    ylabel("q (W/m²)");
+    grid on;
+    
     %----------------------------------------
-    % Accuracy Metric
+    % Plot Spatial Prediction Y
     %----------------------------------------
-    % Total Error
-    subplot(2,2,3);
-    bar(metrics,errTot);
-    ylabel('Error (K)')
-    title('Total Error Values')
+    % Init
+    figure;
+    txt = 'Spatial Prediction and Prediction error for x=' + string(selX*dx-dx) + 'm and t=' + string(selT*Ts-Ts) + 'sec';
+    sgtitle(txt);
+    
+    % Model Prediction Y
+    subplot(2,3,1);
+    plot(y, squeeze(test.y(selT,:,selX)));
+    hold on;
+    plot(y, squeeze(pred.y(selT,:,selX)));
+    title("Temperatures (Y)")
+    xlabel("y (m)");
+    ylabel("T (°C)");
     grid on;
-
-    % Steady Error
-    subplot(2,2,4);
-    bar(metrics,errSS);
-    ylabel('Error (K)')
-    title('Steady State Error Values')
+    legend('True','Pred');
+    subplot(2,3,4);
+    err = squeeze(test.y(selT,:,selX)) - squeeze(pred.y(selT,:,selX));
+    plot(y, err);
+    title("Temperatures Error (Y)")
+    xlabel("y (m)");
+    ylabel("T (°C)");
     grid on;
-
-    %===================================================
-    % Plotting Predictions (One Figure)
-    %===================================================
-    if setup.plotOut == 1
-        %----------------------------------------
-        % Init
-        %----------------------------------------
-        figure;
-        sgtitle('Predicted Temperature and Error for Testing Data');
     
-        %----------------------------------------
-        % Predictions
-        %----------------------------------------
-        % Init
-        subplot(2,1,1);
-        hold on
+    % Model Prediction Y Gradients
+    subplot(2,3,2);
+    plot(y, squeeze(test.q(selT,:,selX)));
+    hold on;
+    plot(y, squeeze(pred.q(selT,:,selX)));
+    title("Gradient (Y)")
+    xlabel("y (m)");
+    ylabel("dT (K/m)");
+    grid on;
+    legend('True','Pred');
+    subplot(2,3,5);
+    err = squeeze(test.q(selT,:,selX)) - squeeze(pred.q(selT,:,selX));
+    plot(y, err);
+    title("Gradient Error (Y)")
+    xlabel("y (m)");
+    ylabel("dT (K/m)");
+    grid on;
     
-        % Prediction
-        set(gca,'ColorOrderIndex',1);
-        for i = 1:Ny
-            set(gca,'ColorOrderIndex',i);
-            plot(time, yTest(:,i));
-            set(gca,'ColorOrderIndex',i);
-            plot(time, yPred(:,i),'--');
-        end
-        
-        % Reference
-        plot(time,rTest,'k--');
+    % Model Prediction Y Fluxes
+    subplot(2,3,3);
+    plot(y, squeeze(test.qk(selT,:,selX)));
+    hold on;
+    plot(y, squeeze(pred.qk(selT,:,selX)));
+    title("Flux (Y)")
+    xlabel("y (m)");
+    ylabel("q (W/m²)");
+    grid on;
+    legend('True','Pred');
+    subplot(2,3,6);
+    err = squeeze(test.qk(selT,:,selX)) - squeeze(pred.qk(selT,:,selX));
+    plot(y, err);
+    title("Flux Error (Y)")
+    xlabel("y (m)");
+    ylabel("q (W/m²)");
+    grid on;
     
-        % Labels
-        xlabel('time (sec)');
-        ylabel('temperature (°C)');
-        title('Temperature Prediction');
-        grid on;
-        
-        %----------------------------------------
-        % Error
-        %----------------------------------------
-        % Init
-        subplot(2,1,2);
-        hold on
+    %----------------------------------------
+    % Plot Spatial Prediction X-Y
+    %----------------------------------------
+    % Init
+    figure;
+    txt = 'Spatial Prediction and Prediction Error for t=' + string(selT*Ts-Ts) + 'sec';
+    sgtitle(txt);
     
-        % Prediction
-        set(gca,'ColorOrderIndex',1);
-        for i = 1:Ny
-            set(gca,'ColorOrderIndex',i);
-            yErr = yTest(:,i) - yPred(:,i);
-            plot(time, yErr);
-        end
+    % Temperatures
+    subplot(2,3,1);
+    pcolor(x,y,squeeze(pred.y(selT,:,:)));
+    title("Temperatures (X-Y)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    colorbar
+    grid on;
+    subplot(2,3,4);
+    err = squeeze(test.y(selT,:,:)) - squeeze(pred.y(selT,:,:));
+    pcolor(x,y,err);
+    title("Temperatures Error (X)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    colorbar
+    grid on;
     
-        % Labels
-        xlabel('time (sec)');
-        ylabel('error (K)');
-        title('Temperature Prediction Error');
-        grid on;
-        legend(namesOut, 'Location','southeast', 'NumColumns', Ny);
-    end
+    % Gradients
+    subplot(2,3,2);
+    pcolor(x,y,squeeze(pred.q(selT,:,:)));
+    title("Gradient (X-Y)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    colorbar
+    grid on;
+    subplot(2,3,5);
+    err = squeeze(test.q(selT,:,:)) - squeeze(pred.q(selT,:,:));
+    pcolor(x,y,err);
+    title("Gradient Error (X)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    colorbar
+    grid on;
     
-    %===================================================
-    % Plotting Predictions (Multi Figure)
-    %===================================================
-    if setup.plotOut == 2
-        for i = 1:Ny
-            %----------------------------------------
-            % Init
-            %----------------------------------------
-            figure;
-            txt = 'Predicted Temperature and Error for Testing Data of Signal ' + namesOut(i);
-            sgtitle(txt);
-        
-            %----------------------------------------
-            % Predictions
-            %----------------------------------------
-            % Init
-            subplot(2,1,1);
-            hold on
-        
-            % Prediction
-            set(gca,'ColorOrderIndex',1);
-            plot(time, yTest(:,i));
-            set(gca,'ColorOrderIndex',1);
-            plot(time, yPred(:,i),'--');
-            
-            % Reference
-            plot(time,rTest,'k--');
-        
-            % Labels
-            xlabel('time (sec)');
-            ylabel('temperature (°C)');
-            title('Temperature Prediction');
-            grid on;
-            
-            %----------------------------------------
-            % Error
-            %----------------------------------------
-            % Init
-            subplot(2,1,2);
-            hold on
-        
-            % Prediction
-            set(gca,'ColorOrderIndex',1);
-            yErr = yTest(:,i) - yPred(:,i);
-            plot(time, yErr);
+    % Fluxes
+    subplot(2,3,3);
+    pcolor(x,y,squeeze(pred.qk(selT,:,:)));
+    title("Flux (X-Y)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    colorbar
+    grid on;
+    subplot(2,3,6);
+    err = squeeze(test.qk(selT,:,:)) - squeeze(pred.qk(selT,:,:));
+    pcolor(x,y,err);
+    title("Flux Error (X)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    colorbar
+    grid on;
     
-            % Labels
-            xlabel('time (sec)');
-            ylabel('error (K)');
-            title('Temperature Prediction Error');
-            grid on;
-            legend(namesOut, 'Location','southeast', 'NumColumns', length(namesOut));
-        end
-    end
+    %----------------------------------------
+    % Plot Temporal Prediction
+    %----------------------------------------
+    % Init
+    figure;
+    txt = 'Temporal Prediction and Prediction error for x=' + string(selX*dx-dx) + 'm and y=' + string(selY*dy-dy) + 'm';
+    sgtitle(txt);
+    
+    % Model Prediction
+    subplot(2,1,1);
+    plot(t_test, squeeze(test.y(:,selY,selX)));
+    hold on;
+    plot(t_test, squeeze(pred.y(:,selY,selX)));
+    title("Absolute Temperatures (T)")
+    xlabel("t (sec)");
+    ylabel("T (°C)");
+    grid on;
+    legend('True','Pred');
+    subplot(2,1,2);
+    err = squeeze(test.y(:,selY,selX)) - squeeze(pred.y(:,selY,selX));
+    plot(t_test, err);
+    title("Temperatures Error (T)")
+    xlabel("t (sec)");
+    ylabel("T (°C)");
+    grid on;
+    
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output

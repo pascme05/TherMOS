@@ -120,7 +120,7 @@ setup.config = "default2D";                                                 % na
 % Plotting and Saving
 %----------------------------------------
 setup.plotOut = 1;                                                          % 0) model output is not plotted, 1) model output is plotted, 2) plotting one figure per output
-setup.plotMdl = 1;                                                          % 0) model structure is not plotted, 1) model structure is plotted
+setup.plotMdl = 0;                                                          % 0) model structure is not plotted, 1) model structure is plotted
 setup.featRank = 0;                                                         % 0) No feature ranking, 1) feature ranking
 setup.save = 0;                                                             % 0) output data not saved, 1) output data saved
 

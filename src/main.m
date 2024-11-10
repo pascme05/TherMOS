@@ -303,6 +303,29 @@ function [] = main(setup, path)
         disp("INFO: Offset removal deactivated")
     end
     fprintf('\n');
+    
+    %===================================================
+    % Gradient/Flux
+    %===================================================
+    %----------------------------------------
+    % Msg
+    %----------------------------------------
+    disp("----------------------------------------");
+    disp("Gradient/Flux")
+    disp("----------------------------------------");
+    
+    %----------------------------------------
+    % Calc
+    %----------------------------------------
+    if para.Dat.gen.dOut == 2
+        [~, ~, data.tr] = calcGrad(data.tr);
+        [~, ~, data.te] = calcGrad(data.te);
+        [~, ~, data.vl] = calcGrad(data.vl);
+        [~, ~, data.pr] = calcGrad(data.pr);
+    else
+        disp("INFO: 1D data no field calculation")
+    end
+    fprintf('\n');
 
     %===================================================
     % Performance
@@ -395,6 +418,7 @@ function [] = main(setup, path)
 
         % 2D Output
         else
+            plotResults2D(data, results, mdl, setup, para);
         end
     end
     fprintf('\n');
