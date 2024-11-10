@@ -126,7 +126,7 @@ function mdl = training(data, setup, para, path)
         %----------------------------------------
         % Saving
         %----------------------------------------
-        mdlName = 'mdl_sf_' + setup.name + '.mat';
+        mdlName = 'mdl_po_' + setup.name + '.mat';
         filename = fullfile(path.mdl, mdlName);
         save(filename, 'mdl');
     end

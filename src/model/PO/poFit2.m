@@ -185,19 +185,36 @@ function mdl = poFit2(data, ~, para)
     %===================================================
     % System Matrices
     %===================================================
+    % for i = 1:K
+    %     for j = 1:K
+    %         Cth2(i, j) = sum(sum(rho .* Cp .* rPhi(:, i) .* rPhi(:, j))) * dx * dy;
+    %     end
+    % end
+    % 
+    % for i = 1:K
+    %     for j = 1:K
+    %         % Interior contributions
+    %         Gx2(i, j) = sum(sum(k2D .* dPhidx(:, :, i) .* dPhidx(:, :, j))) * dx * dy;
+    %         Gy2(i, j) = sum(sum(k2D .* dPhidy(:, :, i) .* dPhidy(:, :, j))) * dx * dy;
+    % 
+    %         % Sum both contributions for interior terms
+    %         Gth2(i, j) = Gx2(i, j) + Gy2(i, j);
+    %     end
+    % end
+
     % System Matrices
     for i = 1:K
         for ii = 1:K
             % Mass Matrix
             Cth(i, ii) = trapz(dx, trapz(dy, sPhi(:, :, ii) .* sPhi(:, :, i), 1), 2) / dx / dy;
-    
+
             % Stiffness Matrix (interior contributions)
             Gth(i, ii) = trapz(dx, trapz(dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), 1), 2) / dx / dy;
-    
+
             % Boundary Terms for Neumann conditions (Y-direction)
             tempY = alpha2D .* sPhi(:, :, ii) .* dPhidx(:, :, i);
             Gy(i, ii) = trapz(dy, tempY(:, end) - tempY(:, 1), 1) / dy;
-    
+
             % Boundary Terms for Neumann conditions (X-direction)
             tempX = alpha2D .* sPhi(:, :, ii) .* dPhidy(:, :, i);
             Gx(i, ii) = trapz(dx, tempX(end, :) -  tempX(1, :), 2) / dx;
@@ -205,44 +222,29 @@ function mdl = poFit2(data, ~, para)
     end
     Gth = Gth - (Gy + Gx);
 
-    % % Compute Thermal Capacitance Matrix (Cth)
-    % for i = 1:K
-    %     for j = 1:K
-    %         Cth(i, j) = sum(sum(rho .* Cp .* rPhi(:, i) .* rPhi(:, j) * dx * dy));
-    %     end
-    % end
-    % 
-    % % Compute Thermal Conductance Matrix (Gth)
-    % for i = 1:K
-    %     for j = 1:K
-    %         Gx(i, j) = sum(sum(k2D .* dPhidx(:, :, i) .* dPhidx(:, :, j) * dx * dy));
-    %         Gy(i, j) = sum(sum(k2D .* dPhidy(:, :, i) .* dPhidy(:, :, j) * dx * dy));
-    %         Gth(i, j) = Gx(i, j) + Gy(i, j);
-    %     end
-    % end
-    
     % Stiffness Matrices
     GC = Gth / Cth;
+    % GC2 = Gth2 / Cth2;
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % ----------------------------------------------------
-    % Reconstruct
-    % ----------------------------------------------------
-    % Init
-    temp = zeros(Nt, length(y), length(x));
-    T_hat = zeros(Nt, length(y), length(x));
-    
-    % Reconstruct
-    for i = 1:K
-        for ii = 1:Nt
-            temp(ii, :, :) = theta(ii, i) .* sPhi(:, :, i);
-        end
-        T_hat = T_hat + temp;
-    end
-    T_hat2 = squeeze(T_hat(:,21,21));
-    T2 = squeeze(T2D(:,21,21));
+    % % ----------------------------------------------------
+    % % Reconstruct
+    % % ----------------------------------------------------
+    % % Init
+    % temp = zeros(Nt, length(y), length(x));
+    % T_hat = zeros(Nt, length(y), length(x));
+    % 
+    % % Reconstruct
+    % for i = 1:K
+    %     for ii = 1:Nt
+    %         temp(ii, :, :) = theta(ii, i) .* sPhi(:, :, i);
+    %     end
+    %     T_hat = T_hat + temp;
+    % end
+    % T_hat2 = squeeze(T_hat(:,21,21));
+    % T2 = squeeze(T2D(:,21,21));
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
