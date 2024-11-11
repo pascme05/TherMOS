@@ -49,7 +49,7 @@ tlist = 0:dt:Tend-dt;                                                       % ti
 % Settings
 %---------------------------------------------------
 plotting = 0;
-saving = 0;
+saving = 1;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Define Geometry
@@ -85,15 +85,15 @@ thermalIC(thermalmodel,Tinit);
 % Adiabatic
 thermalBC(thermalmodel,"Edge",[1,2,3],'Temperature',20);
         
-% Constant Temperature
-thermalBC(thermalmodel,"Edge",4,'Temperature',20); 
+% % Constant Temperature
+% thermalBC(thermalmodel,"Edge",4,'Temperature',20); 
 
 % % Convection
 % thermalBC(thermalmodel,"Edge",4,'ConvectionCoefficient',1000, ...
 %                                 'AmbientTemperature',20);
 
-% % Heat Flux
-% thermalBC(thermalmodel,"Edge",4,'HeatFlux',100);
+% Heat Flux
+thermalBC(thermalmodel,"Edge",4,'HeatFlux',100);
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

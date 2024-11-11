@@ -18,21 +18,33 @@ clear variables
 clc
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% Load Data
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Define Parameters and Variables
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-M = 20;
-N = 20;
-l = 0.20;
-h = 0.20;
-q = 1e6;
-dx = 0.01;
-dt = 1;
-tlist = 0:dt:500-dt;
+%---------------------------------------------------
+% Dimension 
+%---------------------------------------------------
+M = 20;                                                                     % Number of X points
+N = 20;                                                                     % Number of Y points
+l = 0.20;                                                                   % x length (m)
+h = 0.20;                                                                   % y length (m)
+dx = 0.01;                                                                 % internal FEM resolution (m)
+
+%---------------------------------------------------
+% Load Case 
+%---------------------------------------------------
+Tinit = 20;                                                                 % Initial temperature (degC)
+Tend = 2000;                                                                % end value time (sec)
+q = 1000000;                                                                % Volumetric heat generation (W/m3)
+dt = 10;                                                                    % sampling time (sec)
+tlist = 0:dt:Tend-dt;                                                       % time vector (sec)
+
+%---------------------------------------------------
+% Settings
+%---------------------------------------------------
+space_Q = 1;
+space_M = 1;
+plotting = 0;
+saving = 1;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Define Geometry
@@ -56,8 +68,8 @@ ns = char('R1','R2');
 ns = ns';
 g = decsg(gd,sf,ns);
 geometryFromEdges(thermalmodel,g)
-pdegplot(thermalmodel,"EdgeLabels","on","FaceLabels","on","FaceAlpha",0.5)
-axis equal
+% pdegplot(thermalmodel,"EdgeLabels","on","FaceLabels","on","FaceAlpha",0.5)
+% axis equal
 
 % %---------------------------------------------------
 % % Edges 
@@ -65,24 +77,12 @@ axis equal
 % heat_source_region_x = [0, 0.2];
 % heat_source_region_y = [0, 0.2];
 
-%---------------------------------------------------
-% Mesh 
-%---------------------------------------------------
-generateMesh(thermalmodel,'Hmax',dx,'Hmin',dx,'Hgrad',1.0);
-pdemesh(thermalmodel)
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Define Model
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %---------------------------------------------------
 % Material 
 %---------------------------------------------------
-% % Constant Parameters
-% thermalProperties(thermalmodel,"ThermalConductivity",29,'Face',[1,2], ...
-%                                "MassDensity",1300, ...
-%                                "SpecificHeat",800);
-
-% Spatial Parameters
 thermalProperties(thermalmodel,"ThermalConductivity",210,'Face',1, ...
                                "MassDensity",2710, ...
                                "SpecificHeat",900);
@@ -131,6 +131,11 @@ internalHeatSource(thermalmodel,q,'Face',1);
 % internalHeatSource(thermalmodel,q,'Face',[1,2]);
 
 %---------------------------------------------------
+% Mesh 
+%---------------------------------------------------
+generateMesh(thermalmodel,'Hmax',dx,'Hmin',dx,'Hgrad',1.0);
+
+%---------------------------------------------------
 % Solve 
 %---------------------------------------------------
 results = solve(thermalmodel,tlist);
@@ -138,6 +143,9 @@ results = solve(thermalmodel,tlist);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Get results
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%---------------------------------------------------
+% Temperatures
+%---------------------------------------------------
 T = results.Temperature;
 xyz = thermalmodel.Mesh.Nodes;
 dx = (l)/M;
@@ -149,6 +157,10 @@ for k = -M:1:M
         T1(:,kk+N+1,k+M+1) = T(idx, :);
     end
 end
+
+%---------------------------------------------------
+% Heat Generation
+%---------------------------------------------------
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Plotting
@@ -171,6 +183,69 @@ for i = 1:floor(length(tlist) / 10)
     subplot(2,1,2)
     contourf(dT1)
     pause(0.05)
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Output
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%---------------------------------------------------
+% Define Variables 
+%---------------------------------------------------
+Cp = matCp * ones(length(T),1);
+dx = dx;
+dy = dy;
+geo = results.Mesh.Nodes';
+k = matK * ones(length(T),1);
+Lx = 2*l;
+Ly = 2*h;
+r = Tinit * ones(size(T))';
+rho = matRho * ones(length(T),1);
+t = tlist;
+Ts = dt;
+X = q * ones(size(T))';
+y = T';
+
+%---------------------------------------------------
+% Save Variables 
+%---------------------------------------------------
+% Define Vars
+vars_to_save = {'Cp', 'dx', 'dy', 'geo', 'k', 'Lx', 'Ly', 'r', 'rho', 't', ...
+                'Ts', 'X', 'y'};
+
+% Save Vars
+if saving == 1
+    save('data.mat', vars_to_save{:});
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Plotting
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+if plotting == 1
+    %---------------------------------------------------
+    % Fluxes
+    %---------------------------------------------------
+    figure
+    [qx,qy] = evaluateHeatFlux(results);
+    for i = 1:floor(length(tlist) / 10)
+        subplot(2,1,1)
+        pdeplot(thermalmodel,"XYData",results.Temperature(:,floor(i*10)))
+        subplot(2,1,2)
+        pdeplot(thermalmodel,'FlowData',[qx qy])
+        pause(0.001)
+    end
+    
+    %---------------------------------------------------
+    % Temperatures
+    %---------------------------------------------------
+    figure
+    for i = 1:floor(length(tlist) / 10)
+        dT1 = gradient(squeeze(T1(floor(i*10),:,:)), dx, dy);
+        subplot(2,1,1)
+        contourf(squeeze(T1(floor(i*10),:,:)))
+        subplot(2,1,2)
+        contourf(dT1)
+        pause(0.05)
+    end
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
