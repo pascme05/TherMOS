@@ -39,9 +39,22 @@ dt = 10;                                                                    % sa
 tlist = 0:dt:Tend-dt;                                                       % time vector (sec)
 
 %---------------------------------------------------
+% Material 
+%---------------------------------------------------
+% Region-1
+matK1 = 210;                                                                  % Thermal conductivity (W/mK)
+matRho1 = 2710;                                                              % Material density (kg/m3)
+matCp1 = 900;      
+
+% Region-2
+matK2 = 400;                                                                  % Thermal conductivity (W/mK)
+matRho2 = 8933;                                                              % Material density (kg/m3)
+matCp2 = 380;      
+
+%---------------------------------------------------
 % Settings
 %---------------------------------------------------
-space_Q = 1;
+space_Q = 1;                                                                % 1) spatial temperature distribution                                                          
 space_M = 1;
 plotting = 0;
 saving = 1;
@@ -60,6 +73,7 @@ thermalmodel = createpde("thermal","transient");
 % Define the coordinates of the two regions
 R1 = [3,4,-l,0,0,-l,h,h,-h,-h]'; % Region 1
 R2 = [3,4,0,l,l,0,h,h,-h,-h]';   % Region 2
+heat_source_region = [-0.2, 0.0, -0.2, 0.2];
 
 % Combine the regions into a single geometry
 gd = [R1, R2];
@@ -68,14 +82,7 @@ ns = char('R1','R2');
 ns = ns';
 g = decsg(gd,sf,ns);
 geometryFromEdges(thermalmodel,g)
-% pdegplot(thermalmodel,"EdgeLabels","on","FaceLabels","on","FaceAlpha",0.5)
-% axis equal
 
-% %---------------------------------------------------
-% % Edges 
-% %---------------------------------------------------
-% heat_source_region_x = [0, 0.2];
-% heat_source_region_y = [0, 0.2];
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Define Model
@@ -83,12 +90,20 @@ geometryFromEdges(thermalmodel,g)
 %---------------------------------------------------
 % Material 
 %---------------------------------------------------
-thermalProperties(thermalmodel,"ThermalConductivity",210,'Face',1, ...
-                               "MassDensity",2710, ...
-                               "SpecificHeat",900);
-thermalProperties(thermalmodel,"ThermalConductivity",400,'Face',2, ...
-                               "MassDensity",8933, ...
-                               "SpecificHeat",380);
+% Single Area
+if space_M == 0
+    thermalProperties(thermalmodel,"ThermalConductivity",matK1,'Face',[1,2], ...
+                                   "MassDensity",matRho1, ...
+                                   "SpecificHeat",matCp1);
+% Double Area
+else
+    thermalProperties(thermalmodel,"ThermalConductivity",matK1,'Face',1, ...
+                                   "MassDensity",matRho1, ...
+                                   "SpecificHeat",matCp1);
+    thermalProperties(thermalmodel,"ThermalConductivity",matK2,'Face',2, ...
+                                   "MassDensity",matRho2, ...
+                                   "SpecificHeat",matCp2);
+end
 
 %---------------------------------------------------
 % Initial Conditions 
@@ -125,10 +140,13 @@ thermalmodel.SolverOptions.AbsoluteTolerance = 1E-9;
 % Source 
 %---------------------------------------------------
 % Spatial Heat Source
-internalHeatSource(thermalmodel,q,'Face',1);
-
-% % Spatial Parameters
-% internalHeatSource(thermalmodel,q,'Face',[1,2]);
+if space_Q == 1
+    internalHeatSource(thermalmodel,q,'Face',1);
+    
+% Constant Heat Source
+else
+    internalHeatSource(thermalmodel,q,'Face',[1,2]);
+end
 
 %---------------------------------------------------
 % Mesh 
@@ -161,7 +179,60 @@ end
 %---------------------------------------------------
 % Heat Generation
 %---------------------------------------------------
+Q = zeros(size(T))';
+% Spatial Heat Source
+if space_Q == 0
+    Q = q * ones(size(Q));
+    
+% Spatial Parameters
+else
+    for i = 1:numel(results.Mesh.Nodes(1,:))
+        if results.Mesh.Nodes(1,i) >= heat_source_region(1) && results.Mesh.Nodes(1,i) < heat_source_region(2) && ...
+           results.Mesh.Nodes(2,i) >= heat_source_region(3) && results.Mesh.Nodes(2,i) <= heat_source_region(4)
+            Q(:, i) = q;
+        elseif results.Mesh.Nodes(1,i) >= heat_source_region(1) && results.Mesh.Nodes(1,i) <= heat_source_region(2) && ...
+           results.Mesh.Nodes(2,i) >= heat_source_region(3) && results.Mesh.Nodes(2,i) <= heat_source_region(4)
+            Q(:, i) = q/2;
+        end
+    end
+    
+end
 
+%---------------------------------------------------
+% Material Properties
+%---------------------------------------------------
+matCp = ones(length(T),1);
+matK = ones(length(T),1);
+matRho = ones(length(T),1);
+if space_M == 0
+    matCp = matCp1 * ones(length(T),1);
+    matK = matK1 * ones(length(T),1);
+    matRho = matRho1 * ones(length(T),1);
+else
+    for i = 1:numel(results.Mesh.Nodes(1,:))
+        if results.Mesh.Nodes(1,i) >= heat_source_region(1) && results.Mesh.Nodes(1,i) < heat_source_region(2) && ...
+           results.Mesh.Nodes(2,i) >= heat_source_region(3) && results.Mesh.Nodes(2,i) <= heat_source_region(4)
+            matCp(i,1) = matCp1;
+            matK(i,1) = matK1;
+            matRho(i,1) = matRho1;
+        elseif results.Mesh.Nodes(1,i) >= heat_source_region(1) && results.Mesh.Nodes(1,i) <= heat_source_region(2) && ...
+           results.Mesh.Nodes(2,i) >= heat_source_region(3) && results.Mesh.Nodes(2,i) <= heat_source_region(4)
+            matCp(i,1) = (matCp1 + matCp2)/2;
+            matK(i,1) = (matK1 + matK2)/2;
+            matRho(i,1) = (matRho1 + matRho2)/2;
+            % matCp(i,1) = matCp1;
+            % matK(i,1) = matK1;
+            % matRho(i,1) = matRho1;
+            % matCp(i,1) = matCp2;
+            % matK(i,1) =  matK2;
+            % matRho(i,1) = matRho2;
+        else
+            matCp(i,1) = matCp2;
+            matK(i,1) = matK2;
+            matRho(i,1) = matRho2;
+        end
+    end
+end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Output
@@ -169,18 +240,18 @@ end
 %---------------------------------------------------
 % Define Variables 
 %---------------------------------------------------
-Cp = matCp * ones(length(T),1);
+Cp = matCp;
 dx = dx;
 dy = dy;
 geo = results.Mesh.Nodes';
-k = matK * ones(length(T),1);
+k = matK;
 Lx = 2*l;
 Ly = 2*h;
 r = Tinit * ones(size(T))';
-rho = matRho * ones(length(T),1);
+rho = matRho;
 t = tlist;
 Ts = dt;
-X = q * ones(size(T))';
+X = Q;
 y = T';
 
 %---------------------------------------------------
