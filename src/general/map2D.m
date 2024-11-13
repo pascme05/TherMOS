@@ -19,12 +19,13 @@
 % Inp:  1) Tin:         Input snapshot matrix NtxN
 %       2) xInp/yInp:   Spatial input variables
 %       3) xOut/yOut:   Spatial output variables
+%       4) Inter:       Interpolation method 1) nearest, 2) linear
 % Out:  1) Tout:        Output 2D temperature field 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function Tout = map2D(Tin, xInp, yInp, xOut, yOut)
+function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -46,7 +47,17 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut)
     x_grid = linspace(x_min, x_max, Nx);
     y_grid = linspace(y_min, y_max, Ny);
     
-    
+    %===================================================
+    % Interpolation
+    %===================================================
+    if inter == 1
+        method = 'nearest';
+    elseif inter == 2
+        method = 'linear';
+    else
+        method = 'nearest';
+    end
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -59,7 +70,7 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut)
     % Interpolation
     %===================================================
     for i = 1:Nt
-        Tout(i,:,:) = griddata(xInp, yInp, Tin(i,:), Xq, Yq, 'linear');
+        Tout(i,:,:) = griddata(xInp, yInp, Tin(i,:), Xq, Yq, method);
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

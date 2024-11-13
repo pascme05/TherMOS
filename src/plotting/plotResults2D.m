@@ -106,28 +106,28 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     %----------------------------------------
     % Material
     %----------------------------------------
-    k = squeeze(map2D(k', xInp, yInp, x, y));
-    rho = squeeze(map2D(rho', xInp, yInp, x, y));
-    Cp = squeeze(map2D(Cp', xInp, yInp, x, y));
+    k = squeeze(map2D(k', xInp, yInp, x, y, 1));
+    rho = squeeze(map2D(rho', xInp, yInp, x, y, 1));
+    Cp = squeeze(map2D(Cp', xInp, yInp, x, y, 1));
 
     %----------------------------------------
     % Input/Output
     %----------------------------------------
     % Train
-    train.X = squeeze(map2D(train.X, xInp, yInp, x, y));
-    train.y = squeeze(map2D(train.y, xInp, yInp, x, y));
+    train.X = squeeze(map2D(train.X, xInp, yInp, x, y, 1));
+    train.y = squeeze(map2D(train.y, xInp, yInp, x, y, 1));
 
     % Test
-    test.X = squeeze(map2D(test.X, xInp, yInp, x, y));
-    test.y = squeeze(map2D(test.y, xInp, yInp, x, y));
+    test.X = squeeze(map2D(test.X, xInp, yInp, x, y, 1));
+    test.y = squeeze(map2D(test.y, xInp, yInp, x, y, 1));
 
     % Val
-    val.X = squeeze(map2D(val.X, xInp, yInp, x, y));
-    val.y = squeeze(map2D(val.y, xInp, yInp, x, y));
+    val.X = squeeze(map2D(val.X, xInp, yInp, x, y, 1));
+    val.y = squeeze(map2D(val.y, xInp, yInp, x, y, 1));
 
     % Pred
-    pred.X = squeeze(map2D(pred.X, xInp, yInp, x, y));
-    pred.y = squeeze(map2D(pred.y, xInp, yInp, x, y));
+    pred.X = squeeze(map2D(pred.X, xInp, yInp, x, y, 1));
+    pred.y = squeeze(map2D(pred.y, xInp, yInp, x, y, 1));
 
     %----------------------------------------
     % Output

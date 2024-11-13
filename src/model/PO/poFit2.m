@@ -75,15 +75,13 @@ function mdl = poFit2(data, ~, para)
     %===================================================
     % Converting 2D
     %===================================================
-    k2D = squeeze(map2D(k', xInp, yInp, x, y));
-    alpha2D = squeeze(map2D(alpha', xInp, yInp, x, y));
+    alpha2D = squeeze(map2D(alpha', xInp, yInp, x, y, 1));
 
     %===================================================
     % Mean Centering
     %===================================================
     Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
     T = T - Tavg.*ones(Nt,N);                                               % mean centered observation matrix (°C)
-    T2D = squeeze(map2D(T, xInp, yInp, x, y));
 
     %===================================================
     % Eigenvalues
@@ -161,19 +159,13 @@ function mdl = poFit2(data, ~, para)
     end
 
     % Reshape
-    sPhi = map2D(rPhi', xInp, yInp, x, y);
+    sPhi = map2D(rPhi', xInp, yInp, x, y, 1);
     sPhi = permute(sPhi, [2, 3, 1]);
 
     %----------------------------------------
     % Temporal Modes
     %----------------------------------------
     theta = (rPhi' * T')';
-    
-    % for i = 1:K
-    %     for ii = 1:Nt
-    %         theta(ii,i) = trapz(dx, trapz(dy, squeeze(sPhi(:, :, i)) .* squeeze(T2D(ii, :, :)), 1), 2) / dx / dy;
-    %     end
-    % end
 
     %===================================================
     % Gradients

@@ -223,9 +223,9 @@ else
             % matCp(i,1) = matCp1;
             % matK(i,1) = matK1;
             % matRho(i,1) = matRho1;
-            % matCp(i,1) = matCp2;
-            % matK(i,1) =  matK2;
-            % matRho(i,1) = matRho2;
+            matCp(i,1) = matCp2;
+            matK(i,1) =  matK2;
+            matRho(i,1) = matRho2;
         else
             matCp(i,1) = matCp2;
             matK(i,1) = matK2;

@@ -58,9 +58,9 @@ function [q, qk, out] = calcGrad(data)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    k = squeeze(map2D(k', xInp, yInp, x, y));
-    T = squeeze(map2D(T, xInp, yInp, x, y));
-    q = squeeze(map2D(q, xInp, yInp, x, y));
+    k = squeeze(map2D(k', xInp, yInp, x, y, 1));
+    T = squeeze(map2D(T, xInp, yInp, x, y, 1));
+    q = squeeze(map2D(q, xInp, yInp, x, y, 1));
     
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
