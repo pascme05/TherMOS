@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: printConsole                                                      %
-% Date: 13.08.2024                                                        %
+% Date: 19.12.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -26,11 +26,6 @@
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function [] = printConsole(data, results, setup, mdl)
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Message Input
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Printing results on console")
-
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -145,13 +140,13 @@ function [] = printConsole(data, results, setup, mdl)
     %===================================================
     % Training and Testing Times
     %===================================================
-    fprintf('Training time (sec): %5.2f \n', mdl.timeTrain);
-    fprintf('Inference time (us/sample): %5.2f \n', data.pr.testTime*1e6/Nt);
+    fprintf('INFO: Training time (sec): %5.2f \n', mdl.timeTrain);
+    fprintf('INFO: Inference time (us/sample): %5.2f \n', data.pr.testTime*1e6/Nt);
 
     %===================================================
     % Memory Requirements
     %===================================================
-    fprintf('Number Model Parameters: %-5d \n', mdl.size);
+    fprintf('INFO: Number Model Parameters: %-5d \n', mdl.size);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output

@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: resmpData                                                         %
-% Date: 13.08.2024                                                        %
+% Date: 18.12.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -29,11 +29,6 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Message Input
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Resampling (temporal) data")
-
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     Ts = para.Exp.gen.Ts;                                                   % target sampling time (sec)
@@ -45,6 +40,21 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     outDim = size(data.y);                                                  % output data dimension
     inpDim = size(data.X);                                                  % input data dimension
     refDim = size(data.r);                                                  % reference data dimension
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Sanity Check
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    if Ts == Ts_data
+        fprintf('INFO: Data sampling period equals target: %.2f sec \n', Ts);
+        fprintf('\n');
+        yOut = data.y;
+        xOut = data.X;
+        rOut = data.r;
+        tRef = 0:Ts:outDim(1)*Ts_data - Ts_data;
+        return;
+    else
+        fprintf('INFO: Data sampling period: %.2f sec is not equal to target: %.2f sec \n', Ts_data, Ts);
+    end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
@@ -201,11 +211,6 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     else
         disp("WARN: Incorrect reference dimension, no resampling")
     end
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Message Output
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Resampling (temporal) data")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

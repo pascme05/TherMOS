@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: plotResults2D                                                     %
-% Date: 13.08.2024                                                        %
+% Date: 19.12.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -30,7 +30,7 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Plotting results 2D")
+    disp("INFO: Plotting results 2D")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
@@ -38,15 +38,15 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     %===================================================
     % Parameters
     %===================================================
-    [Nt, Ny] = size(data.te.y);                                              % number of output samples
+    [Nt, Ny] = size(data.te.y);                                             % number of output samples
     selX = para.Dat.gen.inpX;                                               % x-position for 1D temporal plots                           
     selY = para.Dat.gen.inpY;                                               % y-position for 1D temporal plots
     selT = -1;                                                              % temporal instant for 1D/2D spatial plots (if -1 last sample)
     Ts = data.tr.Ts;
     dx = data.tr.Data.dx;
     dy = data.tr.Data.dy;
-    Ly = data.tr.Data.Ly;                                                      % length in y direction (m)
-    Lx = data.tr.Data.Lx;                                                      % length in x direction (m)
+    Ly = data.tr.Data.Ly;                                                   % length in y direction (m)
+    Lx = data.tr.Data.Lx;                                                   % length in x direction (m)
 
     %===================================================
     % Variables
@@ -69,8 +69,8 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     %----------------------------------------
     % Derived
     %----------------------------------------
-    xInp = data.tr.Data.geo(:,1);                                              % sampled input values x (m)
-    yInp = data.tr.Data.geo(:,2);                                              % sampled input values y (m)
+    xInp = data.tr.Data.geo(:,1);                                           % sampled input values x (m)
+    yInp = data.tr.Data.geo(:,2);                                           % sampled input values y (m)
     x = 0:dx:Lx;                                                            % x vector (m)
     y = 0:dy:Ly;                                                            % y vector (m)
     
@@ -90,8 +90,18 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     %----------------------------------------
     % Spatial
     %----------------------------------------
+    % Initial
     [~, selX] = min(abs(x - selX));
     [~, selY] = min(abs(x - selY));
+
+    % Limit
+    if selX > length(x)
+        selX = length(x);
+    end
+
+    if selY > length(y)
+        selY = length(y);
+    end
     
     %----------------------------------------
     % Temporal
@@ -128,11 +138,6 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     % Pred
     pred.X = squeeze(map2D(pred.X, xInp, yInp, x, y, 1));
     pred.y = squeeze(map2D(pred.y, xInp, yInp, x, y, 1));
-
-    %----------------------------------------
-    % Output
-    %----------------------------------------
-
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -276,13 +281,13 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     
     % Training
     subplot(2,3,1);
-    plot(t_train, squeeze(train.X(:, selX, selY)));
+    plot(t_train, squeeze(train.X(:, selY, selX)));
     title("Heat Generation (Train)")
     xlabel("t (sec)");
     ylabel("q (W/m³)");
     grid on
     subplot(2,3,4);
-    plot(t_train, squeeze(train.y(:, selX, selY)));
+    plot(t_train, squeeze(train.y(:, selY, selX)));
     title("Temperatures (Train)")
     xlabel("t (sec)");
     ylabel("T (°C)");
@@ -290,13 +295,13 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     
     % Testing 
     subplot(2,3,2);
-    plot(t_test, squeeze(test.X(:, selX, selY)));
+    plot(t_test, squeeze(test.X(:, selY, selX)));
     title("Heat Generation (Test)")
     xlabel("t (sec)");
     ylabel("q (W/m³)");
     grid on
     subplot(2,3,5);
-    plot(t_test, squeeze(test.y(:, selX, selY)));
+    plot(t_test, squeeze(test.y(:, selY, selX)));
     title("Temperatures (Test)")
     xlabel("t (sec)");
     zlabel("T (°C)");
@@ -304,13 +309,13 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     
     % Validaton 
     subplot(2,3,3);
-    plot(t_val, squeeze(val.X(:, selX, selY)));
+    plot(t_val, squeeze(val.X(:, selY, selX)));
     title("Heat Generation (Val)")
     xlabel("t (sec)");
     ylabel("q (W/m³)");
     grid on
     subplot(2,3,6);
-    plot(t_val, squeeze(val.y(:, selX, selY)));
+    plot(t_val, squeeze(val.y(:, selY, selX)));
     title("Temperatures (Val)")
     xlabel("t (sec)");
     zlabel("T (°C)");
@@ -527,12 +532,7 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     xlabel("t (sec)");
     ylabel("T (°C)");
     grid on;
-    
 
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Message Output
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Plotting results 2D")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

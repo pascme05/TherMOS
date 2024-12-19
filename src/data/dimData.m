@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: dimData                                                           %
-% Date: 26.09.2024                                                        %
+% Date: 19.12.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -26,16 +26,11 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function out = dimData(data, setup, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Message Input
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Reducing data dimension")
-
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     Ts = data.Ts;                                                           % sampling time (sec)
     [~, N] = size(data.y2);                                                 % number of profiles in data
-    dim = length(size(data.y));                                             % dimension of raw data input
+    dim = size(data.Data.geo,2);                                            % dimension of raw data input
     pos = para.Dat.gen.cutVal;                                              % position for reducing from 3D -> 2D
     ax = para.Dat.gen.cut;                                                  % axis which is being removed
 
@@ -45,37 +40,9 @@ function out = dimData(data, setup, para)
     %===================================================
     % Check dimension
     %===================================================
-    if (dim-1) ~= setup.datDim
+    if dim ~= setup.datDim
         disp("WARN: Expected and actual data dimension is different")
     end
-    
-    %===================================================
-    % Get Axis for Removal
-    %===================================================
-    % %----------------------------------------
-    % % X-Axis
-    % %----------------------------------------
-    % if ax == 1
-    %     diffX = 0;
-    %     diffY = 0;
-    %     diffZ = pos;
-    % 
-    % %----------------------------------------
-    % % Y-Axis
-    % %----------------------------------------
-    % elseif ax == 2
-    %     selX = pos;
-    %     selY = 0;
-    %     selZ = 0;
-    % 
-    % %----------------------------------------
-    % % Z-Axis
-    % %----------------------------------------
-    % else
-    %     selX = 1;
-    %     selY = 2;
-    %     selZ = 3;
-    % end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -226,11 +193,6 @@ function out = dimData(data, setup, para)
             end
         end
     end
-
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Message Output
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Reducing data dimension")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

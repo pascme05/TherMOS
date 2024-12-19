@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: templateFnc                                                       %
-% Date: 13.08.2024                                                        %
+% Date: 19.12.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -32,9 +32,9 @@ function [q, qk, out] = calcGrad(data)
     %===================================================
     % Parameters
     %===================================================
-    [Nt, ~] = size(data.y);                                              % number of output samples
-    dx = data.Data.dx;
-    dy = data.Data.dy;
+    [Nt, ~] = size(data.y);                                                 % number of output samples
+    dx = data.Data.dx;                                                      % spacing x direction (m)
+    dy = data.Data.dy;                                                      % spacing y direction (m)
     Ly = data.Data.Ly;                                                      % length in y direction (m)
     Lx = data.Data.Lx;                                                      % length in x direction (m)
 
@@ -47,12 +47,12 @@ function [q, qk, out] = calcGrad(data)
     yInp = data.Data.geo(:,2);                                              % sampled input values y (m)
     x = 0:dx:Lx;                                                            % x vector (m)
     y = 0:dy:Ly;                                                            % y vector (m)
-    qk = zeros(Nt, length(y), length(x));
+    qk = zeros(Nt, length(y), length(x));                                   % init heat flux
 
     %===================================================
     % Model
     %===================================================
-    k = data.Data.k;
+    k = data.Data.k;                                                        % thermal conductivity (W/mK)
 
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -85,7 +85,6 @@ function [q, qk, out] = calcGrad(data)
     out = data;
     out.q = q;
     out.qk = qk;
-
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

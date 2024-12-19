@@ -125,8 +125,8 @@ function mdl = poFit2(data, ~, para)
     %----------------------------------------
     % Msg
     %----------------------------------------
-    fprintf('Number of used eigenvalues (model order) K: %i \n', K);
-    fprintf('Cumulative correlation energy Em: %f \n', E)
+    fprintf('INFO: Number of used eigenvalues (model order) K: %i \n', K);
+    fprintf('INFO: Cumulative correlation energy Em: %f \n', E*100)
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -170,8 +170,14 @@ function mdl = poFit2(data, ~, para)
     %===================================================
     % Gradients
     %===================================================
-    for i = 1:K
-        [dPhidx(:, :, i), dPhidy(:, :, i)] = gradient(sPhi(:, :, i), dx, dy);
+    if K == 1
+        for i = 1:K
+            [dPhidx(:, :, i), dPhidy(:, :, i)] = gradient(sPhi(:, :)', dx, dy);
+        end
+    else
+        for i = 1:K
+            [dPhidx(:, :, i), dPhidy(:, :, i)] = gradient(sPhi(:, :, i), dx, dy);
+        end
     end
 
     %===================================================
@@ -221,22 +227,23 @@ function mdl = poFit2(data, ~, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % % ----------------------------------------------------
-    % % Reconstruct
-    % % ----------------------------------------------------
-    % % Init
-    % temp = zeros(Nt, length(y), length(x));
-    % T_hat = zeros(Nt, length(y), length(x));
-    % 
-    % % Reconstruct
-    % for i = 1:K
-    %     for ii = 1:Nt
-    %         temp(ii, :, :) = theta(ii, i) .* sPhi(:, :, i);
-    %     end
-    %     T_hat = T_hat + temp;
-    % end
-    % T_hat2 = squeeze(T_hat(:,21,21));
-    % T2 = squeeze(T2D(:,21,21));
+    % ----------------------------------------------------
+    % Reconstruct
+    % ----------------------------------------------------
+    % Init
+    temp = zeros(Nt, length(y), length(x));
+    T_hat = zeros(Nt, length(y), length(x));
+    T2D = map2D(T, xInp, yInp, x, y, 1);
+
+    % Reconstruct
+    for i = 1:K
+        for ii = 1:Nt
+            temp(ii, :, :) = theta(ii, i) .* sPhi(:, :, i);
+        end
+        T_hat = T_hat + temp;
+    end
+    T_pred2 = squeeze(T_hat(:,2,21));
+    T_true2 = squeeze(T2D(:,2,21));
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output

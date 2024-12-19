@@ -168,7 +168,7 @@ function out = poSol2(mdl, data, para)
     %----------------------------------------
     % Heat Generation
     %----------------------------------------
-    % q2 = ((alpha ./ k .* Q')' * rPhi)';
+    % q = ((alpha ./ k .* Q')' * rPhi)';
 
     for i = 1:Nt
         for ii = 1:K

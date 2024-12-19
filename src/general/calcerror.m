@@ -5,6 +5,10 @@ function [MAE, RMSE, SAE, NAE, MAX, NRSME] = calcerror(yTrue, yPred)
     SAE = (mean(abs(yTrue)) - mean(abs(yPred))) / mean(abs(yTrue));
     NAE = mean(abs(err)./mean(yTrue));
     MAX = max(abs(err));
-    NRSME = 100*(1-(sum(abs(err)))/sum(abs(yTrue - mean(yTrue))));
+    if norm(yTrue - mean(yTrue)) == 0
+        NRSME = 100 * (1 - norm(err));
+    else
+        NRSME = 100 * (1 - norm(err) / norm(yTrue - mean(yTrue)));
+    end
 end
 
