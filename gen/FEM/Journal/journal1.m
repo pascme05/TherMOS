@@ -23,12 +23,12 @@ clc
 %---------------------------------------------------
 % Dimension 
 %---------------------------------------------------
-M = 50;                                                                     % Number of X points
-N = 2;                                                                      % Number of Y points
+M = 25;                                                                     % Number of X points
+N = 8;                                                                      % Number of Y points
 l = 0.05;                                                                   % x length (m)
 b = 0.0075;                                                                 % width (m)
 h = 0.002;                                                                  % y length (m)
-dx = 0.001;                                                                 % internal FEM resolution (m)
+dx = 0.00025;                                                                 % internal FEM resolution (m)
 
 %---------------------------------------------------
 % Material 
@@ -108,8 +108,8 @@ thermalBC(thermalmodel,"Edge",6,'ConvectionCoefficient',1000, ...
 thermalBC(thermalmodel,"Edge",[3,4,7],'ConvectionCoefficient',7.5, ...
                                 'AmbientTemperature',65);
 
-% Heat Flux
-thermalBC(thermalmodel,"Edge",1,'HeatFlux',P_con/(4*b*h));
+% % Heat Flux
+% thermalBC(thermalmodel,"Edge",1,'HeatFlux',P_con/(4*b*h));
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

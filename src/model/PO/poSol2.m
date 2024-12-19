@@ -154,22 +154,24 @@ function out = poSol2(mdl, data, para)
     for i = 1:K
         % Interior contributions
         c(i) = trapz(dx, trapz(dy, sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy), 1), 2) / dx / dy;
-        
+
         % Boundary contributions in Y-direction
-        tempY = sAlpha .* sPhi(:, :, i) .* dT0dx;
-        cy(i) = trapz(dy, tempY(:, end) - tempY(:, 1), 1) / dy;
-        
+        % tempY = sAlpha .* sPhi(:, :, i) .* dT0dx;
+        % cy(i) = trapz(dy, tempY(:, end) - tempY(:, 1), 1) / dy;
+        tempY = trapz(dy, sAlpha .* sPhi(:, :, i) .* dT0dx, 1) / dy;
+        cy(i) = sum(tempY([1, end]));
+
         % Boundary contributions in X-direction
-        tempX = sAlpha .* sPhi(:, :, i) .* dT0dy;
-        cx(i) = trapz(dx, tempX(end, :) - tempX(1, :), 2) / dx;
+        % tempX = sAlpha .* sPhi(:, :, i) .* dT0dy;
+        % cx(i) = trapz(dx, tempX(end, :) - tempX(1, :), 2) / dx;
+        tempX = trapz(dx, sAlpha .* sPhi(:, :, i) .* dT0dy, 2) / dx;
+        cx(i) = sum(tempX([1, end]));
     end
-    c = c - (cx + cy);
+    c = c + (cx/dx + cy/dx);
 
     %----------------------------------------
     % Heat Generation
     %----------------------------------------
-    % q = ((alpha ./ k .* Q')' * rPhi)';
-
     for i = 1:Nt
         for ii = 1:K
             q(ii, i) = trapz(dx, trapz(dy, sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii)), 1), 2) / dx / dy;

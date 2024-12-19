@@ -210,40 +210,44 @@ function mdl = poFit2(data, ~, para)
             Gth(i, ii) = trapz(dx, trapz(dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), 1), 2) / dx / dy;
 
             % Boundary Terms for Neumann conditions (Y-direction)
-            tempY = alpha2D .* sPhi(:, :, ii) .* dPhidx(:, :, i);
-            Gy(i, ii) = trapz(dy, tempY(:, end) - tempY(:, 1), 1) / dy;
+            % tempY = alpha2D .* sPhi(:, :, ii) .* dPhidx(:, :, i);
+            % Gy(i, ii) = trapz(dy, tempY(:, end) - tempY(:, 1), 1) / dy;
+            tempY = trapz(dy, alpha2D .* sPhi(:, :, ii) .* dPhidx(:, :, i), 1) / dy;
+            Gy(i, ii) = sum(tempY([1, end]));
 
             % Boundary Terms for Neumann conditions (X-direction)
-            tempX = alpha2D .* sPhi(:, :, ii) .* dPhidy(:, :, i);
-            Gx(i, ii) = trapz(dx, tempX(end, :) -  tempX(1, :), 2) / dx;
+            % tempX = alpha2D .* sPhi(:, :, ii) .* dPhidy(:, :, i);
+            % Gx(i, ii) = trapz(dx, tempX(end, :) -  tempX(1, :), 2) / dx;
+            tempX = trapz(dx, alpha2D .* sPhi(:, :, ii) .* dPhidy(:, :, i), 2) / dx;
+            Gx(i, ii) = sum(tempX([1, end]));
+
         end
     end
-    Gth = Gth - (Gy + Gx);
+    Gth = Gth + (Gy/dy + Gx/dx);
 
     % Stiffness Matrices
     GC = Gth / Cth;
-    % GC2 = Gth2 / Cth2;
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % ----------------------------------------------------
-    % Reconstruct
-    % ----------------------------------------------------
-    % Init
-    temp = zeros(Nt, length(y), length(x));
-    T_hat = zeros(Nt, length(y), length(x));
-    T2D = map2D(T, xInp, yInp, x, y, 1);
-
-    % Reconstruct
-    for i = 1:K
-        for ii = 1:Nt
-            temp(ii, :, :) = theta(ii, i) .* sPhi(:, :, i);
-        end
-        T_hat = T_hat + temp;
-    end
-    T_pred2 = squeeze(T_hat(:,2,21));
-    T_true2 = squeeze(T2D(:,2,21));
+    % % ----------------------------------------------------
+    % % Reconstruct
+    % % ----------------------------------------------------
+    % % Init
+    % temp = zeros(Nt, length(y), length(x));
+    % T_hat = zeros(Nt, length(y), length(x));
+    % T2D = map2D(T, xInp, yInp, x, y, 1);
+    % 
+    % % Reconstruct
+    % for i = 1:K
+    %     for ii = 1:Nt
+    %         temp(ii, :, :) = theta(ii, i) .* sPhi(:, :, i);
+    %     end
+    %     T_hat = T_hat + temp;
+    % end
+    % T_pred2 = squeeze(T_hat(:,2,21));
+    % T_true2 = squeeze(T2D(:,2,21));
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
