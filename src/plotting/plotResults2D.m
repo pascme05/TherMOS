@@ -77,9 +77,19 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     %===================================================
     % Model
     %===================================================
+    %----------------------------------------
+    % Material
+    %----------------------------------------
     k = data.tr.Data.k;
     rho = data.tr.Data.rho;
     Cp = data.tr.Data.Cp;
+
+    %----------------------------------------
+    % Boundary
+    %----------------------------------------
+    hc = data.tr.Data.hc;
+    fl = data.tr.Data.fl;
+    Ta = data.tr.Data.Ta;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
@@ -119,6 +129,13 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     k = squeeze(map2D(k', xInp, yInp, x, y, 1));
     rho = squeeze(map2D(rho', xInp, yInp, x, y, 1));
     Cp = squeeze(map2D(Cp', xInp, yInp, x, y, 1));
+    
+    %----------------------------------------
+    % Boundary
+    %----------------------------------------
+    hc = squeeze(map2D(hc', xInp, yInp, x, y, 1));
+    fl = squeeze(map2D(fl', xInp, yInp, x, y, 1));
+    Ta = squeeze(map2D(Ta', xInp, yInp, x, y, 1));
 
     %----------------------------------------
     % Input/Output
@@ -189,6 +206,58 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     xlabel("x (m)");
     ylabel("y (m)");
     zlabel("Rho (kg/m³)");
+    grid on
+    set(gca,'xtick',x)
+    set(gca,'ytick',y)
+    colorbar
+    
+    %===================================================
+    % Boundary Conditions
+    %===================================================
+    %----------------------------------------
+    % Init
+    %----------------------------------------
+    figure;
+    txt = 'Spatially Distributed Boundary Conditions';
+    sgtitle(txt);
+    
+    %----------------------------------------
+    % Ambient Temperature
+    %----------------------------------------
+    subplot(1,3,1);
+    pcolor(x,y,Ta);
+    title("Ambient Temperature (°C)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    zlabel("Ta (°C)");
+    grid on
+    set(gca,'xtick',x)
+    set(gca,'ytick',y)
+    colorbar
+    
+    %----------------------------------------
+    % Heat Transfer Coefficients
+    %----------------------------------------
+    subplot(1,3,2);
+    pcolor(x,y,hc);
+    title("Heat Transfer Coefficient (W/m²K)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    zlabel("hc (W/m2K)");
+    grid on
+    set(gca,'xtick',x)
+    set(gca,'ytick',y)
+    colorbar
+    
+    %----------------------------------------
+    % Heat Flux
+    %----------------------------------------
+    subplot(1,3,3);
+    pcolor(x,y,fl);
+    title("Heat Flux (W/m²)")
+    xlabel("x (m)");
+    ylabel("y (m)");
+    zlabel("fl (W/m²)");
     grid on
     set(gca,'xtick',x)
     set(gca,'ytick',y)

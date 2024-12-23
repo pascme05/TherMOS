@@ -57,7 +57,7 @@ tlist = 0:dt:Tend-dt;                                                       % ti
 %---------------------------------------------------
 % Settings
 %---------------------------------------------------
-plotting = 0;
+plotting = 1;
 saving = 1;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -100,13 +100,14 @@ thermalIC(thermalmodel,Tinit);
 % thermalBC(thermalmodel,"Edge",2,'Temperature',35);
         
 % % Constant Temperature
-% thermalBC(thermalmodel,"Edge",4,'Temperature',20); 
+% thermalBC(thermalmodel,"Edge",[3,4],'Temperature',65); 
 
 % Convection
-thermalBC(thermalmodel,"Edge",6,'ConvectionCoefficient',1000, ...
+thermalBC(thermalmodel,"Edge",[1],'ConvectionCoefficient',1000, ...
                                 'AmbientTemperature',55);
-thermalBC(thermalmodel,"Edge",[3,4,7],'ConvectionCoefficient',7.5, ...
-                                'AmbientTemperature',65);
+
+% thermalBC(thermalmodel,"Edge",[3,4,7],'ConvectionCoefficient',7.5, ...
+%                                 'AmbientTemperature',65);
 
 % % Heat Flux
 % thermalBC(thermalmodel,"Edge",1,'HeatFlux',P_con/(4*b*h));

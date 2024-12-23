@@ -51,3 +51,11 @@ samples and M/N spatial samples:
 11) Ts:     Sampling time (sec)
 12) X:      Spatial input features of size TxMN (W)
 13) y:      Spatial output features of size TxMN (degC)
+
+The following three parameters are optional. If provided they will be used 
+to calculate the results, otherwise the boundary conditions are calculated
+based on the derivate of the temperatures at the boundary.
+
+14) Ta:     Ambient temperature for convection at the boundary (degC)
+15) h:      Heat transfer coefficient at the bounary (W/m2K)
+16) f:      Heat flux boundary conditions (W/m2)

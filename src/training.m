@@ -110,7 +110,7 @@ function mdl = training(data, setup, para, path)
         % Fitting 
         %----------------------------------------
         timeStart = tic;
-        mdl = poFit2(data.tr, data.vl, para);
+        mdl = poFit3(data.tr, data.vl, para);
         mdl.timeTrain = toc(timeStart);
 
         %----------------------------------------
