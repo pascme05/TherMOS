@@ -230,23 +230,23 @@ function mdl = poFit3(data, ~, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % ----------------------------------------------------
-    % Reconstruct
-    % ----------------------------------------------------
-    % Init
-    temp = zeros(Nt, length(y), length(x));
-    T_hat = zeros(Nt, length(y), length(x));
-    T2D = map2D(T, xInp, yInp, x, y, 1);
-
-    % Reconstruct
-    for i = 1:K
-        for ii = 1:Nt
-            temp(ii, :, :) = theta(ii, i) .* sPhi(:, :, i);
-        end
-        T_hat = T_hat + temp;
-    end
-    T_pred2 = squeeze(T_hat(:,2,21));
-    T_true2 = squeeze(T2D(:,2,21));
+    % % ----------------------------------------------------
+    % % Reconstruct
+    % % ----------------------------------------------------
+    % % Init
+    % temp = zeros(Nt, length(y), length(x));
+    % T_hat = zeros(Nt, length(y), length(x));
+    % T2D = map2D(T, xInp, yInp, x, y, 1);
+    % 
+    % % Reconstruct
+    % for i = 1:K
+    %     for ii = 1:Nt
+    %         temp(ii, :, :) = theta(ii, i) .* sPhi(:, :, i);
+    %     end
+    %     T_hat = T_hat + temp;
+    % end
+    % T_pred2 = squeeze(T_hat(:,2,21));
+    % T_true2 = squeeze(T2D(:,2,21));
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output

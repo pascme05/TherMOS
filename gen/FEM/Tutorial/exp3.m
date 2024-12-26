@@ -18,21 +18,42 @@ clear variables
 clc
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% Load Data
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Define Parameters and Variables
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-M = 20;
-N = 20;
-l = 0.20;
-h = 0.20;
-q = 1e6;
+%---------------------------------------------------
+% Dimension 
+%---------------------------------------------------
+M = 20;                                                                     % Number of X points
+N = 20;                                                                     % Number of Y points
+l = 0.20;                                                                   % x length (m)
+h = 0.20;                                                                   % y length (m)
 dx = 0.01;
-dt = 1;
-tlist = 0:dt:500-dt;
+
+%---------------------------------------------------
+% Material 
+%---------------------------------------------------
+matK = [210, 400];                                                          % Thermal conductivity (W/mK)
+matRho = [2710, 8933];                                                      % Material density (kg/m3)
+matCp = [900, 380];                                                         % Specific heat capacity (J/kgK)
+
+%---------------------------------------------------
+% Load Case 
+%---------------------------------------------------
+Ta = 20;                                                                    % ambient temperature (degC)
+fl = 100;                                                                   % heat flux boundary (W/m2)
+hc = 1000;                                                                  % heat transfer coefficient (W/m2K)
+Tinit = 20;                                                                 % Initial temperature (degC)
+Tend = 2000;                                                                % end value time (sec)
+q = 1e6;                                                                    % Volumetric heat generation (W/m3)
+dt = 10;                                                                    % sampling time (sec)
+tlist = 0:dt:Tend-dt;                                                       % time vector (sec)
+
+%---------------------------------------------------
+% Settings
+%---------------------------------------------------
+setting = 2;                                                                % 0) spatial heat generation, 1) spatial material parameters, 2) 0+1
+plotting = 1;
+saving = 1;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Define Geometry
@@ -59,17 +80,15 @@ geometryFromEdges(thermalmodel,g)
 pdegplot(thermalmodel,"EdgeLabels","on","FaceLabels","on","FaceAlpha",0.5)
 axis equal
 
-% %---------------------------------------------------
-% % Edges 
-% %---------------------------------------------------
-% heat_source_region_x = [0, 0.2];
-% heat_source_region_y = [0, 0.2];
+% Heat Source Region
+heat_source_region_x = [-0.2, 0.0];
+heat_source_region_y = [-0.2, 0.2];
 
 %---------------------------------------------------
 % Mesh 
 %---------------------------------------------------
 generateMesh(thermalmodel,'Hmax',dx,'Hmin',dx,'Hgrad',1.0);
-pdemesh(thermalmodel)
+% pdemesh(thermalmodel)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Define Model
@@ -77,40 +96,48 @@ pdemesh(thermalmodel)
 %---------------------------------------------------
 % Material 
 %---------------------------------------------------
-% % Constant Parameters
-% thermalProperties(thermalmodel,"ThermalConductivity",29,'Face',[1,2], ...
-%                                "MassDensity",1300, ...
-%                                "SpecificHeat",800);
-
 % Spatial Parameters
-thermalProperties(thermalmodel,"ThermalConductivity",210,'Face',1, ...
-                               "MassDensity",2710, ...
-                               "SpecificHeat",900);
-thermalProperties(thermalmodel,"ThermalConductivity",400,'Face',2, ...
-                               "MassDensity",8933, ...
-                               "SpecificHeat",380);
+if setting ~= 0
+    thermalProperties(thermalmodel,"ThermalConductivity",matK(1), ...
+                                   "MassDensity",matRho(1), ...
+                                   "SpecificHeat",matCp(1), "Face",1);
+    thermalProperties(thermalmodel,"ThermalConductivity",matK(2), ...
+                                   "MassDensity",matRho(2), ...
+                                   "SpecificHeat",matCp(2),'Face',2);
+else
+    thermalProperties(thermalmodel,"ThermalConductivity",matK(1), ...
+                               "MassDensity",matRho(1), ...
+                               "SpecificHeat",matCp(1),'Face',[1,2]);
+end
 
 %---------------------------------------------------
 % Initial Conditions 
 %---------------------------------------------------
-thermalIC(thermalmodel,20);
+thermalIC(thermalmodel,Tinit);
 
 %---------------------------------------------------
 % Boundary Conditions 
 %---------------------------------------------------
-% Adiabatic
-thermalBC(thermalmodel,"Edge",[2,3,4,5,6],'Temperature',20);
+% General
+thermalBC(thermalmodel,"Edge",[2,3,4,5,6],'Temperature',Ta);
         
 % Constant Temperature
-thermalBC(thermalmodel,"Edge",1,'Temperature',20); 
+thermalBC(thermalmodel,"Edge",1,'Temperature',Ta); 
+hc = 0;
+fl = 0;
+
+% % Adiabatic 
+% hc = 0;
+% fl = 0;
 
 % % Convection
-% thermalBC(thermalmodel,"Edge",1,'ConvectionCoefficient',1000, ...
-%                                 'AmbientTemperature',20);
+% thermalBC(thermalmodel,"Edge",1,'ConvectionCoefficient',h, ...
+%                                 'AmbientTemperature',Ta);
+% fl = 0;
 
 % % Heat Flux
-% thermalBC(thermalmodel,"Edge",1,'HeatFlux',100);
-
+% thermalBC(thermalmodel,"Edge",1,'HeatFlux',fl);
+% hc = 0;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Solve Model
@@ -125,10 +152,13 @@ thermalmodel.SolverOptions.AbsoluteTolerance = 1E-9;
 % Source 
 %---------------------------------------------------
 % Spatial Heat Source
-internalHeatSource(thermalmodel,q,'Face',1);
+if setting ~= 1
+    internalHeatSource(thermalmodel,q,'Face',1);
 
-% % Spatial Parameters
-% internalHeatSource(thermalmodel,q,'Face',[1,2]);
+% Spatial Parameters
+else
+    internalHeatSource(thermalmodel,q,'Face',[1,2]);
+end
 
 %---------------------------------------------------
 % Solve 
@@ -138,6 +168,9 @@ results = solve(thermalmodel,tlist);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Get results
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%---------------------------------------------------
+% Temperature 
+%---------------------------------------------------
 T = results.Temperature;
 xyz = thermalmodel.Mesh.Nodes;
 dx = (l)/M;
@@ -150,27 +183,133 @@ for k = -M:1:M
     end
 end
 
+%---------------------------------------------------
+% Internal Heat 
+%---------------------------------------------------
+% Spatial Heat Source
+if setting ~= 1
+    internalHeatSource(thermalmodel,q,'Face',1);
+    Q = zeros(size(T));
+    for i = 1:size(T,1)
+        if results.Mesh.Nodes(1,i) >= heat_source_region_x(1) && results.Mesh.Nodes(1,i) < heat_source_region_x(2)
+            Q(i,:) = q;
+        elseif results.Mesh.Nodes(1,i) <= heat_source_region_x(2)
+            Q(i,:) = q/2;
+        end
+    end
+
+else
+    internalHeatSource(thermalmodel,q,'Face',[1,2]);
+    Q = q * ones(size(T));
+end
+
+%---------------------------------------------------
+% Spatial Parameters
+%---------------------------------------------------
+if setting ~= 0
+    Cp = matCp(2) * ones(length(T),1);
+    k = matK(2) * ones(length(T),1);
+    rho = matRho(2) * ones(length(T),1);
+    for i = 1:size(T,1)
+        if results.Mesh.Nodes(1,i) >= heat_source_region_x(1) && results.Mesh.Nodes(1,i) < heat_source_region_x(2)
+            Cp(i,:) = matCp(1);
+            k(i,:) = matK(1);
+            rho(i,:) = matRho(1);
+        elseif results.Mesh.Nodes(1,i) <= heat_source_region_x(2)
+            % Cp(i,:) = (matCp(1) + matCp(2))/2;
+            % k(i,:) = (matK(1) + matK(2))/2;
+            % rho(i,:) = (matRho(1) + matRho(2))/2;
+        end
+    end
+else
+    Cp = matCp(1) * ones(length(T),1);
+    k = matK(1) * ones(length(T),1);
+    rho = matRho(1) * ones(length(T),1);
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Output
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%---------------------------------------------------
+% Define Variables 
+%---------------------------------------------------
+Cp = Cp;
+dx = dx;
+dy = dy;
+geo = results.Mesh.Nodes';
+k = k;
+Lx = 2*l;
+Ly = 2*h;
+r = Tinit * ones(size(T))';
+rho = rho;
+t = tlist;
+Ts = dt;
+X = Q';
+y = T';
+
+%---------------------------------------------------
+% Define Output Boundaries
+%---------------------------------------------------
+% Ambient Temperature
+Ta = Ta * ones(length(T),1);
+
+% Convection
+hc = hc * ones(length(T),1);
+for i = 1:numel(results.Mesh.Nodes(1,:))
+    if results.Mesh.Nodes(1,i) ~= -l
+        hc(i) = 0;
+    end
+end
+
+% Heat Flux
+fl = fl * ones(length(T),1);
+for i = 1:numel(results.Mesh.Nodes(1,:))
+    if results.Mesh.Nodes(1,i) ~= -l
+        fl(i) = 0;
+    end
+end
+
+%---------------------------------------------------
+% Save Variables 
+%---------------------------------------------------
+% Define Vars
+vars_to_save = {'Cp', 'dx', 'dy', 'geo', 'k', 'Lx', 'Ly', 'r', 'rho', 't', ...
+                'Ts', 'X', 'y', 'Ta', 'hc', 'fl'};
+
+% Save Vars
+if saving == 1
+    save('data.mat', vars_to_save{:});
+end
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Plotting
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% figure
-% [qx,qy] = evaluateHeatFlux(results);
-% for i = 1:floor(length(tlist) / 10)
-%     subplot(2,1,1)
-%     pdeplot(thermalmodel,"XYData",results.Temperature(:,floor(i*10)))
-%     subplot(2,1,2)
-%     pdeplot(thermalmodel,'FlowData',[qx qy])
-%     pause(0.001)
-% end
-
-figure
-for i = 1:floor(length(tlist) / 10)
-    dT1 = gradient(squeeze(T1(floor(i*10),:,:)), dx, dy);
-    subplot(2,1,1)
-    contourf(squeeze(T1(floor(i*10),:,:)))
-    subplot(2,1,2)
-    contourf(dT1)
-    pause(0.05)
+if plotting == 1
+    %---------------------------------------------------
+    % Fluxes
+    %---------------------------------------------------
+    figure
+    [qx,qy] = evaluateHeatFlux(results);
+    for i = 1:floor(length(tlist) / 10)
+        subplot(2,1,1)
+        pdeplot(thermalmodel,"XYData",results.Temperature(:,floor(i*10)))
+        subplot(2,1,2)
+        pdeplot(thermalmodel,'FlowData',[qx qy])
+        pause(0.001)
+    end
+    
+    %---------------------------------------------------
+    % Temperatures
+    %---------------------------------------------------
+    figure
+    for i = 1:floor(length(tlist) / 10)
+        dT1 = gradient(squeeze(T1(floor(i*10),:,:)), dx, dy);
+        subplot(2,1,1)
+        contourf(squeeze(T1(floor(i*10),:,:)))
+        subplot(2,1,2)
+        contourf(dT1)
+        pause(0.05)
+    end
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

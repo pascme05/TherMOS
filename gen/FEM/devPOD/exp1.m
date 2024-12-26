@@ -40,8 +40,8 @@ matCp = 800;                                                                % Sp
 % Load Case 
 %---------------------------------------------------
 Ta = 20;                                                                    % ambient temperature (degC)
-fl = 10000;                                                                   % heat flux boundary (W/m2)
-hc = 5000;                                                                  % heat transfer coefficient (W/m2K)
+fl = 100;                                                                   % heat flux boundary (W/m2)
+hc = 1000;                                                                  % heat transfer coefficient (W/m2K)
 Tinit = 20;                                                                 % Initial temperature (degC)
 Tend = 5000;                                                                % end value time (sec)
 q = 1000000;                                                                % Volumetric heat generation (W/m3)
@@ -102,9 +102,9 @@ thermalBC(thermalmodel,"Edge",[1,2,3],'Temperature',Ta);
 %                                 'AmbientTemperature',Ta);
 % fl = 0;
 
-% Heat Flux
-thermalBC(thermalmodel,"Edge",4,'HeatFlux',fl);
-hc = 0;
+% % Heat Flux
+% thermalBC(thermalmodel,"Edge",4,'HeatFlux',fl);
+% hc = 0;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Solve Model

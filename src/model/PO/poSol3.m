@@ -30,7 +30,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function out = poSol3(mdl, data, para)
+function out = poSol3(mdl, data, ~)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -183,7 +183,7 @@ function out = poSol3(mdl, data, para)
 
         % Boundary Term Convection
         BC_q1 = sAlpha ./ sK .* hc2D .* sPhi(:,:,i) .* Ta2D;
-        BC_q2 = -sAlpha ./ sK .* fl2D .* sPhi(:,:,i); 
+        BC_q2 = -sAlpha ./ sK .* fl2D .* sPhi(:,:,i) / dx / dy; 
         qBC(i) = sum(sum(BC_q1 .* dS + BC_q2 .* dS));
     end
 
@@ -191,8 +191,7 @@ function out = poSol3(mdl, data, para)
     % Source Term
     %----------------------------------------
     for i = 1:Nt
-        % F(:, i) = (q(:, i) + c' - qBC');
-        F(:, i) = (q(:, i) + c');
+        F(:, i) = (q(:, i) + c' - qBC');
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
