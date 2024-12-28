@@ -47,6 +47,7 @@ function out = poSol3(mdl, data, ~)
     %----------------------------------------
     [Nt, N] = size(data.y);                                                 % number of time steps (Nt) and snapshots (N)
     Ts = data.Ts;                                                           % sampling time (sec)
+    deg = 3;                                                                % degree for stencil solution
 
     %----------------------------------------
     % Data
@@ -115,7 +116,6 @@ function out = poSol3(mdl, data, ~)
     %===================================================
     % Mean Centering
     %===================================================
-    T = T + 273.15;
     Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
     T0 = T(1,:) - Tavg;                                                     % initial temperature (°C)
 
@@ -168,17 +168,29 @@ function out = poSol3(mdl, data, ~)
     %----------------------------------------
     % Heat Generation
     %----------------------------------------
+    % % Solution using Trapz
+    % for i = 1:Nt
+    %     for ii = 1:K
+    %         q2(ii, i) = trapz(dx, trapz(dy, sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii)), 1), 2) / dx / dy;
+    %     end
+    % end
+    
+    % Solution using Stencil Int
     for i = 1:Nt
         for ii = 1:K
-            q(ii, i) = trapz(dx, trapz(dy, sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii)), 1), 2) / dx / dy;
+            temp = sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii));
+            q(ii, i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
         end
     end
-    
+
+
     %----------------------------------------
     % Interior contributions
     %----------------------------------------
     for i = 1:K
         % Interior
+        % temp = sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy);
+        % c2(i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
         c(i) = trapz(dx, trapz(dy, sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy), 1), 2) / dx / dy;
 
         % Boundary Term Convection
@@ -193,6 +205,26 @@ function out = poSol3(mdl, data, ~)
     for i = 1:Nt
         F(:, i) = (q(:, i) + c' - qBC');
     end
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Pre-Processing
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Normalisation Values
+    %===================================================
+    % u_scale = max(abs(g0));
+    % q_scale = max(abs(F(:)));
+    q_scale = 1;
+    u_scale = 1;
+    tau = max(Cth) / max(Gth); 
+    
+    %===================================================
+    % Normalisation
+    %===================================================
+    Cth = Cth / tau;
+    Gth = Gth * tau;
+    F = F / q_scale * tau;
+    g0 = g0 / u_scale;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -201,23 +233,36 @@ function out = poSol3(mdl, data, ~)
     % Init
     %===================================================
     % Variables
-    tlist = linspace(0, Nt*Ts-Ts, Nt)';
+    tlist = linspace(0, Nt*Ts-Ts, Nt)' / tau / tau;
     
-    % Solver
-    odeoptions = odeset('Mass', Cth, 'JConstant', 'on', ...
-                        'RelTol', 1e-3, 'AbsTol', 1e-5, ...
-                        'Jacobian', -Gth);
-
+    % Choose solver dynamically
+    % is_stiff = max(eig(Gth/Cth)) > tau; % Example stiffness criterion
+    is_stiff = 1;
+    
     %===================================================
     % Solve
     %===================================================
-    sol = ode15s(@(t,y) odefnc2(t,y,Gth,F',tlist),tlist,g0,odeoptions);
-    theta_hat = deval(sol,tlist)';
+    % Solver options
+    if is_stiff == 1
+        odeoptions = odeset('Mass', Cth, 'JConstant', 'on', ...
+                        'RelTol', 1e-5, 'AbsTol', 1e-7, ...
+                        'Jacobian', -Gth);
+        sol = ode23s(@(t,y) odefnc2(t,y,Gth,F',tlist),tlist,g0,odeoptions);
+    else
+        odeoptions = odeset('RelTol', 1e-3, 'AbsTol', 1e-5);
+        sol = ode45(@(t, y) odefnc2(t, y, Gth/Cth, F', tlist), tlist, g0, odeoptions);
+    end
+    % u = rk4(Cth, Gth, F, g0, Nt, K, Ts / tau / tau);
+    % [t, y] = rk6(tlist, g0, Ts/ tau / tau, Gth/Cth, F');
+    
+    % Evaluate solution
+    theta_hat = deval(sol, tlist)';
+    theta_hat = theta_hat * u_scale;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    T_est = theta_hat * rPhi' + Tavg.*ones(Nt,N) - 273.15;
+    T_est = theta_hat * rPhi' + Tavg.*ones(Nt,N);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output

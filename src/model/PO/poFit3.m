@@ -45,6 +45,7 @@ function mdl = poFit3(data, ~, para)
     Emax = para.Mdl.gen.Emax;                                               % maximum energy captured (%)
     E = 0;                                                                  % captured energy by POD
     eps = para.Mdl.gen.eps;                                                 % numerical lower bound
+    deg = 3;                                                                % degree for stencil solution
     
     %----------------------------------------
     % Data
@@ -93,7 +94,6 @@ function mdl = poFit3(data, ~, para)
     %===================================================
     % Mean Centering
     %===================================================
-    T = T + 273.15;
     Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
     T = T - Tavg.*ones(Nt,N);                                               % mean centered observation matrix (°C)
 
@@ -199,9 +199,15 @@ function mdl = poFit3(data, ~, para)
     %----------------------------------------
     % Thermal Capacitance
     %----------------------------------------
+    % for i = 1:K
+    %     for ii = 1:K
+    %         Cth2(i, ii) = trapz(dx, trapz(dy, sPhi(:, :, ii) .* sPhi(:, :, i), 1), 2) / dx / dy;
+    %     end
+    % end
+
     for i = 1:K
         for ii = 1:K
-            Cth(i, ii) = trapz(dx, trapz(dy, sPhi(:, :, ii) .* sPhi(:, :, i), 1), 2) / dx / dy;
+            Cth(i, ii) = intStencil(length(x), length(y), dx, dy, sPhi(:, :, ii) .* sPhi(:, :, i), deg) * dx * dy;
         end
     end
 
@@ -211,7 +217,8 @@ function mdl = poFit3(data, ~, para)
     for i = 1:K
         for ii = 1:K
             % Boundary Free
-            Gth(i, ii) = trapz(dx, trapz(dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), 1), 2) / dx / dy;
+            % Gth2(i, ii) = trapz(dx, trapz(dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), 1), 2) / dx / dy;
+            Gth(i, ii) = intStencil(length(x), length(y), dx, dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), deg) * dx * dy;
 
             % Boundary Convection
             tempBC = hc2D .* alpha2D ./ k2D .* sPhi(:, :, ii) .* sPhi(:, :, i);

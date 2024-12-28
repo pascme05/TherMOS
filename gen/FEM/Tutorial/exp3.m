@@ -194,7 +194,7 @@ if setting ~= 1
         if results.Mesh.Nodes(1,i) >= heat_source_region_x(1) && results.Mesh.Nodes(1,i) < heat_source_region_x(2)
             Q(i,:) = q;
         elseif results.Mesh.Nodes(1,i) <= heat_source_region_x(2)
-            Q(i,:) = q/2;
+            % Q(i,:) = q/2;
         end
     end
 
