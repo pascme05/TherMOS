@@ -47,7 +47,8 @@ function out = poSol3(mdl, data, ~)
     %----------------------------------------
     [Nt, N] = size(data.y);                                                 % number of time steps (Nt) and snapshots (N)
     Ts = data.Ts;                                                           % sampling time (sec)
-    deg = 3;                                                                % degree for stencil solution
+    deg = -1;                                                                % degree for stencil solution (-1 internal trapz approach)
+    is_stiff = 1;                                                           % stiff vs. non-stiff solvers
 
     %----------------------------------------
     % Data
@@ -64,9 +65,15 @@ function out = poSol3(mdl, data, ~)
     %----------------------------------------
     % Boundary
     %----------------------------------------
-    hc = data.Data.hc;                                                      % heat transfer coefficient (W/m²K)
-    fl = data.Data.fl;                                                      % heat flux (W/m²)
-    Ta = data.Data.Cp;                                                      % ambient temperature (°C)
+    try
+        hc = data.Data.hc;                                                  % heat transfer coefficient (W/m²K)
+        fl = data.Data.fl;                                                  % heat flux (W/m²)
+        Ta = data.Data.Ta;                                                  % ambient temperature (°C)
+    catch
+        hc = zeros(size(alpha));
+        fl = zeros(size(alpha));
+        Ta = zeros(size(alpha));
+    end
 
     %----------------------------------------
     % Model
@@ -106,6 +113,8 @@ function out = poSol3(mdl, data, ~)
     % Init
     %----------------------------------------
     c = zeros(1, K);
+    cy = zeros(1, K);
+    cx = zeros(1, K);
     qBC = zeros(1, K);
     q = zeros(K, Nt);
     F = zeros(K, Nt);
@@ -168,42 +177,53 @@ function out = poSol3(mdl, data, ~)
     %----------------------------------------
     % Heat Generation
     %----------------------------------------
-    % % Solution using Trapz
-    % for i = 1:Nt
-    %     for ii = 1:K
-    %         q2(ii, i) = trapz(dx, trapz(dy, sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii)), 1), 2) / dx / dy;
-    %     end
-    % end
-    
-    % Solution using Stencil Int
     for i = 1:Nt
         for ii = 1:K
-            temp = sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii));
-            q(ii, i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
+            % Solution using Trapz
+            if deg == -1
+                q(ii, i) = trapz(dx, trapz(dy, sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii)), 1), 2) / dx / dy;
+            
+            % Solution using Stencil Int
+            else
+                temp = sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii));
+                q(ii, i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
+            end
         end
     end
-
 
     %----------------------------------------
     % Interior contributions
     %----------------------------------------
     for i = 1:K
         % Interior
-        % temp = sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy);
-        % c2(i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
-        c(i) = trapz(dx, trapz(dy, sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy), 1), 2) / dx / dy;
+        if deg == -1
+            c(i) = trapz(dx, trapz(dy, sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy), 1), 2) / dx / dy;
+        else
+            temp = sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy);
+            c(i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
+        end
+        
+        % Boundary contributions in Y-direction
+        tempY = trapz(dy, sAlpha .* sPhi(:, :, i) .* dT0dx, 1) / dy;
+        cy(i) = sum(tempY([1, end]));
 
-        % Boundary Term Convection
-        BC_q1 = sAlpha ./ sK .* hc2D .* sPhi(:,:,i) .* Ta2D;
-        BC_q2 = -sAlpha ./ sK .* fl2D .* sPhi(:,:,i) / dx / dy; 
-        qBC(i) = sum(sum(BC_q1 .* dS + BC_q2 .* dS));
+        % Boundary contributions in X-direction
+        tempX = trapz(dx, sAlpha .* sPhi(:, :, i) .* dT0dy, 2) / dx;
+        cx(i) = sum(tempX([1, end]));
+
+        % % Boundary
+        % BC_q1 = sAlpha ./ sK .* hc2D .* sPhi(:,:,i) .* Ta2D;
+        % BC_q2 = -sAlpha ./ sK .* fl2D .* sPhi(:,:,i) / dx / dy; 
+        % qBC(i) = sum(sum(BC_q1 .* dS + BC_q2 .* dS));
     end
+    c = c + (cx/dx + cy/dx);
 
     %----------------------------------------
     % Source Term
     %----------------------------------------
     for i = 1:Nt
-        F(:, i) = (q(:, i) + c' - qBC');
+        % F(:, i) = (q(:, i) + c' - qBC');
+        F(:, i) = (q(:, i) + c');
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -216,7 +236,8 @@ function out = poSol3(mdl, data, ~)
     % q_scale = max(abs(F(:)));
     q_scale = 1;
     u_scale = 1;
-    tau = max(Cth) / max(Gth); 
+    % tau = max(Cth) / max(Gth); 
+    tau = 1; 
     
     %===================================================
     % Normalisation
@@ -237,7 +258,6 @@ function out = poSol3(mdl, data, ~)
     
     % Choose solver dynamically
     % is_stiff = max(eig(Gth/Cth)) > tau; % Example stiffness criterion
-    is_stiff = 1;
     
     %===================================================
     % Solve
@@ -245,8 +265,8 @@ function out = poSol3(mdl, data, ~)
     % Solver options
     if is_stiff == 1
         odeoptions = odeset('Mass', Cth, 'JConstant', 'on', ...
-                        'RelTol', 1e-5, 'AbsTol', 1e-7, ...
-                        'Jacobian', -Gth);
+                            'RelTol', 1e-5, 'AbsTol', 1e-7, ...
+                            'Jacobian', -Gth);
         sol = ode23s(@(t,y) odefnc2(t,y,Gth,F',tlist),tlist,g0,odeoptions);
     else
         odeoptions = odeset('RelTol', 1e-3, 'AbsTol', 1e-5);

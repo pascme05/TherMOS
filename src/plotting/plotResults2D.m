@@ -87,9 +87,15 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     %----------------------------------------
     % Boundary
     %----------------------------------------
-    hc = data.tr.Data.hc;
-    fl = data.tr.Data.fl;
-    Ta = data.tr.Data.Ta;
+    try
+        hc = data.Data.hc;                                                  % heat transfer coefficient (W/m²K)
+        fl = data.Data.fl;                                                  % heat flux (W/m²)
+        Ta = data.Data.Ta;                                                  % ambient temperature (°C)
+    catch
+        hc = zeros(size(k));
+        fl = zeros(size(k));
+        Ta = zeros(size(k));
+    end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing

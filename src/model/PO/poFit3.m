@@ -45,7 +45,7 @@ function mdl = poFit3(data, ~, para)
     Emax = para.Mdl.gen.Emax;                                               % maximum energy captured (%)
     E = 0;                                                                  % captured energy by POD
     eps = para.Mdl.gen.eps;                                                 % numerical lower bound
-    deg = 3;                                                                % degree for stencil solution
+    deg = -1;                                                                % degree for stencil solution (-1 internal trapz approach)
     
     %----------------------------------------
     % Data
@@ -62,7 +62,11 @@ function mdl = poFit3(data, ~, para)
     %----------------------------------------
     % Boundary
     %----------------------------------------
-    hc = data.Data.hc;                                                      % heat transfer coefficient (W/m²K)
+    try
+        hc = data.Data.hc;                                                  % heat transfer coefficient (W/m²K)
+    catch
+        hc = zeros(size(alpha));
+    end
 
     %===================================================
     % Variables
@@ -152,6 +156,8 @@ function mdl = poFit3(data, ~, para)
     dPhidy = zeros(length(y), length(x), K);
     Cth = zeros(K, K);
     Gth = zeros(K, K);
+    Gx = zeros(K, K);
+    Gy = zeros(K, K);
     BC_h = zeros(K, K);
 
     %===================================================
@@ -199,15 +205,16 @@ function mdl = poFit3(data, ~, para)
     %----------------------------------------
     % Thermal Capacitance
     %----------------------------------------
-    % for i = 1:K
-    %     for ii = 1:K
-    %         Cth2(i, ii) = trapz(dx, trapz(dy, sPhi(:, :, ii) .* sPhi(:, :, i), 1), 2) / dx / dy;
-    %     end
-    % end
-
     for i = 1:K
         for ii = 1:K
-            Cth(i, ii) = intStencil(length(x), length(y), dx, dy, sPhi(:, :, ii) .* sPhi(:, :, i), deg) * dx * dy;
+            % Trapasoidal
+            if deg == -1
+                Cth(i, ii) = trapz(dx, trapz(dy, sPhi(:, :, ii) .* sPhi(:, :, i), 1), 2) / dx / dy;
+            
+            % Stencil
+            else
+                Cth(i, ii) = intStencil(length(x), length(y), dx, dy, sPhi(:, :, ii) .* sPhi(:, :, i), deg) * dx * dy;
+            end
         end
     end
 
@@ -217,17 +224,29 @@ function mdl = poFit3(data, ~, para)
     for i = 1:K
         for ii = 1:K
             % Boundary Free
-            % Gth2(i, ii) = trapz(dx, trapz(dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), 1), 2) / dx / dy;
-            Gth(i, ii) = intStencil(length(x), length(y), dx, dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), deg) * dx * dy;
+            if deg == -1
+                Gth(i, ii) = trapz(dx, trapz(dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), 1), 2) / dx / dy;
+            else
+                Gth(i, ii) = intStencil(length(x), length(y), dx, dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), deg) * dx * dy;
+            end
+            
+            % Boundary Terms for Neumann conditions (Y-direction)
+            tempY = trapz(dy, alpha2D .* sPhi(:, :, ii) .* dPhidx(:, :, i), 1) / dy;
+            Gy(i, ii) = sum(tempY([1, end]));
 
-            % Boundary Convection
-            tempBC = hc2D .* alpha2D ./ k2D .* sPhi(:, :, ii) .* sPhi(:, :, i);
-            BC_h(i,ii) = sum(sum(tempBC .* dS));
+            % Boundary Terms for Neumann conditions (X-direction)
+            tempX = trapz(dx, alpha2D .* sPhi(:, :, ii) .* dPhidy(:, :, i), 2) / dx;
+            Gx(i, ii) = sum(tempX([1, end]));
 
-            % Update Gth
-            Gth(i, ii) = Gth(i, ii) + BC_h(i,ii);
+            % % Boundary Convection
+            % tempBC = hc2D .* alpha2D ./ k2D .* sPhi(:, :, ii) .* sPhi(:, :, i);
+            % BC_h(i,ii) = sum(sum(tempBC .* dS));
+
+            % % Update Gth
+            % Gth(i, ii) = Gth(i, ii) + BC_h(i,ii);
         end
     end
+    Gth = Gth + (Gy/dy + Gx/dx);
 
     %----------------------------------------
     % Stiffness Matrices

@@ -29,6 +29,7 @@ l = 0.05;                                                                   % x 
 b = 0.0075;                                                                 % width (m)
 h = 0.002;                                                                  % y length (m)
 dx = 0.001;                                                                 % internal FEM resolution (m)
+Vol = 8*l*b*h;                                                              % Busbar volume (m³)
 
 %---------------------------------------------------
 % Material 
@@ -40,18 +41,20 @@ matCp = 380;                                                                % Sp
 %---------------------------------------------------
 % losses 
 %---------------------------------------------------
-Idc = 500;
-P_ohm = 0.01724 / (4*b*h*1e6) * 2*l * Idc^2;
-P_con = 5e-6 * Idc^2;
-Vol = 8*l*b*h;
+Idc = 500;                                                                  % Busbar current (A)
+P_ohm = 0.01724 / (4*b*h*1e6) * 2*l * Idc^2;                                % Internal heat generation (W)
+P_con = 5e-6 * Idc^2;                                                       % Heat flow screwing connection (W)
 
 %---------------------------------------------------
 % Load Case 
 %---------------------------------------------------
+Ta = 55;                                                                    % ambient temperature (degC)
+fl = 100;                                                                   % heat flux boundary (W/m2)
+hc = 1000;                                                                  % heat transfer coefficient (W/m2K)
 Tinit = 55;                                                                 % Initial temperature (degC)
-Tend = 100;                                                                 % end value time (sec)
+Tend = 600;                                                                 % end value time (sec)
 q = P_ohm/Vol;                                                              % Volumetric heat generation (W/m3)
-dt = 5;                                                                     % sampling time (sec)
+dt = 1;                                                                     % sampling time (sec)
 tlist = 0:dt:Tend-dt;                                                       % time vector (sec)
 
 %---------------------------------------------------
@@ -64,14 +67,15 @@ saving = 1;
 %% Define Geometry
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 thermalmodel = createpde("thermal","transient");
-R1 = [3,4,0,3*l/2,3*l/2,0,h,h,-h,-h]';   % Region 1
-R2 = [3,4,-0.5*l,0,0,-0.5*l,h,h,-h,-h]'; % Region 2
+R1 = [3,4,-l,-0.5*l,-0.5*l,-l,h,h,-h,-h]'; % Left region (25 mm)
+R2 = [3,4,-0.5*l,0.5*l,0.5*l,-0.5*l,h,h,-h,-h]';   % Middle region (50 mm)
+R3 = [3,4,0.5*l,l,l,0.5*l,h,h,-h,-h]';     % Right region (25 mm)
 
 
 % Combine the regions into a single geometry
-gd = [R1, R2];
-sf = 'R1+R2';
-ns = char('R1','R2');
+gd = [R1, R2, R3];
+sf = 'R1+R2+R3';
+ns = char('R1','R2','R3');
 ns = ns';
 g = decsg(gd,sf,ns);
 geometryFromEdges(thermalmodel,g)
@@ -84,7 +88,7 @@ pdegplot(thermalmodel,"EdgeLabels","on","FaceAlpha",0.5)
 %---------------------------------------------------
 % Material 
 %---------------------------------------------------
-thermalProperties(thermalmodel,"ThermalConductivity",matK,'Face',[1,2], ...
+thermalProperties(thermalmodel,"ThermalConductivity",matK,'Face',[1,2,3], ...
                                "MassDensity",matRho, ...
                                "SpecificHeat",matCp);
 
@@ -96,27 +100,21 @@ thermalIC(thermalmodel,Tinit);
 %---------------------------------------------------
 % Boundary Conditions 
 %---------------------------------------------------
-% % Adiabatic
-% thermalBC(thermalmodel,"Edge",2,'Temperature',35);
-        
-% % Constant Temperature
-% thermalBC(thermalmodel,"Edge",4,'Temperature',20); 
-
 % Convection
-% thermalBC(thermalmodel,"Edge",6,'ConvectionCoefficient',1000, ...
-%                                 'AmbientTemperature',55);
-thermalBC(thermalmodel,"Edge",[3,4],'ConvectionCoefficient',100, ...
-                                'AmbientTemperature',55);
+thermalBC(thermalmodel,"Edge",7,'ConvectionCoefficient',hc, ...
+                                'AmbientTemperature',Ta);
+% thermalBC(thermalmodel,"Edge",[1,2,4,5,6,8,9],'ConvectionCoefficient',5, ...
+%                                 'AmbientTemperature',Ta);
 
 % % Heat Flux
-% thermalBC(thermalmodel,"Edge",1,'HeatFlux',P_con/(4*b*h));
+% thermalBC(thermalmodel,"Edge",9,'HeatFlux',P_con/(b*l/2));
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Solve Model
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 generateMesh(thermalmodel,'Hmax',dx,'Hmin',dx,'Hgrad',1.0);
-internalHeatSource(thermalmodel,q,'Face',[1, 2]);
+internalHeatSource(thermalmodel,q,'Face',[1, 2, 3]);
 results = solve(thermalmodel,tlist);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -141,8 +139,6 @@ end
 % Define Variables 
 %---------------------------------------------------
 Cp = matCp * ones(length(T),1);
-dx = dx;
-dy = dy;
 geo = results.Mesh.Nodes';
 k = matK * ones(length(T),1);
 Lx = 2*l;
@@ -153,6 +149,28 @@ t = tlist;
 Ts = dt;
 X = q * ones(size(T))';
 y = T';
+
+%---------------------------------------------------
+% Define Output Boundaries
+%---------------------------------------------------
+% % Ambient Temperature
+% Ta = Ta * ones(length(T),1);
+% 
+% % Convection
+% hc = hc * ones(length(T),1);
+% for i = 1:numel(results.Mesh.Nodes(1,:))
+%     if results.Mesh.Nodes(1,i) ~= -l
+%         hc(i) = 0;
+%     end
+% end
+% 
+% % Heat Flux
+% fl = fl * ones(length(T),1);
+% for i = 1:numel(results.Mesh.Nodes(1,:))
+%     if results.Mesh.Nodes(1,i) ~= -l
+%         fl(i) = 0;
+%     end
+% end
 
 %---------------------------------------------------
 % Save Variables 
