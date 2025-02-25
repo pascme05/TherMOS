@@ -69,8 +69,12 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
     %===================================================
     % Interpolation
     %===================================================
+    % for i = 1:Nt
+    %     Tout(i,:,:) = griddata(xInp, yInp, Tin(i,:), Xq, Yq, method);
+    % end
     for i = 1:Nt
-        Tout(i,:,:) = griddata(xInp, yInp, Tin(i,:), Xq, Yq, method);
+        F = scatteredInterpolant(xInp, yInp, Tin(i,:)', method, 'nearest');
+        Tout(i,:,:) = F(Xq, Yq);
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

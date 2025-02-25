@@ -45,7 +45,7 @@ function mdl = poFit3(data, ~, para)
     Emax = para.Mdl.gen.Emax;                                               % maximum energy captured (%)
     E = 0;                                                                  % captured energy by POD
     eps = para.Mdl.gen.eps;                                                 % numerical lower bound
-    deg = -1;                                                                % degree for stencil solution (-1 internal trapz approach)
+    deg = 3;                                                                % degree for stencil solution (-1 internal trapz approach)
     
     %----------------------------------------
     % Data
@@ -238,12 +238,12 @@ function mdl = poFit3(data, ~, para)
             tempX = trapz(dx, alpha2D .* sPhi(:, :, ii) .* dPhidy(:, :, i), 2) / dx;
             Gx(i, ii) = sum(tempX([1, end]));
 
-            % % Boundary Convection
-            % tempBC = hc2D .* alpha2D ./ k2D .* sPhi(:, :, ii) .* sPhi(:, :, i);
-            % BC_h(i,ii) = sum(sum(tempBC .* dS));
+            % Boundary Convection
+            tempBC = hc2D .* alpha2D ./ k2D .* sPhi(:, :, ii) .* sPhi(:, :, i);
+            BC_h(i,ii) = sum(sum(tempBC .* dS));
 
-            % % Update Gth
-            % Gth(i, ii) = Gth(i, ii) + BC_h(i,ii);
+            % Update Gth
+            Gth(i, ii) = Gth(i, ii) + BC_h(i,ii);
         end
     end
     Gth = Gth + (Gy/dy + Gx/dx);

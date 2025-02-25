@@ -104,7 +104,7 @@ thermalIC(thermalmodel,Tinit);
 % thermalBC(thermalmodel,"Edge",[1,2,3,4,5,6,7,8,9],'Temperature',Ta);
 
 % Convection
-thermalBC(thermalmodel,"Edge",1,'ConvectionCoefficient',hc, ...
+thermalBC(thermalmodel,"Edge",[1,4,7],'ConvectionCoefficient',hc, ...
                                 'AmbientTemperature',Ta);
 
 % thermalBC(thermalmodel,"Edge",[1,5,8,9],'ConvectionCoefficient',5, ...
@@ -157,31 +157,50 @@ y = T';
 %---------------------------------------------------
 % Define Output Boundaries
 %---------------------------------------------------
+% Mapping
+x_coords = results.Mesh.Nodes(1, :);
+y_coords = results.Mesh.Nodes(2, :);
+
+% Define the boundary values
+l = max(abs(x_coords));  % Half-length in x-direction
+b = max(abs(y_coords));  % Half-length in y-direction
+
+% Find indices of nodes that are on any edge
+on_left_edge   = abs(x_coords + l) < 1e-4;   % x = -l
+on_right_edge  = abs(x_coords - l) < 1e-4;   % x = l
+on_bottom_edge = abs(y_coords + b) < 1e-4;   % y = -b
+on_top_edge    = abs(y_coords - b) < 1e-3;   % y = b
+
+on_edge = on_left_edge | on_right_edge | on_bottom_edge | on_top_edge;
+
+% Apply the condition: x < -0.25 and node on an edge
+mask = (x_coords < -0.025) & on_edge;
+sum(mask)
+
+% Set those nodes to zero
+tempMesh = results.Mesh.Nodes;
+tempMesh(:, mask) = 0;
+
 % Ambient Temperature
 Ta = Ta * ones(length(T),1);
 
 % Convection
 hc = hc * ones(length(T),1);
-for i = 1:numel(results.Mesh.Nodes(1,:))
-    if results.Mesh.Nodes(1,i) ~= -l
+for i = 1:numel(tempMesh(1,:))
+    if mask(i) == 0
         hc(i) = 0;
     end
 end
 
 % Heat Flux
-fl = fl * ones(length(T),1);
-for i = 1:numel(results.Mesh.Nodes(1,:))
-    if results.Mesh.Nodes(1,i) ~= -l
-        fl(i) = 0;
-    end
-end
+fl = zeros(length(T),1);
 
 %---------------------------------------------------
 % Save Variables 
 %---------------------------------------------------
 % Define Vars
 vars_to_save = {'Cp', 'dx', 'dy', 'geo', 'k', 'Lx', 'Ly', 'r', 'rho', 't', ...
-                'Ts', 'X', 'y'};
+                'Ts', 'X', 'y', 'Ta', 'hc', 'fl'};
 
 % Save Vars
 if saving == 1

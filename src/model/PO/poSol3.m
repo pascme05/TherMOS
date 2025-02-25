@@ -47,7 +47,7 @@ function out = poSol3(mdl, data, ~)
     %----------------------------------------
     [Nt, N] = size(data.y);                                                 % number of time steps (Nt) and snapshots (N)
     Ts = data.Ts;                                                           % sampling time (sec)
-    deg = -1;                                                                % degree for stencil solution (-1 internal trapz approach)
+    deg = 3;                                                                % degree for stencil solution (-1 internal trapz approach)
     is_stiff = 1;                                                           % stiff vs. non-stiff solvers
 
     %----------------------------------------
@@ -127,6 +127,7 @@ function out = poSol3(mdl, data, ~)
     %===================================================
     Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
     T0 = T(1,:) - Tavg;                                                     % initial temperature (°C)
+    Ta = Ta - Tavg';
 
     %===================================================
     % 2D Reshaping
@@ -211,10 +212,10 @@ function out = poSol3(mdl, data, ~)
         tempX = trapz(dx, sAlpha .* sPhi(:, :, i) .* dT0dy, 2) / dx;
         cx(i) = sum(tempX([1, end]));
 
-        % % Boundary
-        % BC_q1 = sAlpha ./ sK .* hc2D .* sPhi(:,:,i) .* Ta2D;
-        % BC_q2 = -sAlpha ./ sK .* fl2D .* sPhi(:,:,i) / dx / dy; 
-        % qBC(i) = sum(sum(BC_q1 .* dS + BC_q2 .* dS));
+        % Boundary
+        BC_q1 = sAlpha ./ sK .* hc2D .* sPhi(:,:,i) .* Ta2D;
+        BC_q2 = -sAlpha ./ sK .* fl2D .* sPhi(:,:,i) / dx / dy; 
+        qBC(i) = sum(sum(BC_q1 .* dS + BC_q2 .* dS));
     end
     c = c + (cx/dx + cy/dx);
 
@@ -222,8 +223,8 @@ function out = poSol3(mdl, data, ~)
     % Source Term
     %----------------------------------------
     for i = 1:Nt
-        % F(:, i) = (q(:, i) + c' - qBC');
-        F(:, i) = (q(:, i) + c');
+        F(:, i) = (q(:, i) + c' - qBC');
+        % F(:, i) = (q(:, i) + c');
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -236,8 +237,7 @@ function out = poSol3(mdl, data, ~)
     % q_scale = max(abs(F(:)));
     q_scale = 1;
     u_scale = 1;
-    % tau = max(Cth) / max(Gth); 
-    tau = 1; 
+    tau = max(Cth) / max(Gth); 
     
     %===================================================
     % Normalisation
