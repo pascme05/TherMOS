@@ -47,7 +47,7 @@ function out = poSol3(mdl, data, ~)
     %----------------------------------------
     [Nt, N] = size(data.y);                                                 % number of time steps (Nt) and snapshots (N)
     Ts = data.Ts;                                                           % sampling time (sec)
-    deg = 3;                                                                % degree for stencil solution (-1 internal trapz approach)
+    deg = -1;                                                               % degree for stencil solution (-1 internal trapz approach)
     is_stiff = 1;                                                           % stiff vs. non-stiff solvers
 
     %----------------------------------------
@@ -182,7 +182,7 @@ function out = poSol3(mdl, data, ~)
         for ii = 1:K
             % Solution using Trapz
             if deg == -1
-                q(ii, i) = trapz(dx, trapz(dy, sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii)), 1), 2) / dx / dy;
+                q(ii, i) = trapz(dx, trapz(dy, sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii)), 1), 2);
             
             % Solution using Stencil Int
             else
@@ -198,33 +198,33 @@ function out = poSol3(mdl, data, ~)
     for i = 1:K
         % Interior
         if deg == -1
-            c(i) = trapz(dx, trapz(dy, sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy), 1), 2) / dx / dy;
+            c(i) = trapz(dx, trapz(dy, sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy), 1), 2);
         else
             temp = sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy);
             c(i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
         end
         
         % Boundary contributions in Y-direction
-        tempY = trapz(dy, sAlpha .* sPhi(:, :, i) .* dT0dx, 1) / dy;
+        tempY = trapz(dy, sAlpha .* sPhi(:, :, i) .* dT0dx, 1);
         cy(i) = sum(tempY([1, end]));
 
         % Boundary contributions in X-direction
-        tempX = trapz(dx, sAlpha .* sPhi(:, :, i) .* dT0dy, 2) / dx;
+        tempX = trapz(dx, sAlpha .* sPhi(:, :, i) .* dT0dy, 2);
         cx(i) = sum(tempX([1, end]));
 
         % Boundary
         BC_q1 = sAlpha ./ sK .* hc2D .* sPhi(:,:,i) .* Ta2D;
-        BC_q2 = -sAlpha ./ sK .* fl2D .* sPhi(:,:,i) / dx / dy; 
-        qBC(i) = sum(sum(BC_q1 .* dS + BC_q2 .* dS));
+        BC_q2 = -sAlpha ./ sK .* fl2D .* sPhi(:,:,i); 
+        qBC(i) = trapz(dx, trapz(dy, (BC_q1 .* dS + BC_q2 .* dS), 1), 2);
+        % c(i) = c(i) - qBC(i);
     end
-    c = c + (cx/dx + cy/dx);
+    c = c + (cx + cy);
 
     %----------------------------------------
     % Source Term
     %----------------------------------------
     for i = 1:Nt
-        F(:, i) = (q(:, i) + c' - qBC');
-        % F(:, i) = (q(:, i) + c');
+        F(:, i) = (q(:, i) + c');
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -269,7 +269,7 @@ function out = poSol3(mdl, data, ~)
                             'Jacobian', -Gth);
         sol = ode23s(@(t,y) odefnc2(t,y,Gth,F',tlist),tlist,g0,odeoptions);
     else
-        odeoptions = odeset('RelTol', 1e-3, 'AbsTol', 1e-5);
+        odeoptions = odeset('RelTol', 1e-5, 'AbsTol', 1e-7);
         sol = ode45(@(t, y) odefnc2(t, y, Gth/Cth, F', tlist), tlist, g0, odeoptions);
     end
     % u = rk4(Cth, Gth, F, g0, Nt, K, Ts / tau / tau);

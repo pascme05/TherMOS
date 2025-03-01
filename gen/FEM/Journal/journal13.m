@@ -53,7 +53,7 @@ fl = 100;                                                                   % he
 hc = 1000;                                                                  % heat transfer coefficient (W/m2K)
 Tinit = 55;                                                                 % Initial temperature (degC)
 Tend = 3000;                                                                 % end value time (sec)
-q = P_ohm/Vol;                                                              % Volumetric heat generation (W/m3)
+q = 10*P_ohm/Vol;                                                              % Volumetric heat generation (W/m3)
 dt = 10;                                                                     % sampling time (sec)
 tlist = 0:dt:Tend-dt;                                                       % time vector (sec)
 
@@ -101,11 +101,11 @@ thermalIC(thermalmodel,Tinit);
 % Boundary Conditions 
 %---------------------------------------------------
 % Temperature
-% thermalBC(thermalmodel,"Edge",[1,2,3,4,5,6,7,8,9],'Temperature',Ta);
+thermalBC(thermalmodel,"Edge",[1,4,5,6],'Temperature',Ta);
 
-% Convection
-thermalBC(thermalmodel,"Edge",[1,4,7],'ConvectionCoefficient',hc, ...
-                                'AmbientTemperature',Ta);
+% % Convection
+% thermalBC(thermalmodel,"Edge",[1,4,5,6],'ConvectionCoefficient',hc, ...
+%                                 'AmbientTemperature',Ta);
 
 % thermalBC(thermalmodel,"Edge",[1,5,8,9],'ConvectionCoefficient',5, ...
 %                                 'AmbientTemperature',Ta);
@@ -185,12 +185,13 @@ tempMesh(:, mask) = 0;
 Ta = Ta * ones(length(T),1);
 
 % Convection
-hc = hc * ones(length(T),1);
-for i = 1:numel(tempMesh(1,:))
-    if mask(i) == 0
-        hc(i) = 0;
-    end
-end
+hc = hc * zeros(length(T),1);
+% hc = hc * ones(length(T),1);
+% for i = 1:numel(tempMesh(1,:))
+%     if mask(i) == 0
+%         hc(i) = 0;
+%     end
+% end
 
 % Heat Flux
 fl = zeros(length(T),1);

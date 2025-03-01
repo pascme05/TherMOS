@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: poFit3                                                            %
+% File: poSol3                                                            %
 % Date: 13.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -14,22 +14,27 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function solves for the system matrices Gth and Cth as well as the 
-% spatial modes of phi of the POD.
+% This function calculates the temperature response for a POD system
+%
+%                     T(x,t) ≈ Σ φ_i(x) * a_i(t)   
+%
+% where x is the spatial position, t is the time, φ are the spatial modes,
+% and a(t) are the temporal modes based on a PDE system with matrices Gth 
+% and Cth as extracted from the POD training.  
 % -------------------------------------------------------------------------
-% Inp:  1) data:    Training input data struct
-%       2) val:     Validation input data struct
+% Inp:  1) mdl:     Fitted model parameters
+%       2) data:    Testing input data struct
 %       3) para:    All simulation parameters of the current simulation
-% Out:  1) mdl:     Trained model
+% Out:  1) out:     Predicted temperature response
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function mdl = poFit3(data, ~, para)
+function out = poSol3(mdl, data, ~)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Fitting Proper Orthogonal Model")
+    disp("START: Solving Proper Orthogonal Model")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
@@ -41,12 +46,10 @@ function mdl = poFit3(data, ~, para)
     % General
     %----------------------------------------
     [Nt, N] = size(data.y);                                                 % number of time steps (Nt) and snapshots (N)
-    Kmax = para.Mdl.gen.Kmax;                                               % maximum number of modes
-    Emax = para.Mdl.gen.Emax;                                               % maximum energy captured (%)
-    E = 0;                                                                  % captured energy by POD
-    eps = para.Mdl.gen.eps;                                                 % numerical lower bound
+    Ts = data.Ts;                                                           % sampling time (sec)
     deg = -1;                                                               % degree for stencil solution (-1 internal trapz approach)
-    
+    is_stiff = 1;                                                           % stiff vs. non-stiff solvers
+
     %----------------------------------------
     % Data
     %----------------------------------------
@@ -64,87 +67,185 @@ function mdl = poFit3(data, ~, para)
     %----------------------------------------
     try
         hc = data.Data.hc;                                                  % heat transfer coefficient (W/m²K)
+        fl = data.Data.fl;                                                  % heat flux (W/m²)
+        Ta = data.Data.Ta;                                                  % ambient temperature (°C)
     catch
         hc = zeros(size(alpha));
+        fl = zeros(size(alpha));
+        Ta = zeros(size(alpha));
     end
+
+    %----------------------------------------
+    % Model
+    %----------------------------------------
+    Cth = mdl.Cth;
+    Gth = mdl.Gth;
+    dPhidx = mdl.dPhidx;
+    dPhidy = mdl.dPhidy;
+    sPhi = mdl.sPhi;
+    rPhi = mdl.rPhi;
+    K = mdl.K;
 
     %===================================================
     % Variables
     %===================================================
-    % General
+    %----------------------------------------
+    % Data
+    %----------------------------------------
     xInp = data.Data.geo(:,1);                                              % sampled input values x (m)
     yInp = data.Data.geo(:,2);                                              % sampled input values y (m)
     x = 0:dx:Lx;                                                            % x vector (m)
     y = 0:dy:Ly;                                                            % y vector (m)
     T = data.y;                                                             % temperature snapshots NtxN (°C)
+    Q = data.X;                                                             % volumetric heat generation (W/m³)
+    out = data;
     
+    %----------------------------------------
     % BC Matrix
+    %----------------------------------------
     dS = zeros(length(y), length(x));
     dS(1, :) = dy;      
     dS(end, :) = dy;     
     dS(:, 1) = dx;       
     dS(:, end) = dx; 
 
+    %----------------------------------------
+    % Init
+    %----------------------------------------
+    c = zeros(1, K);
+    cy = zeros(1, K);
+    cx = zeros(1, K);
+    qBC = zeros(1, K);
+    q = zeros(K, Nt);
+    F = zeros(K, Nt);
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Converting 2D
-    %===================================================
-    alpha2D = squeeze(map2D(alpha', xInp, yInp, x, y, 1));
-    k2D = squeeze(map2D(k', xInp, yInp, x, y, 1));
-    hc2D = squeeze(map2D(hc', xInp, yInp, x, y, 1));
-
-    %===================================================
     % Mean Centering
     %===================================================
     Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
-    T = T - Tavg.*ones(Nt,N);                                               % mean centered observation matrix (°C)
+    T0 = T(1,:) - Tavg;                                                     % initial temperature (°C)
+    Ta = Ta - Tavg';
 
     %===================================================
-    % Eigenvalues
+    % 2D Reshaping
     %===================================================
-    [~,S,Phi] = svd(T/sqrt(Nt-1));
-    lam = diag(S);
+    %----------------------------------------
+    % Material Properties
+    %----------------------------------------
+    sAlpha = map2D(alpha', xInp, yInp, x, y, 1);
+    sAlpha = reshape(sAlpha, [length(y), length(x)]);
+    sK = map2D(k', xInp, yInp, x, y, 1);
+    sK= reshape(sK, [length(y), length(x)]);
+    
+    %----------------------------------------
+    % Boundary
+    %----------------------------------------
+    hc2D = squeeze(map2D(hc', xInp, yInp, x, y, 1));
+    fl2D = squeeze(map2D(fl', xInp, yInp, x, y, 1));
+    Ta2D = squeeze(map2D(Ta', xInp, yInp, x, y, 1));
+    
+    %----------------------------------------
+    % Heat Generation
+    %----------------------------------------
+    sQ = map2D(Q, xInp, yInp, x, y, 2);
+
+    %----------------------------------------
+    % Temperatures
+    %----------------------------------------
+    if sum(diff(alpha)) == 0
+        sT0 = map2D(T0, xInp, yInp, x, y, 2);
+    else
+        sT0 = map2D(T0, xInp, yInp, x, y, 1);
+    end
+    sT0 = reshape(sT0, [length(y), length(x)]);
     
     %===================================================
-    % Cumulative Correlation Energy
+    % Gradient
+    %===================================================
+    [dT0dx, dT0dy] = gradient(sT0, dx, dy);
+
+    %===================================================
+    % Init Values
+    %===================================================
+    g0 = T0 * rPhi;
+
+    %===================================================
+    % Source Terms
     %===================================================
     %----------------------------------------
-    % Init
+    % Heat Generation
     %----------------------------------------
-    n = 1;
-
-    %----------------------------------------
-    % Energy
-    %----------------------------------------
-    if para.Mdl.pod.sel == 2
-        while E < Emax && n < Kmax
-            E = sum(abs(lam(1:n))) / sum(abs(lam));
-            n = n + 1;
+    for i = 1:Nt
+        for ii = 1:K
+            % Solution using Trapz
+            if deg == -1
+                q(ii, i) = trapz(dx, trapz(dy, sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii)), 1), 2);
+            
+            % Solution using Stencil Int
+            else
+                temp = sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii));
+                q(ii, i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
+            end
         end
-        K = n;
-
-    %----------------------------------------
-    % Opti
-    %----------------------------------------
-    elseif para.Mdl.pod.sel == 3
-        E = sum(abs(lam(1:para.Mdl.pod.K))) / sum(abs(lam));
-        K = setup.mdl.pod.K;
-
-    %----------------------------------------
-    % Fixed
-    %----------------------------------------
-    else
-        E = sum(abs(lam(1:para.Mdl.pod.K))) / sum(abs(lam));
-        K = para.Mdl.pod.K;
     end
 
     %----------------------------------------
-    % Msg
+    % Interior contributions
     %----------------------------------------
-    fprintf('INFO: Number of used eigenvalues (model order) K: %i \n', K);
-    fprintf('INFO: Cumulative correlation energy Em: %f \n', E*100)
+    for i = 1:K
+        % Interior
+        if deg == -1
+            c(i) = trapz(dx, trapz(dy, sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy), 1), 2);
+        else
+            temp = sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy);
+            c(i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
+        end
+        
+        % Boundary contributions in Y-direction
+        tempY = trapz(dy, sAlpha .* sPhi(:, :, i) .* dT0dx, 1);
+        cy(i) = sum(tempY([1, end]));
+
+        % Boundary contributions in X-direction
+        tempX = trapz(dx, sAlpha .* sPhi(:, :, i) .* dT0dy, 2);
+        cx(i) = sum(tempX([1, end]));
+
+        % Boundary
+        BC_q1 = sAlpha ./ sK .* hc2D .* sPhi(:,:,i) .* Ta2D;
+        BC_q2 = -sAlpha ./ sK .* fl2D .* sPhi(:,:,i); 
+        qBC(i) = trapz(dx, trapz(dy, (BC_q1 .* dS + BC_q2 .* dS), 1), 2);
+        c(i) = c(i) - qBC(i);
+    end
+    % c = c + (cx + cy);
+
+    %----------------------------------------
+    % Source Term
+    %----------------------------------------
+    for i = 1:Nt
+        F(:, i) = (q(:, i) + c');
+    end
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Pre-Processing
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Normalisation Values
+    %===================================================
+    % u_scale = max(abs(g0));
+    % q_scale = max(abs(F(:)));
+    q_scale = 1;
+    u_scale = 1;
+    tau = max(Cth) / max(Gth); 
+    
+    %===================================================
+    % Normalisation
+    %===================================================
+    Cth = Cth / tau;
+    Gth = Gth * tau;
+    F = F / q_scale * tau;
+    g0 = g0 / u_scale;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -152,150 +253,52 @@ function mdl = poFit3(data, ~, para)
     %===================================================
     % Init
     %===================================================
-    dPhidx = zeros(length(y), length(x), K);
-    dPhidy = zeros(length(y), length(x), K);
-    Cth = zeros(K, K);
-    Gth = zeros(K, K);
-    Gx = zeros(K, K);
-    Gy = zeros(K, K);
-    BC_h = zeros(K, K);
-
-    %===================================================
-    % Extract Modes
-    %===================================================
-    %----------------------------------------
-    % Spatial Modes
-    %----------------------------------------
-    % Reduction
-    rPhi = Phi(:,1:K);
+    % Variables
+    tlist = linspace(0, Nt*Ts-Ts, Nt)' / tau / tau;
     
-    % Compute Orthogonal Matrix
-    Id = rPhi'*rPhi;
+    % Choose solver dynamically
+    % is_stiff = max(eig(Gth/Cth)) > tau; % Example stiffness criterion
     
-    % Check Orthogonal Matrix
-    if abs(norm(eye(K) - Id)) > eps
-        disp('ERROR: POD modes are not orthonormal');
-    end
-
-    % Reshape
-    sPhi = map2D(rPhi', xInp, yInp, x, y, 1);
-    sPhi = permute(sPhi, [2, 3, 1]);
-
-    %----------------------------------------
-    % Temporal Modes
-    %----------------------------------------
-    theta = (rPhi' * T')';
-
     %===================================================
-    % Gradients
+    % Solve
     %===================================================
-    if K == 1
-        for i = 1:K
-            [dPhidx(:, :, i), dPhidy(:, :, i)] = gradient(sPhi(:, :)', dx, dy);
-        end
+    % Solver options
+    if is_stiff == 1
+        odeoptions = odeset('Mass', Cth, 'JConstant', 'on', ...
+                            'RelTol', 1e-5, 'AbsTol', 1e-7, ...
+                            'Jacobian', -Gth);
+        sol = ode23s(@(t,y) odefnc2(t,y,Gth,F',tlist),tlist,g0,odeoptions);
     else
-        for i = 1:K
-            [dPhidx(:, :, i), dPhidy(:, :, i)] = gradient(sPhi(:, :, i), dx, dy);
-        end
+        odeoptions = odeset('RelTol', 1e-5, 'AbsTol', 1e-7);
+        sol = ode45(@(t, y) odefnc2(t, y, Gth/Cth, F', tlist), tlist, g0, odeoptions);
     end
-
-    %===================================================
-    % System Matrices
-    %===================================================
-    %----------------------------------------
-    % Thermal Capacitance
-    %----------------------------------------
-    for i = 1:K
-        for ii = 1:K
-            % Trapasoidal
-            if deg == -1
-                Cth(i, ii) = trapz(dx, trapz(dy, sPhi(:, :, ii) .* sPhi(:, :, i), 1), 2);
-            
-            % Stencil
-            else
-                Cth(i, ii) = intStencil(length(x), length(y), dx, dy, sPhi(:, :, ii) .* sPhi(:, :, i), deg) * dx * dy;
-            end
-        end
-    end
-
-    %----------------------------------------
-    % Thermal Conductance
-    %----------------------------------------
-    for i = 1:K
-        for ii = 1:K
-            % Boundary Free
-            if deg == -1
-                Gth(i, ii) = trapz(dx, trapz(dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), 1), 2);
-            else
-                Gth(i, ii) = intStencil(length(x), length(y), dx, dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), deg) * dx * dy;
-            end
-            
-            % Boundary Terms for Neumann conditions (Y-direction)
-            tempY = trapz(dy, alpha2D .* sPhi(:, :, ii) .* dPhidx(:, :, i), 1); 
-            Gy(i, ii) = sum(tempY([1, end]));
-
-            % Boundary Terms for Neumann conditions (X-direction)
-            tempX = trapz(dx, alpha2D .* sPhi(:, :, ii) .* dPhidy(:, :, i), 2);
-            Gx(i, ii) = sum(tempX([1, end]));
-
-            % Boundary Convection
-            tempBC = hc2D .* alpha2D ./ k2D .* sPhi(:, :, ii) .* sPhi(:, :, i);
-            BC_h(i,ii) = trapz(dx, trapz(dy, tempBC .* dS, 1), 2);
-
-            % % Update
-            % Gth(i, ii) = Gth(i, ii) + BC_h(i,ii);
-        end
-    end
-    Gth = Gth + (Gy + Gx);
-
-    %----------------------------------------
-    % Stiffness Matrices
-    %----------------------------------------
-    GC = Gth / Cth;
+    % u = rk4(Cth, Gth, F, g0, Nt, K, Ts / tau / tau);
+    % [t, y] = rk6(tlist, g0, Ts/ tau / tau, Gth/Cth, F');
     
+    % Evaluate solution
+    theta_hat = deval(sol, tlist)';
+    theta_hat = theta_hat * u_scale;
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % % ----------------------------------------------------
-    % % Reconstruct
-    % % ----------------------------------------------------
-    % % Init
-    % temp = zeros(Nt, length(y), length(x));
-    % T_hat = zeros(Nt, length(y), length(x));
-    % T2D = map2D(T, xInp, yInp, x, y, 1);
-    % 
-    % % Reconstruct
-    % for i = 1:K
-    %     for ii = 1:Nt
-    %         temp(ii, :, :) = theta(ii, i) .* sPhi(:, :, i);
-    %     end
-    %     T_hat = T_hat + temp;
-    % end
-    % T_pred2 = squeeze(T_hat(:,2,21));
-    % T_true2 = squeeze(T2D(:,2,21));
+    T_est = theta_hat * rPhi' + Tavg.*ones(Nt,N);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    mdl.rPhi = rPhi;
-    mdl.sPhi = sPhi;
-    mdl.theta = theta;
-    mdl.dPhidx = dPhidx;
-    mdl.dPhidy = dPhidy;
-    mdl.Gth = Gth;
-    mdl.Cth = Cth;
-    mdl.lam = lam;
-    mdl.E = E;
-    mdl.GC = GC;
-    mdl.K = K;
-    mdl.Tavg = Tavg;
-    mdl.lam = lam;
+    out.y = T_est;
+    out.X = Q;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Fitting Proper Orthogonal Model")
+    disp("DONE: Solving Proper Orthogonal Model")
 end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Function
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% References
