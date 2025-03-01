@@ -126,6 +126,7 @@ function out = poSol3(mdl, data, ~)
     % Mean Centering
     %===================================================
     Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
+    % Tavg = T(1,1);
     T0 = T(1,:) - Tavg;                                                     % initial temperature (°C)
     Ta = Ta - Tavg';
 
@@ -175,6 +176,8 @@ function out = poSol3(mdl, data, ~)
     %===================================================
     % Source Terms
     %===================================================
+    % q = alpha(1) / k(1) * rPhi' * Q' * dx *dy / length(alpha) * length(x) * length(y);
+
     %----------------------------------------
     % Heat Generation
     %----------------------------------------
@@ -183,7 +186,7 @@ function out = poSol3(mdl, data, ~)
             % Solution using Trapz
             if deg == -1
                 q(ii, i) = trapz(dx, trapz(dy, sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii)), 1), 2);
-            
+
             % Solution using Stencil Int
             else
                 temp = sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii));
@@ -204,6 +207,21 @@ function out = poSol3(mdl, data, ~)
             c(i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
         end
         
+        % % Left boundary (x = 0)
+        % cx(i) = cx(i) + sum(sAlpha(:,1) .* sPhi(:,1,i) .* dT0dx(:,1) * dy);
+        % 
+        % % Right boundary (x = Lx)
+        % cx(i) = cx(i) - sum(sAlpha(:,end) .* sPhi(:,end,i) .* dT0dx(:,end) * dy);
+        % 
+        % % Bottom boundary (y = 0)
+        % cy(i) = cy(i) + sum(sAlpha(1,:) .* sPhi(1,:,i) .* dT0dy(1,:) * dx);
+        % 
+        % % Top boundary (y = Ly)
+        % cy(i) = cy(i) - sum(sAlpha(end,:) .* sPhi(end,:,i) .* dT0dy(end,:) * dx);
+        % 
+        % % Convection
+        % qBC(i) = qBC(i) +  sum(hc2D(:,1) .* sPhi(:,1,i) .* Ta2D(:,1) * dy);
+
         % Boundary contributions in Y-direction
         tempY = trapz(dy, sAlpha .* sPhi(:, :, i) .* dT0dx, 1);
         cy(i) = sum(tempY([1, end]));
@@ -212,13 +230,13 @@ function out = poSol3(mdl, data, ~)
         tempX = trapz(dx, sAlpha .* sPhi(:, :, i) .* dT0dy, 2);
         cx(i) = sum(tempX([1, end]));
 
-        % Boundary
-        BC_q1 = sAlpha ./ sK .* hc2D .* sPhi(:,:,i) .* Ta2D;
-        BC_q2 = -sAlpha ./ sK .* fl2D .* sPhi(:,:,i); 
-        qBC(i) = trapz(dx, trapz(dy, (BC_q1 .* dS + BC_q2 .* dS), 1), 2);
+        % % Boundary
+        % BC_q1 = sAlpha ./ sK .* hc2D .* sPhi(:,:,i) .* Ta2D;
+        % BC_q2 = -sAlpha ./ sK .* fl2D .* sPhi(:,:,i); 
+        % qBC(i) = trapz(dx, trapz(dy, (BC_q1 .* dS + BC_q2 .* dS), 1), 2);
         % c(i) = c(i) - qBC(i);
     end
-    c = c + (cx + cy);
+    % c = c + (cx + cy) + qBC;
 
     %----------------------------------------
     % Source Term

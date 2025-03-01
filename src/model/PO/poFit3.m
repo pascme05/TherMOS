@@ -99,6 +99,7 @@ function mdl = poFit3(data, ~, para)
     % Mean Centering
     %===================================================
     Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
+    % Tavg = T(1,1);
     T = T - Tavg.*ones(Nt,N);                                               % mean centered observation matrix (°C)
 
     %===================================================
@@ -215,6 +216,9 @@ function mdl = poFit3(data, ~, para)
             else
                 Cth(i, ii) = intStencil(length(x), length(y), dx, dy, sPhi(:, :, ii) .* sPhi(:, :, i), deg) * dx * dy;
             end
+
+            % Symmetry
+            Cth(i, ii) = Cth(ii, i);
         end
     end
 
@@ -229,7 +233,22 @@ function mdl = poFit3(data, ~, para)
             else
                 Gth(i, ii) = intStencil(length(x), length(y), dx, dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), deg) * dx * dy;
             end
-            
+
+            % % Left boundary (x = 0)
+            % Gx(i, ii) = Gx(i, ii) + sum(alpha2D(:,1) .* sPhi(:,1,ii) .* dPhidx(:,1,i) * dy);
+            % 
+            % % Right boundary (x = Lx)
+            % Gx(i, ii) = Gx(i, ii) - sum(alpha2D(:,end) .* sPhi(:,end,ii) .* dPhidx(:,end,i) * dy);
+            % 
+            % % Bottom boundary (y = 0)
+            % Gy(i, ii) = Gy(i, ii) + sum(alpha2D(1,:) .* sPhi(1,:,ii) .* dPhidy(1,:,i) * dx);
+            % 
+            % % Top boundary (y = Ly)
+            % Gy(i, ii) = Gy(i, ii) - sum(alpha2D(end,:) .* sPhi(end,:,ii) .* dPhidy(end,:,i) * dx);
+            % 
+            % % Test convection
+            % BC_h(i,ii) = sum(hc2D(:,1) .* sPhi(:,1,ii) .* sPhi(:,1,i) * dy);
+
             % Boundary Terms for Neumann conditions (Y-direction)
             tempY = trapz(dy, alpha2D .* sPhi(:, :, ii) .* dPhidx(:, :, i), 1); 
             Gy(i, ii) = sum(tempY([1, end]));
@@ -238,15 +257,18 @@ function mdl = poFit3(data, ~, para)
             tempX = trapz(dx, alpha2D .* sPhi(:, :, ii) .* dPhidy(:, :, i), 2);
             Gx(i, ii) = sum(tempX([1, end]));
 
-            % Boundary Convection
-            tempBC = hc2D .* alpha2D ./ k2D .* sPhi(:, :, ii) .* sPhi(:, :, i);
-            BC_h(i,ii) = trapz(dx, trapz(dy, tempBC .* dS, 1), 2);
+            % % Boundary Convection
+            % tempBC = hc2D .* alpha2D ./ k2D .* sPhi(:, :, ii) .* sPhi(:, :, i);
+            % BC_h(i,ii) = trapz(dx, trapz(dy, tempBC .* dS, 1), 2);
 
             % % Update
             % Gth(i, ii) = Gth(i, ii) + BC_h(i,ii);
+
+            % % Symmetry
+            % Gth(i, ii) = Gth(ii, i);
         end
     end
-    Gth = Gth + (Gy + Gx);
+    % Gth = Gth + (Gy + Gx) + BC_h;
 
     %----------------------------------------
     % Stiffness Matrices
