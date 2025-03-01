@@ -608,6 +608,34 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     ylabel("T (°C)");
     grid on;
 
+    %----------------------------------------
+    % Plot Temporal Prediction (Average)
+    %----------------------------------------
+    % Init
+    figure;
+    txt = 'Temporal Prediction and Prediction error for averaged over the total geometry';
+    sgtitle(txt);
+    
+    % Model Prediction
+    subplot(2,1,1);
+    plot(t_test, mean(squeeze(test.y(:,selY,selX)),[2,3]));
+    hold on;
+    plot(t_test, mean(squeeze(pred.y(:,selY,selX)),[2,3]));
+    title("Absolute Temperatures (T)")
+    xlabel("t (sec)");
+    ylabel("T (°C)");
+    grid on;
+    legend('True','Pred');
+    subplot(2,1,2);
+    predTemp = mean(squeeze(pred.y(:,selY,selX)),[2,3]);
+    trueTemp = mean(squeeze(test.y(:,selY,selX)),[2,3]);
+    err = predTemp - trueTemp;
+    plot(t_test, err);
+    title("Temperatures Error (T)")
+    xlabel("t (sec)");
+    ylabel("T (°C)");
+    grid on;
+
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
