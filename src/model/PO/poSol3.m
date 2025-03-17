@@ -149,6 +149,14 @@ function out = poSol3(mdl, data, ~)
     Ta2D = squeeze(map2D(Ta', xInp, yInp, x, y, 1));
     
     %----------------------------------------
+    % Sample BC
+    %----------------------------------------
+    dS(1, fl2D(1,:)==0 & hc2D(1,:)==0) = 0;
+    dS(end, fl2D(end,:)==0 & hc2D(end,:)==0) = 0;
+    dS(fl2D(:,1)==0 & hc2D(:,1)==0, 1) = 0;
+    dS(fl2D(:,end)==0 & hc2D(:,end)==0, end) = 0;
+
+    %----------------------------------------
     % Heat Generation
     %----------------------------------------
     sQ = map2D(Q, xInp, yInp, x, y, 2);
@@ -166,7 +174,37 @@ function out = poSol3(mdl, data, ~)
     %===================================================
     % Gradient
     %===================================================
+    %----------------------------------------
+    % Extend
+    %----------------------------------------
+    sT02 = zeros(length(y)+2, length(x)+2);
+
+    % Place the original matrix in the center
+    sT02(2:end-1, 2:end-1) = sT0;
+    
+    % Add the vector to the edges
+    sT02(1, 2:end-1) = Ta2D(1,:);   
+    sT02(2:end-1, 1) = Ta2D(:,1);  
+    sT02(end, 2:end-1) = Ta2D(end,:);  
+    sT02(2:end-1, end) = Ta2D(:,end);   
+    
+    % Compute corner values as averages
+    sT02(1,1) = Ta2D(1,1);  
+    sT02(1,end) = Ta2D(1,end);
+    sT02(end,1) = Ta2D(end,1);
+    sT02(end,end) = Ta2D(end,end);
+
+    %----------------------------------------
+    % Calc
+    %----------------------------------------
+    [dT0dx2, dT0dy2] = gradient(sT02, dx, dy);
     [dT0dx, dT0dy] = gradient(sT0, dx, dy);
+
+    % %----------------------------------------
+    % % Limit
+    % %----------------------------------------
+    % dT0dx = dT0dx2(2:end-1,2:end-1);
+    % dT0dy = dT0dy2(2:end-1,2:end-1);
 
     %===================================================
     % Init Values
@@ -176,7 +214,8 @@ function out = poSol3(mdl, data, ~)
     %===================================================
     % Source Terms
     %===================================================
-    % q = alpha(1) / k(1) * rPhi' * Q' * dx *dy / length(alpha) * length(x) * length(y);
+    % ratio = length(alpha) / ((length(x)-2) * (length(y)-2) + (length(y)-1) + (length(x)-1) + 1);
+    % q = alpha(1) / k(1) * rPhi' * Q' * dx *dy / ratio;
 
     %----------------------------------------
     % Heat Generation
@@ -207,28 +246,28 @@ function out = poSol3(mdl, data, ~)
             c(i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
         end
         
-        % % Left boundary (x = 0)
-        % cx(i) = cx(i) + sum(sAlpha(:,1) .* sPhi(:,1,i) .* dT0dx(:,1) * dy);
-        % 
-        % % Right boundary (x = Lx)
-        % cx(i) = cx(i) - sum(sAlpha(:,end) .* sPhi(:,end,i) .* dT0dx(:,end) * dy);
-        % 
-        % % Bottom boundary (y = 0)
-        % cy(i) = cy(i) + sum(sAlpha(1,:) .* sPhi(1,:,i) .* dT0dy(1,:) * dx);
-        % 
-        % % Top boundary (y = Ly)
-        % cy(i) = cy(i) - sum(sAlpha(end,:) .* sPhi(end,:,i) .* dT0dy(end,:) * dx);
-        % 
+        % Left boundary (x = 0)
+        cx(i) = cx(i) + sum(sAlpha(:,1) .* sPhi(:,1,i) .* dT0dx(:,1) * dy);
+
+        % Right boundary (x = Lx)
+        cx(i) = cx(i) - sum(sAlpha(:,end) .* sPhi(:,end,i) .* dT0dx(:,end) * dy);
+
+        % Bottom boundary (y = 0)
+        cy(i) = cy(i) + sum(sAlpha(1,:) .* sPhi(1,:,i) .* dT0dy(1,:) * dx);
+
+        % Top boundary (y = Ly)
+        cy(i) = cy(i) - sum(sAlpha(end,:) .* sPhi(end,:,i) .* dT0dy(end,:) * dx);
+
         % % Convection
         % qBC(i) = qBC(i) +  sum(hc2D(:,1) .* sPhi(:,1,i) .* Ta2D(:,1) * dy);
 
-        % Boundary contributions in Y-direction
-        tempY = trapz(dy, sAlpha .* sPhi(:, :, i) .* dT0dx, 1);
-        cy(i) = sum(tempY([1, end]));
-
-        % Boundary contributions in X-direction
-        tempX = trapz(dx, sAlpha .* sPhi(:, :, i) .* dT0dy, 2);
-        cx(i) = sum(tempX([1, end]));
+        % % Boundary contributions in Y-direction
+        % tempY = trapz(dy, sAlpha .* sPhi(:, :, i) .* dT0dx, 1);
+        % cy(i) = sum(tempY([1, end]));
+        % 
+        % % Boundary contributions in X-direction
+        % tempX = trapz(dx, sAlpha .* sPhi(:, :, i) .* dT0dy, 2);
+        % cx(i) = sum(tempX([1, end]));
 
         % % Boundary
         % BC_q1 = sAlpha ./ sK .* hc2D .* sPhi(:,:,i) .* Ta2D;

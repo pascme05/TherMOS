@@ -64,36 +64,54 @@ function mdl = poFit3(data, ~, para)
     %----------------------------------------
     try
         hc = data.Data.hc;                                                  % heat transfer coefficient (W/m²K)
+        fl = data.Data.fl;                                                  % heat flux (W/m²)
     catch
         hc = zeros(size(alpha));
+        fl = zeros(size(alpha));
     end
 
     %===================================================
     % Variables
     %===================================================
+    %----------------------------------------
     % General
+    %----------------------------------------
     xInp = data.Data.geo(:,1);                                              % sampled input values x (m)
     yInp = data.Data.geo(:,2);                                              % sampled input values y (m)
     x = 0:dx:Lx;                                                            % x vector (m)
     y = 0:dy:Ly;                                                            % y vector (m)
     T = data.y;                                                             % temperature snapshots NtxN (°C)
     
+    %----------------------------------------
     % BC Matrix
+    %----------------------------------------
     dS = zeros(length(y), length(x));
-    dS(1, :) = dy;      
-    dS(end, :) = dy;     
-    dS(:, 1) = dx;       
-    dS(:, end) = dx; 
+    dS(1, :) = 1;      
+    dS(end, :) = 1;     
+    dS(:, 1) = 1;       
+    dS(:, end) = 1; 
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Converting 2D
+    % Boundary Conditions
     %===================================================
+    %----------------------------------------
+    % Converting 2D
+    %----------------------------------------
     alpha2D = squeeze(map2D(alpha', xInp, yInp, x, y, 1));
     k2D = squeeze(map2D(k', xInp, yInp, x, y, 1));
     hc2D = squeeze(map2D(hc', xInp, yInp, x, y, 1));
+    fl2D = squeeze(map2D(fl', xInp, yInp, x, y, 1));
+
+    %----------------------------------------
+    % Sample BC
+    %----------------------------------------
+    dS(1, fl2D(1,:)==0 & hc2D(1,:)==0) = 0;
+    dS(end, fl2D(end,:)==0 & hc2D(end,:)==0) = 0;
+    dS(fl2D(:,1)==0 & hc2D(:,1)==0, 1) = 0;
+    dS(fl2D(:,end)==0 & hc2D(:,end)==0, end) = 0;
 
     %===================================================
     % Mean Centering
@@ -159,7 +177,6 @@ function mdl = poFit3(data, ~, para)
     Gth = zeros(K, K);
     Gx = zeros(K, K);
     Gy = zeros(K, K);
-    BC_h = zeros(K, K);
 
     %===================================================
     % Extract Modes
@@ -234,41 +251,17 @@ function mdl = poFit3(data, ~, para)
                 Gth(i, ii) = intStencil(length(x), length(y), dx, dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), deg) * dx * dy;
             end
 
-            % % Left boundary (x = 0)
-            % Gx(i, ii) = Gx(i, ii) + sum(alpha2D(:,1) .* sPhi(:,1,ii) .* dPhidx(:,1,i) * dy);
-            % 
-            % % Right boundary (x = Lx)
-            % Gx(i, ii) = Gx(i, ii) - sum(alpha2D(:,end) .* sPhi(:,end,ii) .* dPhidx(:,end,i) * dy);
-            % 
-            % % Bottom boundary (y = 0)
-            % Gy(i, ii) = Gy(i, ii) + sum(alpha2D(1,:) .* sPhi(1,:,ii) .* dPhidy(1,:,i) * dx);
-            % 
-            % % Top boundary (y = Ly)
-            % Gy(i, ii) = Gy(i, ii) - sum(alpha2D(end,:) .* sPhi(end,:,ii) .* dPhidy(end,:,i) * dx);
-            % 
-            % % Test convection
-            % BC_h(i,ii) = sum(hc2D(:,1) .* sPhi(:,1,ii) .* sPhi(:,1,i) * dy);
-
-            % Boundary Terms for Neumann conditions (Y-direction)
-            tempY = trapz(dy, alpha2D .* sPhi(:, :, ii) .* dPhidx(:, :, i), 1); 
-            Gy(i, ii) = sum(tempY([1, end]));
-
-            % Boundary Terms for Neumann conditions (X-direction)
-            tempX = trapz(dx, alpha2D .* sPhi(:, :, ii) .* dPhidy(:, :, i), 2);
-            Gx(i, ii) = sum(tempX([1, end]));
-
-            % % Boundary Convection
-            % tempBC = hc2D .* alpha2D ./ k2D .* sPhi(:, :, ii) .* sPhi(:, :, i);
-            % BC_h(i,ii) = trapz(dx, trapz(dy, tempBC .* dS, 1), 2);
-
-            % % Update
-            % Gth(i, ii) = Gth(i, ii) + BC_h(i,ii);
+            % Boundary Terms for Neumann conditions
+            tempX = squeeze(alpha2D .* sPhi(:, :, ii) .* dPhidx(:, :, i) .* dS);
+            tempY = squeeze(alpha2D .* sPhi(:, :, ii) .* dPhidy(:, :, i) .* dS);
+            Gx(i, ii) = trapz(dy, tempX(:,1), 1) + trapz(dy, tempX(:,end), 1); 
+            Gy(i, ii) = trapz(dx, tempY(1,:), 2) + trapz(dx, tempY(end,:), 2); 
 
             % % Symmetry
             % Gth(i, ii) = Gth(ii, i);
         end
     end
-    % Gth = Gth + (Gy + Gx) + BC_h;
+    Gth = Gth + (Gy + Gx);
 
     %----------------------------------------
     % Stiffness Matrices
