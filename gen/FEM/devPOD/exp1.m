@@ -24,9 +24,9 @@ clc
 % Dimension 
 %---------------------------------------------------
 M = 20;                                                                     % Number of X points
-N = 20;                                                                     % Number of Y points
+N = 30;                                                                     % Number of Y points
 l = 0.20;                                                                   % x length (m)
-h = 0.20;                                                                   % y length (m)
+h = 0.30;                                                                   % y length (m)
 dx = 0.01;                                                                 % internal FEM resolution (m)
 
 %---------------------------------------------------
@@ -40,11 +40,11 @@ matCp = 800;                                                                % Sp
 % Load Case 
 %---------------------------------------------------
 Ta = 20;                                                                    % ambient temperature (degC)
-fl = 1000;                                                                  % heat flux boundary (W/m2)
+fl = 10000;                                                                  % heat flux boundary (W/m2)
 hc = 5000;                                                                  % heat transfer coefficient (W/m2K)
 Tinit = 20;                                                                 % Initial temperature (degC)
-Tend = 10000;                                                                % end value time (sec)
-q = 1000000;                                                                % Volumetric heat generation (W/m3)
+Tend = 20000;                                                                % end value time (sec)
+q = 10000;                                                                % Volumetric heat generation (W/m3)
 dt = 50;                                                                    % sampling time (sec)
 tlist = 0:dt:Tend-dt;                                                       % time vector (sec)
 
@@ -89,7 +89,7 @@ thermalIC(thermalmodel,Tinit);
 thermalBC(thermalmodel,"Edge",[1, 2],'Temperature',Ta);
 
 % % Constant Temperature
-% thermalBC(thermalmodel,"Edge",[3, 4],'Temperature',Ta);
+% thermalBC(thermalmodel,"Edge",[1, 2],'Temperature',Ta);
 % hc = 0;
 % fl = 0;
 
@@ -102,9 +102,9 @@ fl = 0;
 %                                 'AmbientTemperature',Ta);
 % fl = 0;
 
-% % Heat Flux
-% thermalBC(thermalmodel,"Edge",[3, 4],'HeatFlux',fl);
-% hc = 0;
+% Heat Flux
+thermalBC(thermalmodel,"Edge",[3, 4],'HeatFlux',fl);
+hc = 0;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Solve Model

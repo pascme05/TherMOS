@@ -56,7 +56,7 @@ matCp2 = 380;
 %---------------------------------------------------
 space_Q = 1;                                                                % 1) spatial temperature distribution                                                          
 space_M = 1;
-plotting = 0;
+plotting = 1;
 saving = 1;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -82,6 +82,7 @@ ns = char('R1','R2');
 ns = ns';
 g = decsg(gd,sf,ns);
 geometryFromEdges(thermalmodel,g)
+pdegplot(thermalmodel,"EdgeLabels","on","FaceAlpha",0.5)
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -114,10 +115,10 @@ thermalIC(thermalmodel,20);
 % Boundary Conditions 
 %---------------------------------------------------
 % Adiabatic
-thermalBC(thermalmodel,"Edge",[2,3,4,5,6],'Temperature',20);
+thermalBC(thermalmodel,"Edge",[2,3,4,6],'Temperature',20);
         
-% Constant Temperature
-thermalBC(thermalmodel,"Edge",1,'Temperature',20); 
+% % Constant Temperature
+% thermalBC(thermalmodel,"Edge",1,'Temperature',20); 
 
 % % Convection
 % thermalBC(thermalmodel,"Edge",1,'ConvectionCoefficient',1000, ...

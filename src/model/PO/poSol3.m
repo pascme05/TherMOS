@@ -246,28 +246,28 @@ function out = poSol3(mdl, data, ~)
             c(i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
         end
         
-        % Left boundary (x = 0)
-        cx(i) = cx(i) + sum(sAlpha(:,1) .* sPhi(:,1,i) .* dT0dx(:,1) * dy);
-
-        % Right boundary (x = Lx)
-        cx(i) = cx(i) - sum(sAlpha(:,end) .* sPhi(:,end,i) .* dT0dx(:,end) * dy);
-
-        % Bottom boundary (y = 0)
-        cy(i) = cy(i) + sum(sAlpha(1,:) .* sPhi(1,:,i) .* dT0dy(1,:) * dx);
-
-        % Top boundary (y = Ly)
-        cy(i) = cy(i) - sum(sAlpha(end,:) .* sPhi(end,:,i) .* dT0dy(end,:) * dx);
+        % % Left boundary (x = 0)
+        % cx(i) = cx(i) + sum(sAlpha(:,1) .* sPhi(:,1,i) .* dT0dx(:,1) * dy);
+        % 
+        % % Right boundary (x = Lx)
+        % cx(i) = cx(i) - sum(sAlpha(:,end) .* sPhi(:,end,i) .* dT0dx(:,end) * dy);
+        % 
+        % % Bottom boundary (y = 0)
+        % cy(i) = cy(i) + sum(sAlpha(1,:) .* sPhi(1,:,i) .* dT0dy(1,:) * dx);
+        % 
+        % % Top boundary (y = Ly)
+        % cy(i) = cy(i) - sum(sAlpha(end,:) .* sPhi(end,:,i) .* dT0dy(end,:) * dx);
 
         % % Convection
         % qBC(i) = qBC(i) +  sum(hc2D(:,1) .* sPhi(:,1,i) .* Ta2D(:,1) * dy);
 
-        % % Boundary contributions in Y-direction
-        % tempY = trapz(dy, sAlpha .* sPhi(:, :, i) .* dT0dx, 1);
-        % cy(i) = sum(tempY([1, end]));
-        % 
-        % % Boundary contributions in X-direction
-        % tempX = trapz(dx, sAlpha .* sPhi(:, :, i) .* dT0dy, 2);
-        % cx(i) = sum(tempX([1, end]));
+        % Boundary contributions in Y-direction
+        tempY = trapz(dy, sAlpha .* sPhi(:, :, i) .* dT0dx, 1);
+        cy(i) = sum(tempY([1, end]));
+
+        % Boundary contributions in X-direction
+        tempX = trapz(dx, sAlpha .* sPhi(:, :, i) .* dT0dy, 2);
+        cx(i) = sum(tempX([1, end]));
 
         % % Boundary
         % BC_q1 = sAlpha ./ sK .* hc2D .* sPhi(:,:,i) .* Ta2D;
