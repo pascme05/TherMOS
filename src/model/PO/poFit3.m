@@ -108,16 +108,15 @@ function mdl = poFit3(data, ~, para)
     %----------------------------------------
     % Sample BC
     %----------------------------------------
-    dS(1, fl2D(1,:)==0 & hc2D(1,:)==0) = 0;
-    dS(end, fl2D(end,:)==0 & hc2D(end,:)==0) = 0;
-    dS(fl2D(:,1)==0 & hc2D(:,1)==0, 1) = 0;
-    dS(fl2D(:,end)==0 & hc2D(:,end)==0, end) = 0;
+    % dS(1, fl2D(1,:)==0 & hc2D(1,:)==0) = 0;
+    % dS(end, fl2D(end,:)==0 & hc2D(end,:)==0) = 0;
+    % dS(fl2D(:,1)==0 & hc2D(:,1)==0, 1) = 0;
+    % dS(fl2D(:,end)==0 & hc2D(:,end)==0, end) = 0;
 
     %===================================================
     % Mean Centering
     %===================================================
     Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
-    % Tavg = T(1,1);
     T = T - Tavg.*ones(Nt,N);                                               % mean centered observation matrix (°C)
 
     %===================================================
@@ -197,7 +196,11 @@ function mdl = poFit3(data, ~, para)
 
     % Reshape
     sPhi = map2D(rPhi', xInp, yInp, x, y, 1);
-    sPhi = permute(sPhi, [2, 3, 1]);
+    if K == 1
+        sPhi = squeeze(sPhi);
+    else
+        sPhi = permute(sPhi, [2, 3, 1]);
+    end
 
     %----------------------------------------
     % Temporal Modes
@@ -208,9 +211,7 @@ function mdl = poFit3(data, ~, para)
     % Gradients
     %===================================================
     if K == 1
-        for i = 1:K
-            [dPhidx(:, :, i), dPhidy(:, :, i)] = gradient(sPhi(:, :)', dx, dy);
-        end
+        [dPhidx, dPhidy] = gradient(sPhi, dx, dy);
     else
         for i = 1:K
             [dPhidx(:, :, i), dPhidy(:, :, i)] = gradient(sPhi(:, :, i), dx, dy);
@@ -223,42 +224,58 @@ function mdl = poFit3(data, ~, para)
     %----------------------------------------
     % Thermal Capacitance
     %----------------------------------------
-    for i = 1:K
-        for ii = 1:K
-            % Trapasoidal
-            if deg == -1
-                Cth(i, ii) = trapz(dx, trapz(dy, sPhi(:, :, ii) .* sPhi(:, :, i), 1), 2);
-            
-            % Stencil
-            else
-                Cth(i, ii) = intStencil(length(x), length(y), dx, dy, sPhi(:, :, ii) .* sPhi(:, :, i), deg) * dx * dy;
+    if K == 1
+        Cth = trapz(dx, trapz(dy, sPhi.*sPhi, 1), 2);
+    else
+        for i = 1:K
+            for ii = 1:K
+                % Trapasoidal
+                if deg == -1
+                    Cth(i, ii) = trapz(dx, trapz(dy, sPhi(:, :, ii) .* sPhi(:, :, i), 1), 2);
+                
+                % Stencil
+                else
+                    Cth(i, ii) = intStencil(length(x), length(y), dx, dy, sPhi(:, :, ii) .* sPhi(:, :, i), deg) * dx * dy;
+                end
+    
+                % Symmetry
+                Cth(i, ii) = Cth(ii, i);
             end
-
-            % Symmetry
-            Cth(i, ii) = Cth(ii, i);
         end
     end
+
 
     %----------------------------------------
     % Thermal Conductance
     %----------------------------------------
-    for i = 1:K
-        for ii = 1:K
-            % Boundary Free
-            if deg == -1
-                Gth(i, ii) = trapz(dx, trapz(dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), 1), 2);
-            else
-                Gth(i, ii) = intStencil(length(x), length(y), dx, dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), deg) * dx * dy;
+    if K == 1
+        % Boundary Free
+        Gth = trapz(dx, trapz(dy, alpha2D .* (dPhidx.*dPhidx + dPhidy.*dPhidy), 1), 2);
+
+        % Boundary Terms for Neumann conditions
+        tempX = squeeze(alpha2D.*sPhi.*dPhidx.*dS);
+        tempY = squeeze(alpha2D.*sPhi.*dPhidy.*dS);
+        Gx = trapz(dy, tempX(:,1), 1) + trapz(dy, tempX(:,end), 1); 
+        Gy = trapz(dx, tempY(1,:), 2) + trapz(dx, tempY(end,:), 2); 
+    else
+        for i = 1:K
+            for ii = 1:K
+                % Boundary Free
+                if deg == -1
+                    Gth(i, ii) = trapz(dx, trapz(dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), 1), 2);
+                else
+                    Gth(i, ii) = intStencil(length(x), length(y), dx, dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), deg) * dx * dy;
+                end
+    
+                % Boundary Terms for Neumann conditions
+                tempX = squeeze(alpha2D .* sPhi(:, :, ii) .* dPhidx(:, :, i) .* dS);
+                tempY = squeeze(alpha2D .* sPhi(:, :, ii) .* dPhidy(:, :, i) .* dS);
+                Gx(i, ii) = trapz(dy, tempX(:,1), 1) + trapz(dy, tempX(:,end), 1); 
+                Gy(i, ii) = trapz(dx, tempY(1,:), 2) + trapz(dx, tempY(end,:), 2); 
+    
+                % % Symmetry
+                % Gth(i, ii) = Gth(ii, i);
             end
-
-            % Boundary Terms for Neumann conditions
-            tempX = squeeze(alpha2D .* sPhi(:, :, ii) .* dPhidx(:, :, i) .* dS);
-            tempY = squeeze(alpha2D .* sPhi(:, :, ii) .* dPhidy(:, :, i) .* dS);
-            Gx(i, ii) = trapz(dy, tempX(:,1), 1) + trapz(dy, tempX(:,end), 1); 
-            Gy(i, ii) = trapz(dx, tempY(1,:), 2) + trapz(dx, tempY(end,:), 2); 
-
-            % % Symmetry
-            % Gth(i, ii) = Gth(ii, i);
         end
     end
     Gth = Gth + (Gy + Gx);

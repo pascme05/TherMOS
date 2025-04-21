@@ -618,18 +618,18 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     
     % Model Prediction
     subplot(2,1,1);
-    plot(t_test, mean(squeeze(test.y(:,selY,selX)),[2,3]));
+    plot(t_test, mean(squeeze(test.y),[2,3]));
     hold on;
-    plot(t_test, mean(squeeze(pred.y(:,selY,selX)),[2,3]));
+    plot(t_test, mean(squeeze(pred.y),[2,3]));
     title("Absolute Temperatures (T)")
     xlabel("t (sec)");
     ylabel("T (°C)");
     grid on;
     legend('True','Pred');
     subplot(2,1,2);
-    predTemp = mean(squeeze(pred.y(:,selY,selX)),[2,3]);
-    trueTemp = mean(squeeze(test.y(:,selY,selX)),[2,3]);
-    err = predTemp - trueTemp;
+    predTemp = mean(squeeze(pred.y),[2,3]);
+    trueTemp = mean(squeeze(test.y),[2,3]);
+    err = trueTemp - predTemp;
     plot(t_test, err);
     title("Temperatures Error (T)")
     xlabel("t (sec)");

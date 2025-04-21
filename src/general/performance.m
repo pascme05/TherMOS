@@ -126,37 +126,37 @@ function out = performance(dataTest, dataPred, para, mdl)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Performance 2D
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    if dim == 2
-        %===================================================
-        % Total
-        %===================================================
-        out.err.tot.MAE = mean(out.err.tot.MAE);
-        out.err.tot.RMSE = mean(out.err.tot.RMSE);
-        out.err.tot.SAE = mean(out.err.tot.SAE);
-        out.err.tot.NAE = mean(out.err.tot.NAE);
-        out.err.tot.MAX = max(out.err.tot.MAX);
-        out.err.tot.NRSME = mean(out.err.tot.NRSME);
-
-        %===================================================
-        % Steady-State
-        %===================================================
-        out.err.ss.MAE = mean(out.err.ss.MAE);
-        out.err.ss.RMSE = mean(out.err.ss.RMSE);
-        out.err.ss.SAE = mean(out.err.ss.SAE);
-        out.err.ss.NAE = mean(out.err.ss.NAE);
-        out.err.ss.MAX = max(out.err.ss.MAX);
-        out.err.ss.NRSME = mean(out.err.ss.NRSME);
-
-        %===================================================
-        % Transient
-        %===================================================
-        out.err.tr.MAE = mean(out.err.tr.MAE);
-        out.err.tr.RMSE = mean(out.err.tr.RMSE);
-        out.err.tr.SAE = mean(out.err.tr.SAE);
-        out.err.tr.NAE = mean(out.err.tr.NAE);
-        out.err.tr.MAX = max(out.err.tr.MAX);
-        out.err.tr.NRSME = mean(out.err.tr.NRSME);
-    end
+    % if dim == 2
+    %     %===================================================
+    %     % Total
+    %     %===================================================
+    %     out.err.tot.MAE = mean(out.err.tot.MAE);
+    %     out.err.tot.RMSE = mean(out.err.tot.RMSE);
+    %     out.err.tot.SAE = mean(out.err.tot.SAE);
+    %     out.err.tot.NAE = mean(out.err.tot.NAE);
+    %     out.err.tot.MAX = max(out.err.tot.MAX);
+    %     out.err.tot.NRSME = mean(out.err.tot.NRSME);
+    % 
+    %     %===================================================
+    %     % Steady-State
+    %     %===================================================
+    %     out.err.ss.MAE = mean(out.err.ss.MAE);
+    %     out.err.ss.RMSE = mean(out.err.ss.RMSE);
+    %     out.err.ss.SAE = mean(out.err.ss.SAE);
+    %     out.err.ss.NAE = mean(out.err.ss.NAE);
+    %     out.err.ss.MAX = max(out.err.ss.MAX);
+    %     out.err.ss.NRSME = mean(out.err.ss.NRSME);
+    % 
+    %     %===================================================
+    %     % Transient
+    %     %===================================================
+    %     out.err.tr.MAE = mean(out.err.tr.MAE);
+    %     out.err.tr.RMSE = mean(out.err.tr.RMSE);
+    %     out.err.tr.SAE = mean(out.err.tr.SAE);
+    %     out.err.tr.NAE = mean(out.err.tr.NAE);
+    %     out.err.tr.MAX = max(out.err.tr.MAX);
+    %     out.err.tr.NRSME = mean(out.err.tr.NRSME);
+    % end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing

@@ -125,9 +125,9 @@ function out = poSol3(mdl, data, ~)
     %===================================================
     % Mean Centering
     %===================================================
-    Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
-    % Tavg = T(1,1);
-    T0 = T(1,:) - Tavg;                                                     % initial temperature (°C)
+    Tavg = mdl.Tavg;                                                      % average temperature over time steps (°C)
+    % Tavg = 0;
+    T0 = T(1,:);                                                     % initial temperature (°C)
     Ta = Ta - Tavg';
 
     %===================================================
@@ -148,13 +148,13 @@ function out = poSol3(mdl, data, ~)
     fl2D = squeeze(map2D(fl', xInp, yInp, x, y, 1));
     Ta2D = squeeze(map2D(Ta', xInp, yInp, x, y, 1));
     
-    %----------------------------------------
-    % Sample BC
-    %----------------------------------------
-    dS(1, fl2D(1,:)==0 & hc2D(1,:)==0) = 0;
-    dS(end, fl2D(end,:)==0 & hc2D(end,:)==0) = 0;
-    dS(fl2D(:,1)==0 & hc2D(:,1)==0, 1) = 0;
-    dS(fl2D(:,end)==0 & hc2D(:,end)==0, end) = 0;
+    % %----------------------------------------
+    % % Sample BC
+    % %----------------------------------------
+    % dS(1, fl2D(1,:)==0 & hc2D(1,:)==0) = 0;
+    % dS(end, fl2D(end,:)==0 & hc2D(end,:)==0) = 0;
+    % dS(fl2D(:,1)==0 & hc2D(:,1)==0, 1) = 0;
+    % dS(fl2D(:,end)==0 & hc2D(:,end)==0, end) = 0;
 
     %----------------------------------------
     % Heat Generation
@@ -209,7 +209,8 @@ function out = poSol3(mdl, data, ~)
     %===================================================
     % Init Values
     %===================================================
-    g0 = T0 * rPhi;
+    % g0 = T0 * rPhi;
+    g0 = zeros(K,1);
 
     %===================================================
     % Source Terms
@@ -245,18 +246,6 @@ function out = poSol3(mdl, data, ~)
             temp = sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy);
             c(i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
         end
-        
-        % % Left boundary (x = 0)
-        % cx(i) = cx(i) + sum(sAlpha(:,1) .* sPhi(:,1,i) .* dT0dx(:,1) * dy);
-        % 
-        % % Right boundary (x = Lx)
-        % cx(i) = cx(i) - sum(sAlpha(:,end) .* sPhi(:,end,i) .* dT0dx(:,end) * dy);
-        % 
-        % % Bottom boundary (y = 0)
-        % cy(i) = cy(i) + sum(sAlpha(1,:) .* sPhi(1,:,i) .* dT0dy(1,:) * dx);
-        % 
-        % % Top boundary (y = Ly)
-        % cy(i) = cy(i) - sum(sAlpha(end,:) .* sPhi(end,:,i) .* dT0dy(end,:) * dx);
 
         % % Convection
         % qBC(i) = qBC(i) +  sum(hc2D(:,1) .* sPhi(:,1,i) .* Ta2D(:,1) * dy);
@@ -264,10 +253,12 @@ function out = poSol3(mdl, data, ~)
         % Boundary contributions in Y-direction
         tempY = trapz(dy, sAlpha .* sPhi(:, :, i) .* dT0dx, 1);
         cy(i) = sum(tempY([1, end]));
+        % cy(i) = trapz(dy, tempY([1, end]));
 
         % Boundary contributions in X-direction
         tempX = trapz(dx, sAlpha .* sPhi(:, :, i) .* dT0dy, 2);
         cx(i) = sum(tempX([1, end]));
+        % cx(i) = trapz(dx, tempX([1, end]));
 
         % % Boundary
         % BC_q1 = sAlpha ./ sK .* hc2D .* sPhi(:,:,i) .* Ta2D;
@@ -275,13 +266,15 @@ function out = poSol3(mdl, data, ~)
         % qBC(i) = trapz(dx, trapz(dy, (BC_q1 .* dS + BC_q2 .* dS), 1), 2);
         % c(i) = c(i) - qBC(i);
     end
-    % c = c + (cx + cy) + qBC;
+    c = c - (cx + cy) + qBC;
+    % c = 0;
+    % c = c/dx/dy;
 
     %----------------------------------------
     % Source Term
     %----------------------------------------
     for i = 1:Nt
-        F(:, i) = (q(:, i) + c');
+        F(:, i) = 1*(q(:, i) + 0*c'); % 0.8912
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -294,7 +287,8 @@ function out = poSol3(mdl, data, ~)
     % q_scale = max(abs(F(:)));
     q_scale = 1;
     u_scale = 1;
-    tau = max(Cth) / max(Gth); 
+    % tau = max(Cth) / max(Gth); 
+    tau = 1;
     
     %===================================================
     % Normalisation
@@ -325,21 +319,26 @@ function out = poSol3(mdl, data, ~)
                             'RelTol', 1e-5, 'AbsTol', 1e-7, ...
                             'Jacobian', -Gth);
         sol = ode23s(@(t,y) odefnc2(t,y,Gth,F',tlist),tlist,g0,odeoptions);
+        theta_hat = deval(sol, tlist)';
     else
         odeoptions = odeset('RelTol', 1e-5, 'AbsTol', 1e-7);
         sol = ode45(@(t, y) odefnc2(t, y, Gth/Cth, F', tlist), tlist, g0, odeoptions);
+        theta_hat = deval(sol, tlist)';
+        theta_hat = theta_hat ./ diag(Cth)';
+        % [~, theta_hat] = rk6(tlist, g0, Ts/ tau / tau, Gth/Cth, F');
+        % theta_hat = theta_hat' ./ diag(Cth)';
     end
     % u = rk4(Cth, Gth, F, g0, Nt, K, Ts / tau / tau);
     % [t, y] = rk6(tlist, g0, Ts/ tau / tau, Gth/Cth, F');
     
     % Evaluate solution
-    theta_hat = deval(sol, tlist)';
-    theta_hat = theta_hat * u_scale;
+    theta_hat = theta_hat * q_scale;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    T_est = theta_hat * rPhi' + Tavg.*ones(Nt,N);
+    T_est = theta_hat * rPhi' + T0.*ones(Nt,N);
+    err = mean(abs(T_est - T),"all")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output

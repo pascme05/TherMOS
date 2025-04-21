@@ -50,7 +50,7 @@ P_con = 5e-6 * Idc^2;                                                       % He
 %---------------------------------------------------
 Ta = 55;                                                                    % ambient temperature (degC)
 fl = 100;                                                                   % heat flux boundary (W/m2)
-hc = 1000;                                                                  % heat transfer coefficient (W/m2K)
+hc = 1500;                                                                  % heat transfer coefficient (W/m2K)
 Tinit = 55;                                                                 % Initial temperature (degC)
 Tend = 3000;                                                                 % end value time (sec)
 q = 10*P_ohm/Vol;                                                              % Volumetric heat generation (W/m3)
@@ -100,18 +100,18 @@ thermalIC(thermalmodel,Tinit);
 %---------------------------------------------------
 % Boundary Conditions 
 %---------------------------------------------------
-% Temperature
-thermalBC(thermalmodel,"Edge",[1,4,5,6],'Temperature',Ta);
+% % Temperature
+% thermalBC(thermalmodel,"Edge",[8],'Temperature',Ta);
 
-% % Convection
-% thermalBC(thermalmodel,"Edge",[1,4,5,6],'ConvectionCoefficient',hc, ...
-%                                 'AmbientTemperature',Ta);
+% Convection
+thermalBC(thermalmodel,"Edge",[8],'ConvectionCoefficient',hc, ...
+                                'AmbientTemperature',Ta);
 
 % thermalBC(thermalmodel,"Edge",[1,5,8,9],'ConvectionCoefficient',5, ...
 %                                 'AmbientTemperature',Ta);
 
 % % Heat Flux
-% thermalBC(thermalmodel,"Edge",[2,6,9],'HeatFlux',P_con/(b+l));
+% thermalBC(thermalmodel,"Edge",[1],'HeatFlux',P_con/(b+l));
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

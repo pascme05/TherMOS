@@ -393,7 +393,7 @@ function [] = main(setup, path)
     %----------------------------------------
     % Printing Console
     %----------------------------------------
-    printConsole(data, results, setup, mdl);
+    printConsole(data, results, setup, mdl, para);
     fprintf('\n');
 
     %===================================================

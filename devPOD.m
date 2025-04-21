@@ -145,9 +145,9 @@ setup.datSep = 1;                                                           % in
 % Training and Testing Selection
 %----------------------------------------
 % File based
-setup.trFile = ["exp12_3"];                                                   % list of training files (strings) at least one
-setup.teFile = "exp12_3";                                                     % testing file (string) exactly one
-setup.vlFile = ["exp12_3"];                                                   % list of validation files (strings) at least one
+setup.trFile = ["exp12"];                                                   % list of training files (strings) at least one
+setup.teFile = "exp12";                                                     % testing file (string) exactly one
+setup.vlFile = ["exp12"];                                                   % list of validation files (strings) at least one
 
 % Sheet based
 setup.trSheet = ["train-1", "train-2", "train-3"];                          % list of training sheets (strings) at least one

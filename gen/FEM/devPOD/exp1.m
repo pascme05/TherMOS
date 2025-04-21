@@ -40,7 +40,7 @@ matCp = 800;                                                                % Sp
 % Load Case 
 %---------------------------------------------------
 Ta = 20;                                                                    % ambient temperature (degC)
-fl = 10000;                                                                  % heat flux boundary (W/m2)
+fl = 20000;                                                                  % heat flux boundary (W/m2)
 hc = 5000;                                                                  % heat transfer coefficient (W/m2K)
 Tinit = 20;                                                                 % Initial temperature (degC)
 Tend = 20000;                                                                % end value time (sec)
@@ -93,9 +93,9 @@ thermalBC(thermalmodel,"Edge",[1, 2],'Temperature',Ta);
 % hc = 0;
 % fl = 0;
 
-% Adiabatic 
-hc = 0;
-fl = 0;
+% % Adiabatic 
+% hc = 0;
+% fl = 0;
 
 % % Convection
 % thermalBC(thermalmodel,"Edge",[3, 4],'ConvectionCoefficient',h, ...
