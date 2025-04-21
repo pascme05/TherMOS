@@ -38,6 +38,12 @@ Tend = 20e-6;
 tlist = 0:dt:Tend-dt;
 T0 = 26.85;
 
+%---------------------------------------------------
+% Settings
+%---------------------------------------------------
+plotting = 1;
+saving = 1;
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Define Geometry
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -50,14 +56,16 @@ thermalmodel = createpde("thermal","transient");
 % Edges 
 %---------------------------------------------------
 % Define Region
-R1 = [3,4,0,l,l,0,0,0,h,h]';
-R2 = [3,4,0,small_length,small_length,0,h-small_height,h-small_height,h,h]';
+% R1 = [3,4,0,l,l,0,0,0,h,h]';
+R1 = [3,4,0,small_length,small_length,0,h-small_height,h-small_height,h,h]';
+R2 = [3,4, small_length, l, l, small_length,  h-small_height, h-small_height, h, h]';
+R3 = [3,4, 0, l, l, 0,  0, 0, h-small_height, h-small_height]';
 
 
 % Combine the regions into a single geometry
-gd = [R1, R2];
-sf = 'R1+R2';
-ns = char('R1','R2');
+gd = [R1, R2, R3];
+sf = 'R1+R2+R3';
+ns = char('R1','R2','R3');
 ns = ns';
 g = decsg(gd,sf,ns);
 geometryFromEdges(thermalmodel,g)
@@ -83,7 +91,7 @@ pdemesh(thermalmodel)
 % Material 
 %---------------------------------------------------
 % Spatial Parameters
-thermalProperties(thermalmodel,"ThermalConductivity",0.17,'Face',2, ...
+thermalProperties(thermalmodel,"ThermalConductivity",0.17,'Face',[2,3], ...
                                "MassDensity",2200, ...
                                "SpecificHeat",1000);
 thermalProperties(thermalmodel,"ThermalConductivity",400,'Face',1, ...
@@ -98,7 +106,7 @@ thermalIC(thermalmodel,T0);
 %---------------------------------------------------
 % Boundary Conditions 
 %---------------------------------------------------
-thermalBC(thermalmodel,"Edge",[1,2,5,6,7,8],'HeatFlux',0);
+% thermalBC(thermalmodel,"Edge",[4,7],'HeatFlux',100);
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -113,7 +121,7 @@ thermalmodel.SolverOptions.AbsoluteTolerance = 1E-9;
 %---------------------------------------------------
 % Source 
 %---------------------------------------------------
-internalHeatSource(thermalmodel,q,'Face',2);
+internalHeatSource(thermalmodel,q,'Face',1);
 
 %---------------------------------------------------
 % Solve 
@@ -138,24 +146,32 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Plotting
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% figure
-% [qx,qy] = evaluateHeatFlux(results);
-% for i = 1:floor(length(tlist) / 10)
-%     subplot(2,1,1)
-%     pdeplot(thermalmodel,"XYData",results.Temperature(:,floor(i*10)))
-%     subplot(2,1,2)
-%     pdeplot(thermalmodel,'FlowData',[qx qy])
-%     pause(0.001)
-% end
-
-figure
-for i = 1:floor(length(tlist) / 10)
-    dT1 = gradient(squeeze(T1(floor(i*10),:,:)), dx, dy);
-    subplot(2,1,1)
-    contourf(squeeze(T1(floor(i*10),:,:)))
-    subplot(2,1,2)
-    contourf(dT1)
-    pause(0.05)
+if plotting == 1
+    %---------------------------------------------------
+    % Fluxes
+    %---------------------------------------------------
+    figure
+    [qx,qy] = evaluateHeatFlux(results);
+    for i = 1:floor(length(tlist) / 10)
+        subplot(2,1,1)
+        pdeplot(thermalmodel,"XYData",results.Temperature(:,floor(i*10)))
+        subplot(2,1,2)
+        pdeplot(thermalmodel,'FlowData',[qx qy])
+        pause(0.001)
+    end
+    
+    %---------------------------------------------------
+    % Temperatures
+    %---------------------------------------------------
+    figure
+    for i = 1:floor(length(tlist) / 10)
+        dT1 = gradient(squeeze(T1(floor(i*10),:,:)), dx, dy);
+        subplot(2,1,1)
+        contourf(squeeze(T1(floor(i*10),:,:)))
+        subplot(2,1,2)
+        contourf(dT1)
+        pause(0.05)
+    end
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

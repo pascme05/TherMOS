@@ -175,6 +175,7 @@ function [] = plotMdl(~, mdl, setup)
         Gth = mdl.Gth;
         K = mdl.K;
         Phi = mdl.sPhi;
+        theta = mdl.theta;
         
         %----------------------------------------
         % Pre-Processing
@@ -193,16 +194,8 @@ function [] = plotMdl(~, mdl, setup)
         set(gcf, 'Position', [100, 100, 800, 600]);
     
         % Load and display the image (RC network schematic)
-        subplot(2, K, 1:K); % Top subplot for image and table
+        subplot(3, K, 1:K); % Top subplot for image and table
         axis off; % No axis for the image and table
-        
-        % Load the image (image_file is the path to your image file)
-        img = imread("ssMdl.png");
-
-        % Display the image in the top half of the figure
-        axes('Position', [0.25, 0.7, 0.5, 0.2]);
-        imshow(img);
-        axis off;
         
         % Determine the number of matrices to be displayed
         num_tables = 2;
@@ -211,8 +204,8 @@ function [] = plotMdl(~, mdl, setup)
         table_width = 1 / num_tables;
         
         % Define the vertical position and height for all tables (they are aligned horizontally)
-        table_height = 0.1;
-        table_vert_pos = 0.55;
+        table_height = 0.2;
+        table_vert_pos = 0.75;
         
         % Convert the state-space matrices to display in uitables side by side
         uitable('Data', Gth, 'ColumnName', arrayfun(@(x) ['Gth', num2str(x)], 1:size(Gth, 2), 'UniformOutput', false), ...
@@ -223,14 +216,25 @@ function [] = plotMdl(~, mdl, setup)
                 'RowName', arrayfun(@(x) ['Cth', num2str(x)], 1:size(Cth, 1), 'UniformOutput', false), ...
                 'Units', 'normalized', 'Position', [table_width, table_vert_pos, table_width, table_height]);
     
-        % Plot the transient thermal impedance in the lower half of the figure
+        % Spatial Modes
         for i = 1:K
-            subplot(2, K, i+K);
+            subplot(3, K, i+K);
             surf(squeeze(Phi(:,:,i)));
             ylabel("y (m)");
             xlabel("x (m)");
             txt = "Spatial Mode Phi-" + num2str(i);
             title(txt);
+        end
+
+        % Temporal Modes
+        for i = 1:K
+            subplot(3, K, i+2*K);
+            plot(theta(:,i));
+            ylabel("Mag (p.u.)");
+            xlabel("t (sec)");
+            txt = "Temporal Mode Theta-" + num2str(i);
+            title(txt);
+            grid on;
         end
     end
 

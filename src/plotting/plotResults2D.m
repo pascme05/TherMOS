@@ -38,6 +38,7 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     %===================================================
     % Parameters
     %===================================================
+    K = mdl.K;                                                              % number of modes
     [Nt, Ny] = size(data.te.y);                                             % number of output samples
     selX = para.Dat.gen.inpX;                                               % x-position for 1D temporal plots                           
     selY = para.Dat.gen.inpY;                                               % y-position for 1D temporal plots
@@ -399,6 +400,40 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     %===================================================
     % Predictions
     %===================================================
+    %----------------------------------------
+    % Temporal Modes
+    %----------------------------------------
+    % Init
+    figure;
+    txt = 'Temporal Prediction Modes';
+    sgtitle(txt);
+
+    % Mode Prediction
+    K_max = min([K, 5]);
+    for i = 1:K_max
+        subplot(2, K_max, i);
+        plot(t_test, pred.theta_hat(:,i));
+        hold on;
+        plot(t_test, pred.theta(:,i)-pred.theta(1,i));
+        ylabel("Mag (p.u.)");
+        xlabel("t (sec)");
+        txt = "Temporal Mode Theta-" + num2str(i);
+        title(txt);
+        grid on;
+    end
+
+    % Mode Error
+    for i = 1:K_max
+        subplot(2, K_max, i+K_max);
+        err = (pred.theta(:,i)-pred.theta_hat(:,i)-pred.theta(1,i));
+        plot(t_test, err);
+        ylabel("Mag Error (%)");
+        xlabel("t (sec)");
+        txt = "Temporal Mode Error Theta-" + num2str(i);
+        title(txt);
+        grid on;
+    end
+
     %----------------------------------------
     % Plot Spatial Prediction X
     %----------------------------------------

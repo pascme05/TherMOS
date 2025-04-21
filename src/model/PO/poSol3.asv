@@ -209,8 +209,8 @@ function out = poSol3(mdl, data, ~)
     %===================================================
     % Init Values
     %===================================================
-    g0 = T0 * rPhi;
-    % g0 = zeros(K,1);
+    % g0 = T0 * rPhi;
+    g0 = zeros(K,1);
 
     %===================================================
     % Source Terms
@@ -246,18 +246,6 @@ function out = poSol3(mdl, data, ~)
             temp = sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy);
             c(i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
         end
-        
-        % % Left boundary (x = 0)
-        % cx(i) = cx(i) + sum(sAlpha(:,1) .* sPhi(:,1,i) .* dT0dx(:,1) * dy);
-        % 
-        % % Right boundary (x = Lx)
-        % cx(i) = cx(i) - sum(sAlpha(:,end) .* sPhi(:,end,i) .* dT0dx(:,end) * dy);
-        % 
-        % % Bottom boundary (y = 0)
-        % cy(i) = cy(i) + sum(sAlpha(1,:) .* sPhi(1,:,i) .* dT0dy(1,:) * dx);
-        % 
-        % % Top boundary (y = Ly)
-        % cy(i) = cy(i) - sum(sAlpha(end,:) .* sPhi(end,:,i) .* dT0dy(end,:) * dx);
 
         % % Convection
         % qBC(i) = qBC(i) +  sum(hc2D(:,1) .* sPhi(:,1,i) .* Ta2D(:,1) * dy);
@@ -286,7 +274,7 @@ function out = poSol3(mdl, data, ~)
     % Source Term
     %----------------------------------------
     for i = 1:Nt
-        F(:, i) = 0*(q(:, i) + 0*c'); % 0.8912
+        F(:, i) = (q(:, i) + 0*c'); % 0.8912, 1.3
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -297,9 +285,9 @@ function out = poSol3(mdl, data, ~)
     %===================================================
     % u_scale = max(abs(g0));
     % q_scale = max(abs(F(:)));
+    % tau = max(Cth) / max(Gth); 
     q_scale = 1;
     u_scale = 1;
-    % tau = max(Cth) / max(Gth); 
     tau = 1;
     
     %===================================================
@@ -349,7 +337,7 @@ function out = poSol3(mdl, data, ~)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    T_est = theta_hat * rPhi' + T0.*ones(Nt,N)  Tavg.*ones(Nt,N);
+    T_est = theta_hat * rPhi' + T0.*ones(Nt,N);
     err = mean(abs(T_est - T),"all")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -357,6 +345,7 @@ function out = poSol3(mdl, data, ~)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     out.y = T_est;
     out.X = Q;
+    out.theta = 
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output

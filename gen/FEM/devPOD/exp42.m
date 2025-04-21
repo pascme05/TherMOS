@@ -31,6 +31,12 @@ thickness_copper_baseplate = 200e-6; % 200 µm
 % Total height
 total_height = thickness_silicon + thickness_copper_substrate + thickness_ceramic + thickness_copper_baseplate;
 
+%---------------------------------------------------
+% Settings
+%---------------------------------------------------
+plotting = 1;
+saving = 1;
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Define Geometry
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -104,25 +110,34 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Plotting
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% figure
-% [qx,qy] = evaluateHeatFlux(results);
-% for i = 1:floor(length(tlist) / 10)
-%     subplot(2,1,1)
-%     pdeplot(thermalmodel,"XYData",results.Temperature(:,floor(i*10)))
-%     subplot(2,1,2)
-%     pdeplot(thermalmodel,'FlowData',[qx qy])
-%     pause(0.001)
-% end
-% 
-% figure
-% for i = 1:floor(length(tlist) / 10)
-%     dT1 = gradient(squeeze(T1(floor(i*10),:,:)), width/100, width/100);
-%     subplot(2,1,1)
-%     contourf(squeeze(T1(floor(i*10),:,:)))
-%     subplot(2,1,2)
-%     contourf(dT1)
-%     pause(0.05)
-% end
+if plotting == 1
+    %---------------------------------------------------
+    % Fluxes
+    %---------------------------------------------------
+    figure
+    [qx,qy] = evaluateHeatFlux(results);
+    for i = 1:floor(length(tlist) / 10)
+        subplot(2,1,1)
+        pdeplot(thermalmodel,"XYData",results.Temperature(:,floor(i*10)))
+        subplot(2,1,2)
+        pdeplot(thermalmodel,'FlowData',[qx qy])
+        pause(0.001)
+    end
+    
+    %---------------------------------------------------
+    % Temperatures
+    %---------------------------------------------------
+    figure
+    for i = 1:floor(length(tlist) / 10)
+        dT1 = gradient(squeeze(T1(floor(i*10),:,:)), dx, dy);
+        subplot(2,1,1)
+        contourf(squeeze(T1(floor(i*10),:,:)))
+        subplot(2,1,2)
+        contourf(dT1)
+        pause(0.05)
+    end
+end
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Functions
