@@ -37,7 +37,7 @@ function out = concatData(data, setup, para)
     % Parameters
     %===================================================
     [~, N] = size(data.y);                                                  % number of profiles in data
-    [Nt,~] = size(data.y{1,1});                                             % number of timesteps
+    % [Nt,~] = size(data.y{1,1});                                             % number of timesteps
     Ts = data.Ts;                                                           % sampling time data (sec)
      
     %===================================================
@@ -108,7 +108,7 @@ function out = concatData(data, setup, para)
     %===================================================
     % Total Time
     %===================================================
-    out.t = 0:Ts:Nt*Ts-Ts;
+    out.t = 0:Ts:sum(out.Nt)*Ts-Ts;
     out.t = out.t';
     
     %===================================================

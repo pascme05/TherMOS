@@ -1,0 +1,36 @@
+function [alpha_opt, q_adj, residual] = optCthGth2(u, q, dt, C, G, lam)
+    [K, ~] = size(u);
+
+    % Compute du/dt
+    du_dt = gradient(u, dt, 2);
+
+    % Initial guess: alpha = ones
+    alpha0 = ones(K, 1);
+
+    % Loss function
+    loss_fn = @(alpha) compute_alpha_residual(alpha, C, G, du_dt, u, q, lam);
+
+    % Optimization options
+    options = optimoptions('fminunc', ...
+        'Display', 'iter', ...
+        'MaxIterations', 1000, ...
+        'StepTolerance', 1e-12, ...
+        'OptimalityTolerance', 1e-12, ...
+        'FunctionTolerance', 1e-12, ...
+        'Algorithm', 'quasi-newton');
+
+    % Run optimization
+    [alpha_opt, ~] = fminunc(loss_fn, alpha0, options);
+
+    % Adjusted q and residual
+    q_adj = alpha_opt .* q;
+    q_est = C * du_dt + G * u;
+    residual = q_est - q_adj;
+end
+
+function err = compute_alpha_residual(alpha, C, G, du_dt, u, q, lam)
+    q_adj = alpha .* q;  % Element-wise scaling per row
+    q_est = C * du_dt + G * u;
+    residual = (q_est - q_adj).*lam;
+    err = sum(residual(:).^2);  % Sum of squared residuals
+end

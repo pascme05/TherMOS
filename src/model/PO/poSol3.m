@@ -85,6 +85,7 @@ function out = poSol3(mdl, data, ~)
     sPhi = mdl.sPhi;
     rPhi = mdl.rPhi;
     K = mdl.K;
+    scale = mdl.alpha;
 
     %===================================================
     % Variables
@@ -273,8 +274,10 @@ function out = poSol3(mdl, data, ~)
     %----------------------------------------
     % Source Term
     %----------------------------------------
+    % temp = [1+190/19000; 1-58/1160; 0.41];
+    % temp = ones(K,1);
     for i = 1:Nt
-        F(:, i) = (q(:, i) + 0*c'); % 0.8912, 1.3
+        F(:, i) = scale.*(q(:, i) + 0*c'); % 0.8912, 1.3
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -283,12 +286,10 @@ function out = poSol3(mdl, data, ~)
     %===================================================
     % Normalisation Values
     %===================================================
-    % u_scale = max(abs(g0));
-    % q_scale = max(abs(F(:)));
-    % tau = max(Cth) / max(Gth); 
-    q_scale = 1;
-    u_scale = 1;
-    tau = 1;
+    q_scale = max(abs(F(:)));
+    tau = max(max(Cth/Gth)); 
+    % q_scale = 1;
+    % tau = 1;
     
     %===================================================
     % Normalisation
@@ -296,7 +297,6 @@ function out = poSol3(mdl, data, ~)
     Cth = Cth / tau;
     Gth = Gth * tau;
     F = F / q_scale * tau;
-    g0 = g0 / u_scale;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation

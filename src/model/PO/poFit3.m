@@ -41,6 +41,7 @@ function mdl = poFit3(data, ~, para)
     % General
     %----------------------------------------
     [Nt, N] = size(data.y);                                                 % number of time steps (Nt) and snapshots (N)
+    Ts = data.Ts;                                                           % sampling time (sec)
     Kmax = para.Mdl.gen.Kmax;                                               % maximum number of modes
     Emax = para.Mdl.gen.Emax;                                               % maximum energy captured (%)
     E = 0;                                                                  % captured energy by POD
@@ -81,7 +82,8 @@ function mdl = poFit3(data, ~, para)
     x = 0:dx:Lx;                                                            % x vector (m)
     y = 0:dy:Ly;                                                            % y vector (m)
     T = data.y;                                                             % temperature snapshots NtxN (°C)
-    
+    Q = data.X;                                                             % volumetric heat generation (W/m³)
+
     %----------------------------------------
     % BC Matrix
     %----------------------------------------
@@ -101,6 +103,7 @@ function mdl = poFit3(data, ~, para)
     % Converting 2D
     %----------------------------------------
     alpha2D = squeeze(map2D(alpha', xInp, yInp, x, y, 1));
+    sQ = map2D(Q, xInp, yInp, x, y, 2);
     k2D = squeeze(map2D(k', xInp, yInp, x, y, 1));
     hc2D = squeeze(map2D(hc', xInp, yInp, x, y, 1));
     fl2D = squeeze(map2D(fl', xInp, yInp, x, y, 1));
@@ -288,6 +291,29 @@ function mdl = poFit3(data, ~, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % ----------------------------------------------------
+    % Optimize Matrices
+    % ----------------------------------------------------
+    % Init
+    q = zeros(K, Nt);
+    g0 = T(1,:) * rPhi;
+    tlist = linspace(0, Nt*Ts-Ts, Nt)';
+    alpha_opt= ones(K,1);
+
+    % Project Heat Losses
+    for i = 1:Nt
+        for ii = 1:K
+            q(ii, i) = trapz(dx, trapz(dy, alpha2D ./ k2D .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii)), 1), 2);
+        end
+    end
+
+    % Optimize
+    scale = sqrt(lam(1:K));
+    [Cth, Gth, q_est] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
+    [alpha_opt, q_adj, residual] = optCthGth2((theta-g0)', q, Ts, Cth, Gth, scale);
+    % [alpha_opt2, u_sim] = optCthGth3(Cth, Gth, rPhi, T, theta', q, tlist);
+    % [C_opt, G_opt] = optCthGth2((theta-g0)', q, Ts, Cth, Gth);
+
     % % ----------------------------------------------------
     % % Reconstruct
     % % ----------------------------------------------------
@@ -322,6 +348,7 @@ function mdl = poFit3(data, ~, para)
     mdl.K = K;
     mdl.Tavg = Tavg;
     mdl.lam = lam;
+    mdl.alpha = alpha_opt;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
