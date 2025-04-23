@@ -166,6 +166,23 @@ function mdl = poFit3(data, ~, para)
     %----------------------------------------
     fprintf('INFO: Number of used eigenvalues (model order) K: %i \n', K);
     fprintf('INFO: Cumulative correlation energy Em: %f \n', E*100)
+    
+    %===================================================
+    % Numerics
+    %===================================================
+    [x_n, w_x] = gauss_legendre(length(x));
+    [y_n, w_y] = gauss_legendre(length(y));
+
+    % map to [x_min,x_max] and [y_min,y_max]
+    xq_1d = 0.5*(max(x)-min(x))*x_n + 0.5*(max(x)-min(x));
+    wq_x  = 0.5*(max(x)-min(x))*w_x;
+    yq_1d = 0.5*(max(y)-min(y))*y_n + 0.5*(max(y)-min(y));
+    wq_y  = 0.5*(max(y)-min(y))*w_y;
+    
+    % form 2D arrays of points & weights
+    [Xq, Yq] = meshgrid(xq_1d, yq_1d);   % Ny×Nx
+    [Xinit, Yinit] = meshgrid(x, y); 
+    W = wq_y(:) * wq_x(:)';
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -243,9 +260,15 @@ function mdl = poFit3(data, ~, para)
     
                 % Symmetry
                 Cth(i, ii) = Cth(ii, i);
+                
+                sPhi_i_q = interp2(Xinit, Yinit, squeeze(sPhi(:,:,i)), Xq, Yq, 'linear');
+                sPhi_ii_q = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
+
+                Cth2(i, ii) = sum(sum(W .* sPhi_ii_q .* sPhi_i_q));
             end
         end
     end
+    Cth = Cth2;
 
 
     %----------------------------------------
@@ -263,25 +286,43 @@ function mdl = poFit3(data, ~, para)
     else
         for i = 1:K
             for ii = 1:K
+                % Interpolation
+                sPhi_i = interp2(Xinit, Yinit, squeeze(sPhi(:,:,i)), Xq, Yq, 'linear');
+                sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
+                dPhidx_i = interp2(Xinit, Yinit, squeeze(dPhidx(:,:,i)), Xq, Yq, 'linear');
+                dPhidx_ii = interp2(Xinit, Yinit, squeeze(dPhidx(:,:,ii)), Xq, Yq, 'linear');
+                dPhidy_i = interp2(Xinit, Yinit, squeeze(dPhidy(:,:,i)), Xq, Yq, 'linear');
+                dPhidy_ii = interp2(Xinit, Yinit, squeeze(dPhidy(:,:,ii)), Xq, Yq, 'linear');
+
+
                 % Boundary Free
                 if deg == -1
                     Gth(i, ii) = trapz(dx, trapz(dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), 1), 2);
                 else
                     Gth(i, ii) = intStencil(length(x), length(y), dx, dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), deg) * dx * dy;
                 end
+                Gth2(i, ii) = sum(sum(W .* squeeze(alpha2D .* (dPhidx_ii .* dPhidx_i + dPhidy_i .* dPhidy_ii))));
     
                 % Boundary Terms for Neumann conditions
                 tempX = squeeze(alpha2D .* sPhi(:, :, ii) .* dPhidx(:, :, i) .* dS);
                 tempY = squeeze(alpha2D .* sPhi(:, :, ii) .* dPhidy(:, :, i) .* dS);
+                tempX2 = alpha2D .* sPhi_ii .* dPhidx_i;
+                tempY2 = alpha2D .* sPhi_ii .* dPhidy_i;
                 Gx(i, ii) = trapz(dy, tempX(:,1), 1) + trapz(dy, tempX(:,end), 1); 
                 Gy(i, ii) = trapz(dx, tempY(1,:), 2) + trapz(dx, tempY(end,:), 2); 
+                % Gx2(i, ii) = sum(W(:,1) .* tempX2(:,1)) + sum(W(:,end) .*tempX2(:,end)); 
+                % Gy2(i, ii) = sum(W(1,:) .* tempY2(1,:)) + sum(W(end,:) .*tempY2(end,:));  
+                Gx2(i, ii) = sum(wq_y .* tempX2(:,1)) + sum(wq_y .* tempX2(:,end)); 
+                Gy2(i, ii) = sum(wq_x' .* tempY2(1,:)) + sum(wq_x' .* tempY2(end,:)); 
     
                 % % Symmetry
                 % Gth(i, ii) = Gth(ii, i);
+                    
             end
         end
     end
     Gth = Gth + (Gy + Gx);
+    Gth = Gth2 + (Gy2 + Gx2);
 
     %----------------------------------------
     % Stiffness Matrices
@@ -303,7 +344,9 @@ function mdl = poFit3(data, ~, para)
     % Project Heat Losses
     for i = 1:Nt
         for ii = 1:K
-            q(ii, i) = trapz(dx, trapz(dy, alpha2D ./ k2D .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii)), 1), 2);
+            sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
+            sQ_i = interp2(Xinit, Yinit, squeeze(sQ(i, :, :)), Xq, Yq, 'linear');
+            q(ii, i) = sum(sum(W .* alpha2D ./ k2D .* sQ_i .* sPhi_ii));
         end
     end
 

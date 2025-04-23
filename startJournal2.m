@@ -145,7 +145,7 @@ setup.datSep = 1;                                                           % in
 % Training and Testing Selection
 %----------------------------------------
 % File based
-setup.trFile = ["journal2_1", "journal2", "journal2_3"];                                                % list of training files (strings) at least one
+setup.trFile = ["journal2"];                                                % list of training files (strings) at least one
 setup.teFile = "journal2";                                                  % testing file (string) exactly one
 setup.vlFile = ["journal2"];                                                % list of validation files (strings) at least one
 

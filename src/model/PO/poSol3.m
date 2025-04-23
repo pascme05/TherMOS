@@ -173,6 +173,23 @@ function out = poSol3(mdl, data, ~)
     sT0 = reshape(sT0, [length(y), length(x)]);
     
     %===================================================
+    % Numerics
+    %===================================================
+    [x_n, w_x] = gauss_legendre(length(x));
+    [y_n, w_y] = gauss_legendre(length(y));
+
+    % map to [x_min,x_max] and [y_min,y_max]
+    xq_1d = 0.5*(max(x)-min(x))*x_n + 0.5*(max(x)-min(x));
+    wq_x  = 0.5*(max(x)-min(x))*w_x;
+    yq_1d = 0.5*(max(y)-min(y))*y_n + 0.5*(max(y)-min(y));
+    wq_y  = 0.5*(max(y)-min(y))*w_y;
+    
+    % form 2D arrays of points & weights
+    [Xq, Yq] = meshgrid(xq_1d, yq_1d);   % Ny×Nx
+    [Xinit, Yinit] = meshgrid(x, y); 
+    W = wq_y(:) * wq_x(:)';
+
+    %===================================================
     % Gradient
     %===================================================
     %----------------------------------------
@@ -233,8 +250,14 @@ function out = poSol3(mdl, data, ~)
                 temp = sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii));
                 q(ii, i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
             end
+            
+            sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
+            sQ_i = interp2(Xinit, Yinit, squeeze(sQ(i, :, :)), Xq, Yq, 'linear');
+
+            q2(ii, i) = sum(sum(W .* sAlpha ./ sK .* sQ_i .* sPhi_ii));
         end
     end
+    q = q2;
 
     %----------------------------------------
     % Interior contributions
