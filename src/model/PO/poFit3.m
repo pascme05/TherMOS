@@ -352,8 +352,8 @@ function mdl = poFit3(data, ~, para)
 
     % Optimize
     scale = sqrt(lam(1:K));
-    [Cth, Gth, q_est] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
-    [alpha_opt, q_adj, residual] = optCthGth2((theta-g0)', q, Ts, Cth, Gth, scale);
+    % [Cth, Gth, q_est] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
+    % [alpha_opt, q_adj, residual] = optCthGth2((theta-g0)', q, Ts, Cth, Gth, scale);
     % [alpha_opt2, u_sim] = optCthGth3(Cth, Gth, rPhi, T, theta', q, tlist);
     % [C_opt, G_opt] = optCthGth2((theta-g0)', q, Ts, Cth, Gth);
 
