@@ -46,7 +46,6 @@ function mdl = poFit3(data, ~, para)
     Emax = para.Mdl.gen.Emax;                                               % maximum energy captured (%)
     E = 0;                                                                  % captured energy by POD
     eps = para.Mdl.gen.eps;                                                 % numerical lower bound
-    deg = -1;                                                               % degree for stencil solution (-1 internal trapz approach)
     
     %----------------------------------------
     % Data
@@ -59,24 +58,10 @@ function mdl = poFit3(data, ~, para)
     rho = data.Data.rho;                                                    % material density (kg/m³)
     Cp = data.Data.Cp;                                                      % specific heat capacity (J/KgK)
     alpha = k ./ (rho.*Cp);                                                 % Thermal diffusivity (m²/s)
-    
-    %----------------------------------------
-    % Boundary
-    %----------------------------------------
-    try
-        hc = data.Data.hc;                                                  % heat transfer coefficient (W/m²K)
-        fl = data.Data.fl;                                                  % heat flux (W/m²)
-    catch
-        hc = zeros(size(alpha));
-        fl = zeros(size(alpha));
-    end
 
     %===================================================
     % Variables
     %===================================================
-    %----------------------------------------
-    % General
-    %----------------------------------------
     xInp = data.Data.geo(:,1);                                              % sampled input values x (m)
     yInp = data.Data.geo(:,2);                                              % sampled input values y (m)
     x = 0:dx:Lx;                                                            % x vector (m)
@@ -84,14 +69,6 @@ function mdl = poFit3(data, ~, para)
     T = data.y;                                                             % temperature snapshots NtxN (°C)
     Q = data.X;                                                             % volumetric heat generation (W/m³)
 
-    %----------------------------------------
-    % BC Matrix
-    %----------------------------------------
-    dS = zeros(length(y), length(x));
-    dS(1, :) = 1;      
-    dS(end, :) = 1;     
-    dS(:, 1) = 1;       
-    dS(:, end) = 1; 
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
@@ -101,26 +78,6 @@ function mdl = poFit3(data, ~, para)
     %===================================================
     xInp = xInp - min(xInp);
     yInp = yInp - min(yInp);
-
-    %===================================================
-    % Boundary Conditions
-    %===================================================
-    %----------------------------------------
-    % Converting 2D
-    %----------------------------------------
-    alpha2D = squeeze(map2D(alpha', xInp, yInp, x, y, 1));
-    sQ = map2D(Q, xInp, yInp, x, y, 2);
-    k2D = squeeze(map2D(k', xInp, yInp, x, y, 1));
-    % hc2D = squeeze(map2D(hc', xInp, yInp, x, y, 1));
-    % fl2D = squeeze(map2D(fl', xInp, yInp, x, y, 1));
-
-    %----------------------------------------
-    % Sample BC
-    %----------------------------------------
-    % dS(1, fl2D(1,:)==0 & hc2D(1,:)==0) = 0;
-    % dS(end, fl2D(end,:)==0 & hc2D(end,:)==0) = 0;
-    % dS(fl2D(:,1)==0 & hc2D(:,1)==0, 1) = 0;
-    % dS(fl2D(:,end)==0 & hc2D(:,end)==0, end) = 0;
 
     %===================================================
     % Mean Centering
@@ -194,8 +151,25 @@ function mdl = poFit3(data, ~, para)
     [Xinit, Yinit] = meshgrid(x, y); 
     W = wq_y(:) * wq_x(:)';
 
-    Jgrid = jacobian2D(xInp, yInp, xq_1d, yq_1d, dx, dy);
-    Jgrid = ones(size(Jgrid));
+    Jgrid = jacobian2D(xInp, yInp, xq_1d, yq_1d);
+    % Jgrid = ones(size(Jgrid));
+    
+    %===================================================
+    % Boundary Conditions
+    %===================================================
+    %----------------------------------------
+    % Converting 2D
+    %----------------------------------------
+    alpha2D = squeeze(map2D(alpha', xInp, yInp, x, y, 1));
+    sQ = map2D(Q, xInp, yInp, x, y, 2);
+    k2D = squeeze(map2D(k', xInp, yInp, x, y, 1));
+    
+    %----------------------------------------
+    % Integration 2D
+    %----------------------------------------
+    alpha2D = interp2(Xinit, Yinit, alpha2D, Xq, Yq, 'linear');
+    k2D     = interp2(Xinit, Yinit, k2D, Xq, Yq, 'linear');
+
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -207,12 +181,8 @@ function mdl = poFit3(data, ~, para)
     dPhidy = zeros(length(y), length(x), K);
     Cth = zeros(K, K);
     Gth = zeros(K, K);
-    Cth2 = zeros(K, K);
-    Gth2 = zeros(K, K);
     Gx = zeros(K, K);
     Gy = zeros(K, K);
-    Gx2 = zeros(K, K);
-    Gy2 = zeros(K, K);
 
     %===================================================
     % Extract Modes
@@ -262,50 +232,44 @@ function mdl = poFit3(data, ~, para)
     % Thermal Capacitance
     %----------------------------------------
     if K == 1
-        Cth = trapz(dx, trapz(dy, sPhi.*sPhi, 1), 2);
+        sPhi_i_q = interp2(Xinit, Yinit, squeeze(sPhi(:,:)), Xq, Yq, 'linear');
+        sPhi_ii_q = interp2(Xinit, Yinit, squeeze(sPhi(:,:)), Xq, Yq, 'linear');
+        Cth = sum(sum(Jgrid .* W .* sPhi_ii_q .* sPhi_i_q));
     else
         for i = 1:K
             for ii = 1:K
-                % Trapasoidal
-                if deg == -1
-                    Cth(i, ii) = trapz(dx, trapz(dy, sPhi(:, :, ii) .* sPhi(:, :, i), 1), 2);
-                
-                % Stencil
-                else
-                    Cth(i, ii) = intStencil(length(x), length(y), dx, dy, sPhi(:, :, ii) .* sPhi(:, :, i), deg) * dx * dy;
-                end
-    
-                % Symmetry
-                Cth(i, ii) = Cth(ii, i);
-                
                 sPhi_i_q = interp2(Xinit, Yinit, squeeze(sPhi(:,:,i)), Xq, Yq, 'linear');
                 sPhi_ii_q = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
+                Cth(i, ii) = sum(sum(Jgrid .* W .* sPhi_ii_q .* sPhi_i_q));
 
-                Cth2(i, ii) = sum(sum(Jgrid .* W .* sPhi_ii_q .* sPhi_i_q));
-                % Cth2(i, ii) = Cth2(ii, i);
+                % % Symmetry
+                % Cth(i, ii) = Cth(ii, i);   
             end
         end
     end
-    Cth = Cth2;
 
 
     %----------------------------------------
     % Thermal Conductance
     %----------------------------------------
     if K == 1
+        % Interpolation
+        sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:)), Xq, Yq, 'linear');
+        dPhidx_i = interp2(Xinit, Yinit, squeeze(dPhidx(:,:)), Xq, Yq, 'linear');
+        dPhidy_i = interp2(Xinit, Yinit, squeeze(dPhidy(:,:)), Xq, Yq, 'linear');
+
         % Boundary Free
-        Gth = trapz(dx, trapz(dy, alpha2D .* (dPhidx.*dPhidx + dPhidy.*dPhidy), 1), 2);
+        Gth = sum(sum(Jgrid .* W .* squeeze(alpha2D .* (dPhidx_i .* dPhidx_i + dPhidy_i .* dPhidy_i))));
 
         % Boundary Terms for Neumann conditions
-        tempX = squeeze(alpha2D.*sPhi.*dPhidx.*dS);
-        tempY = squeeze(alpha2D.*sPhi.*dPhidy.*dS);
-        Gx = trapz(dy, tempX(:,1), 1) + trapz(dy, tempX(:,end), 1); 
-        Gy = trapz(dx, tempY(1,:), 2) + trapz(dx, tempY(end,:), 2); 
+        tempX2 = alpha2D .* Jgrid .* sPhi_ii .* dPhidx_i;
+        tempY2 = alpha2D .* Jgrid .* sPhi_ii .* dPhidy_i;
+        Gx = sum(wq_y .* tempX2(:,1)) + sum(wq_y .* tempX2(:,end)); 
+        Gy = sum(wq_x' .* tempY2(1,:)) + sum(wq_x' .* tempY2(end,:)); 
     else
         for i = 1:K
             for ii = 1:K
                 % Interpolation
-                sPhi_i = interp2(Xinit, Yinit, squeeze(sPhi(:,:,i)), Xq, Yq, 'linear');
                 sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
                 dPhidx_i = interp2(Xinit, Yinit, squeeze(dPhidx(:,:,i)), Xq, Yq, 'linear');
                 dPhidx_ii = interp2(Xinit, Yinit, squeeze(dPhidx(:,:,ii)), Xq, Yq, 'linear');
@@ -314,31 +278,24 @@ function mdl = poFit3(data, ~, para)
 
 
                 % Boundary Free
-                if deg == -1
-                    Gth(i, ii) = trapz(dx, trapz(dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), 1), 2);
-                else
-                    Gth(i, ii) = intStencil(length(x), length(y), dx, dy, alpha2D .* (dPhidx(:, :, ii) .* dPhidx(:, :, i) + dPhidy(:, :, ii) .* dPhidy(:, :, i)), deg) * dx * dy;
-                end
-                Gth2(i, ii) = sum(sum(Jgrid .* W .* squeeze(alpha2D .* (dPhidx_ii .* dPhidx_i + dPhidy_i .* dPhidy_ii))));
+                Gth(i, ii) = sum(sum(Jgrid .* W .* squeeze(alpha2D .* (dPhidx_ii .* dPhidx_i + dPhidy_i .* dPhidy_ii))));
     
                 % Boundary Terms for Neumann conditions
-                tempX = squeeze(alpha2D .* sPhi(:, :, ii) .* dPhidx(:, :, i) .* dS);
-                tempY = squeeze(alpha2D .* sPhi(:, :, ii) .* dPhidy(:, :, i) .* dS);
                 tempX2 = alpha2D .* Jgrid .* sPhi_ii .* dPhidx_i;
                 tempY2 = alpha2D .* Jgrid .* sPhi_ii .* dPhidy_i;
-                Gx(i, ii) = trapz(dy, tempX(:,1), 1) + trapz(dy, tempX(:,end), 1); 
-                Gy(i, ii) = trapz(dx, tempY(1,:), 2) + trapz(dx, tempY(end,:), 2); 
-                Gx2(i, ii) = sum(wq_y .* tempX2(:,1)) + sum(wq_y .* tempX2(:,end)); 
-                Gy2(i, ii) = sum(wq_x' .* tempY2(1,:)) + sum(wq_x' .* tempY2(end,:)); 
-    
+                % Gx(i, ii) = sum(wq_y .* tempX2(:,1)) + sum(wq_y .* tempX2(:,end)); 
+                % Gy(i, ii) = sum(wq_x' .* tempY2(1,:)) + sum(wq_x' .* tempY2(end,:)); 
+                wq_y_resized = repmat(wq_y(:), [length(, length(tempX2(:))/length(wq_y(:))]);
+                wq_x_resized = repmat(wq_y(:), [K, Nx]);
+                Gx(i, ii) = sum(wq_y_resized(:) .* tempX2(:)); 
+                Gy(i, ii) = sum(wq_x_resized(:)' .* tempY2(:));
+
                 % % Symmetry
-                % Gth(i, ii) = Gth(ii, i);
-                    
+                % Gth(i, ii) = Gth(ii, i);                  
             end
         end
     end
-    % Gth = Gth + (Gy + Gx);
-    Gth = Gth2 + (Gy2 + Gx2);
+    Gth = Gth + (Gy + Gx);
 
     %----------------------------------------
     % Stiffness Matrices
@@ -368,8 +325,8 @@ function mdl = poFit3(data, ~, para)
 
     % Optimize
     scale = sqrt(lam(1:K));
-    [Cth, Gth, q_est] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
-    [alpha_opt, q_adj, residual] = optCthGth2((theta-g0)', q, Ts, Cth, Gth, scale);
+    % [Cth, Gth, q_est] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
+    % [alpha_opt, q_adj, residual] = optCthGth2((theta-g0)', q, Ts, Cth, Gth, scale);
     % [alpha_opt2, u_sim] = optCthGth3(Cth, Gth, rPhi, T, theta', q, tlist);
     % [C_opt, G_opt] = optCthGth2((theta-g0)', q, Ts, Cth, Gth);
 
@@ -406,9 +363,9 @@ function mdl = poFit3(data, ~, para)
     mdl.GC = GC;
     mdl.K = K;
     mdl.Tavg = Tavg;
-    mdl.lam = lam;
     mdl.Jgrid = Jgrid;
     mdl.alpha = alpha_opt;
+    mdl.W = W;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
