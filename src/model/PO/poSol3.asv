@@ -47,7 +47,6 @@ function out = poSol3(mdl, data, ~)
     %----------------------------------------
     [Nt, N] = size(data.y);                                                 % number of time steps (Nt) and snapshots (N)
     Ts = data.Ts;                                                           % sampling time (sec)
-    deg = -1;                                                               % degree for stencil solution (-1 internal trapz approach)
     is_stiff = 1;                                                           % stiff vs. non-stiff solvers
 
     %----------------------------------------
@@ -61,32 +60,18 @@ function out = poSol3(mdl, data, ~)
     rho = data.Data.rho;                                                    % material density (kg/m³)
     Cp = data.Data.Cp;                                                      % specific heat capacity (J/KgK)
     alpha = k ./ (rho.*Cp);                                                 % Thermal diffusivity (m²/s)
-    
-    % %----------------------------------------
-    % % Boundary
-    % %----------------------------------------
-    % try
-    %     hc = data.Data.hc;                                                  % heat transfer coefficient (W/m²K)
-    %     fl = data.Data.fl;                                                  % heat flux (W/m²)
-    %     Ta = data.Data.Ta;                                                  % ambient temperature (°C)
-    % catch
-    %     hc = zeros(size(alpha));
-    %     fl = zeros(size(alpha));
-    %     Ta = zeros(size(alpha));
-    % end
 
     %----------------------------------------
     % Model
     %----------------------------------------
     Cth = mdl.Cth;
     Gth = mdl.Gth;
-    % dPhidx = mdl.dPhidx;
-    % dPhidy = mdl.dPhidy;
     sPhi = mdl.sPhi;
     rPhi = mdl.rPhi;
     K = mdl.K;
     scale = mdl.alpha;
     Jgrid = mdl.Jgrid;
+    W = mdl.W;
 
     %===================================================
     % Variables
@@ -102,22 +87,9 @@ function out = poSol3(mdl, data, ~)
     Q = data.X;                                                             % volumetric heat generation (W/m³)
     out = data;
     
-    % %----------------------------------------
-    % % BC Matrix
-    % %----------------------------------------
-    % dS = zeros(length(y), length(x));
-    % dS(1, :) = dy;      
-    % dS(end, :) = dy;     
-    % dS(:, 1) = dx;       
-    % dS(:, end) = dx; 
-
     %----------------------------------------
     % Init
     %----------------------------------------
-    % c = zeros(1, K);
-    % cy = zeros(1, K);
-    % cx = zeros(1, K);
-    % qBC = zeros(1, K);
     q = zeros(K, Nt);
     F = zeros(K, Nt);
 
@@ -129,14 +101,25 @@ function out = poSol3(mdl, data, ~)
     %===================================================
     xInp = xInp - min(xInp);
     yInp = yInp - min(yInp);
-
+    
     %===================================================
     % Mean Centering
     %===================================================
-    % Tavg = mdl.Tavg;                                                      % average temperature over time steps (°C)
-    % Tavg = 0;
-    T0 = T(1,:);                                                     % initial temperature (°C)
-    % Ta = Ta - Tavg';
+    T0 = T(1,:);                                                            % initial temperature (°C)
+    
+    %===================================================
+    % Numerics
+    %===================================================
+    [x_n, ~] = gauss_legendre(length(x));
+    [y_n, ~] = gauss_legendre(length(y));
+
+    % map to [x_min,x_max] and [y_min,y_max]
+    xq_1d = 0.5*(max(x)-min(x))*x_n + 0.5*(max(x)-min(x));
+    yq_1d = 0.5*(max(y)-min(y))*y_n + 0.5*(max(y)-min(y));
+    
+    % form 2D arrays of points & weights
+    [Xq, Yq] = meshgrid(xq_1d, yq_1d);   % Ny×Nx
+    [Xinit, Yinit] = meshgrid(x, y); 
 
     %===================================================
     % 2D Reshaping
@@ -148,158 +131,36 @@ function out = poSol3(mdl, data, ~)
     sAlpha = reshape(sAlpha, [length(y), length(x)]);
     sK = map2D(k', xInp, yInp, x, y, 1);
     sK= reshape(sK, [length(y), length(x)]);
-    
+
     %----------------------------------------
-    % Boundary
+    % Integration 2D
     %----------------------------------------
-    % hc2D = squeeze(map2D(hc', xInp, yInp, x, y, 1));
-    % fl2D = squeeze(map2D(fl', xInp, yInp, x, y, 1));
-    % Ta2D = squeeze(map2D(Ta', xInp, yInp, x, y, 1));
-    
-    % %----------------------------------------
-    % % Sample BC
-    % %----------------------------------------
-    % dS(1, fl2D(1,:)==0 & hc2D(1,:)==0) = 0;
-    % dS(end, fl2D(end,:)==0 & hc2D(end,:)==0) = 0;
-    % dS(fl2D(:,1)==0 & hc2D(:,1)==0, 1) = 0;
-    % dS(fl2D(:,end)==0 & hc2D(:,end)==0, end) = 0;
+    % sAlpha = interp2(Xinit, Yinit, sAlpha, Xq, Yq, 'linear');
+    % sK     = interp2(Xinit, Yinit, sK, Xq, Yq, 'linear');
 
     %----------------------------------------
     % Heat Generation
     %----------------------------------------
     sQ = map2D(Q, xInp, yInp, x, y, 2);
 
-    %----------------------------------------
-    % Temperatures
-    %----------------------------------------
-    % if sum(diff(alpha)) == 0
-    %     sT0 = map2D(T0, xInp, yInp, x, y, 2);
-    % else
-    %     sT0 = map2D(T0, xInp, yInp, x, y, 1);
-    % end
-    % sT0 = reshape(sT0, [length(y), length(x)]);
-    
-    %===================================================
-    % Numerics
-    %===================================================
-    [x_n, w_x] = gauss_legendre(length(x));
-    [y_n, w_y] = gauss_legendre(length(y));
-
-    % map to [x_min,x_max] and [y_min,y_max]
-    xq_1d = 0.5*(max(x)-min(x))*x_n + 0.5*(max(x)-min(x));
-    wq_x  = 0.5*(max(x)-min(x))*w_x;
-    yq_1d = 0.5*(max(y)-min(y))*y_n + 0.5*(max(y)-min(y));
-    wq_y  = 0.5*(max(y)-min(y))*w_y;
-    
-    % form 2D arrays of points & weights
-    [Xq, Yq] = meshgrid(xq_1d, yq_1d);   % Ny×Nx
-    [Xinit, Yinit] = meshgrid(x, y); 
-    W = wq_y(:) * wq_x(:)';
-
-    %===================================================
-    % Gradient
-    %===================================================
-    % %----------------------------------------
-    % % Extend
-    % %----------------------------------------
-    % sT02 = zeros(length(y)+2, length(x)+2);
-    % 
-    % % Place the original matrix in the center
-    % sT02(2:end-1, 2:end-1) = sT0;
-    % 
-    % % Add the vector to the edges
-    % sT02(1, 2:end-1) = Ta2D(1,:);   
-    % sT02(2:end-1, 1) = Ta2D(:,1);  
-    % sT02(end, 2:end-1) = Ta2D(end,:);  
-    % sT02(2:end-1, end) = Ta2D(:,end);   
-    % 
-    % % Compute corner values as averages
-    % sT02(1,1) = Ta2D(1,1);  
-    % sT02(1,end) = Ta2D(1,end);
-    % sT02(end,1) = Ta2D(end,1);
-    % sT02(end,end) = Ta2D(end,end);
-
-    %----------------------------------------
-    % Calc
-    %----------------------------------------
-    % [dT0dx2, dT0dy2] = gradient(sT02, dx, dy);
-    % [dT0dx, dT0dy] = gradient(sT0, dx, dy);
-
-    % %----------------------------------------
-    % % Limit
-    % %----------------------------------------
-    % dT0dx = dT0dx2(2:end-1,2:end-1);
-    % dT0dy = dT0dy2(2:end-1,2:end-1);
-
     %===================================================
     % Init Values
     %===================================================
-    % g0 = T0 * rPhi;
     g0 = zeros(K,1);
 
     %===================================================
     % Source Terms
     %===================================================
-    % ratio = length(alpha) / ((length(x)-2) * (length(y)-2) + (length(y)-1) + (length(x)-1) + 1);
-    % q = alpha(1) / k(1) * rPhi' * Q' * dx *dy / ratio;
-
     %----------------------------------------
     % Heat Generation
     %----------------------------------------
     for i = 1:Nt
         for ii = 1:K
-            % Solution using Trapz
-            if deg == -1
-                q(ii, i) = trapz(dx, trapz(dy, sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii)), 1), 2);
-
-            % Solution using Stencil Int
-            else
-                temp = sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii));
-                q(ii, i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
-            end
-            
             sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
             sQ_i = interp2(Xinit, Yinit, squeeze(sQ(i, :, :)), Xq, Yq, 'linear');
-
-            q2(ii, i) = sum(sum(Jgrid .* W .* sAlpha ./ sK .* sQ_i .* sPhi_ii));
+            q(ii, i) = sum(sum(Jgrid .* W .* sAlpha ./ sK .* sQ_i .* sPhi_ii));
         end
     end
-    q = q2;
-
-    % %----------------------------------------
-    % % Interior contributions
-    % %----------------------------------------
-    % for i = 1:K
-    %     % Interior
-    %     if deg == -1
-    %         c(i) = trapz(dx, trapz(dy, sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy), 1), 2);
-    %     else
-    %         temp = sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy);
-    %         c(i) = intStencil(length(x), length(y), dx, dy, temp, deg) * dx * dy;
-    %     end
-    % 
-    %     % % Convection
-    %     % qBC(i) = qBC(i) +  sum(hc2D(:,1) .* sPhi(:,1,i) .* Ta2D(:,1) * dy);
-    % 
-    %     % Boundary contributions in Y-direction
-    %     tempY = trapz(dy, sAlpha .* sPhi(:, :, i) .* dT0dx, 1);
-    %     cy(i) = sum(tempY([1, end]));
-    %     % cy(i) = trapz(dy, tempY([1, end]));
-    % 
-    %     % Boundary contributions in X-direction
-    %     tempX = trapz(dx, sAlpha .* sPhi(:, :, i) .* dT0dy, 2);
-    %     cx(i) = sum(tempX([1, end]));
-    %     % cx(i) = trapz(dx, tempX([1, end]));
-    % 
-    %     % % Boundary
-    %     % BC_q1 = sAlpha ./ sK .* hc2D .* sPhi(:,:,i) .* Ta2D;
-    %     % BC_q2 = -sAlpha ./ sK .* fl2D .* sPhi(:,:,i); 
-    %     % qBC(i) = trapz(dx, trapz(dy, (BC_q1 .* dS + BC_q2 .* dS), 1), 2);
-    %     % c(i) = c(i) - qBC(i);
-    % end
-    % c = c - (cx + cy) + qBC;
-    % % c = 0;
-    % % c = c/dx/dy;
 
     %----------------------------------------
     % Source Term

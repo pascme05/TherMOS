@@ -153,8 +153,8 @@ function mdl = poFit3(data, ~, para)
     % W = ones(size(W));
 
     Jgrid = jacobian2D(xInp, yInp, xq_1d, yq_1d, 0.10);
-    Jgrid = ones(size(Jgrid));
-    
+    % Jgrid = ones(size(Jgrid));
+
     %===================================================
     % Boundary Conditions
     %===================================================
@@ -168,9 +168,9 @@ function mdl = poFit3(data, ~, para)
     %----------------------------------------
     % Integration 2D
     %----------------------------------------
-    % alpha2D = interp2(Xinit, Yinit, alpha2D, Xq, Yq, 'linear');
-    % k2D     = interp2(Xinit, Yinit, k2D, Xq, Yq, 'linear');
-
+    alpha2D_i = interp2(Xinit, Yinit, alpha2D, Xq, Yq, 'linear');
+    k2D_i = interp2(Xinit, Yinit, k2D, Xq, Yq, 'linear');
+    
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -312,7 +312,6 @@ function mdl = poFit3(data, ~, para)
     % Init
     q = zeros(K, Nt);
     g0 = T(1,:) * rPhi;
-    tlist = linspace(0, Nt*Ts-Ts, Nt)';
     alpha_opt= ones(K,1);
 
     % Project Heat Losses
@@ -320,7 +319,8 @@ function mdl = poFit3(data, ~, para)
         for ii = 1:K
             sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
             sQ_i = interp2(Xinit, Yinit, squeeze(sQ(i, :, :)), Xq, Yq, 'linear');
-            q(ii, i) = sum(sum(Jgrid .* W .* alpha2D ./ k2D .* sQ_i .* sPhi_ii));
+            q(ii, i) = sum(sum(Jgrid .* W .* alpha2D_i ./ k2D_i .* sQ_i .* sPhi_ii));
+            % q(ii, i) = sum(sum(Jgrid .* W .* alpha2D ./ k2D .* sQ_i .* sPhi_ii));
         end
     end
 
@@ -328,8 +328,6 @@ function mdl = poFit3(data, ~, para)
     scale = sqrt(lam(1:K));
     [Cth, Gth, q_est] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
     [alpha_opt, q_adj, residual] = optCthGth2((theta-g0)', q, Ts, Cth, Gth, scale);
-    % [alpha_opt2, u_sim] = optCthGth3(Cth, Gth, rPhi, T, theta', q, tlist);
-    % [C_opt, G_opt] = optCthGth2((theta-g0)', q, Ts, Cth, Gth);
 
     % % ----------------------------------------------------
     % % Reconstruct

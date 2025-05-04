@@ -150,10 +150,11 @@ function mdl = poFit3(data, ~, para)
     [Xq, Yq] = meshgrid(xq_1d, yq_1d);   % Ny×Nx
     [Xinit, Yinit] = meshgrid(x, y); 
     W = wq_y(:) * wq_x(:)';
+    % W = ones(size(W));
 
-    Jgrid = jacobian2D(xInp, yInp, xq_1d, yq_1d);
+    Jgrid = jacobian2D(xInp, yInp, xq_1d, yq_1d, 0.10);
     % Jgrid = ones(size(Jgrid));
-    
+
     %===================================================
     % Boundary Conditions
     %===================================================
@@ -167,9 +168,9 @@ function mdl = poFit3(data, ~, para)
     %----------------------------------------
     % Integration 2D
     %----------------------------------------
-    alpha2D = interp2(Xinit, Yinit, alpha2D, Xq, Yq, 'linear');
-    k2D     = interp2(Xinit, Yinit, k2D, Xq, Yq, 'linear');
-
+    alpha2D_i = conv2(alpha2D, ones(3)/9, 'same');
+    alpha2D_i = interp2(Xinit, Yinit, alpha2D, Xq, Yq, 'linear');
+    k2D_i = interp2(Xinit, Yinit, k2D, Xq, Yq, 'linear');
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -283,12 +284,12 @@ function mdl = poFit3(data, ~, para)
                 % Boundary Terms for Neumann conditions
                 tempX2 = alpha2D .* Jgrid .* sPhi_ii .* dPhidx_i;
                 tempY2 = alpha2D .* Jgrid .* sPhi_ii .* dPhidy_i;
-                % Gx(i, ii) = sum(wq_y .* tempX2(:,1)) + sum(wq_y .* tempX2(:,end)); 
-                % Gy(i, ii) = sum(wq_x' .* tempY2(1,:)) + sum(wq_x' .* tempY2(end,:)); 
-                wq_y_resized = repmat(wq_y(:), [length(, length(tempX2(:))/length(wq_y(:))]);
-                wq_x_resized = repmat(wq_y(:), [K, Nx]);
-                Gx(i, ii) = sum(wq_y_resized(:) .* tempX2(:)); 
-                Gy(i, ii) = sum(wq_x_resized(:)' .* tempY2(:));
+                Gx(i, ii) = sum(wq_y .* tempX2(:,1)) + sum(wq_y .* tempX2(:,end)); 
+                Gy(i, ii) = sum(wq_x' .* tempY2(1,:)) + sum(wq_x' .* tempY2(end,:)); 
+                % wq_y_resized = repmat(wq_y(:), [length(tempX2(:))/length(wq_y(:)), 1]);
+                % wq_x_resized = repmat(wq_x(:), [length(tempY2(:))/length(wq_x(:)), 1]);
+                % Gx(i, ii) = sum(wq_y_resized(:) .* tempX2(:)); 
+                % Gy(i, ii) = sum(wq_x_resized(:) .* tempY2(:));
 
                 % % Symmetry
                 % Gth(i, ii) = Gth(ii, i);                  
@@ -311,7 +312,6 @@ function mdl = poFit3(data, ~, para)
     % Init
     q = zeros(K, Nt);
     g0 = T(1,:) * rPhi;
-    tlist = linspace(0, Nt*Ts-Ts, Nt)';
     alpha_opt= ones(K,1);
 
     % Project Heat Losses
@@ -319,16 +319,15 @@ function mdl = poFit3(data, ~, para)
         for ii = 1:K
             sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
             sQ_i = interp2(Xinit, Yinit, squeeze(sQ(i, :, :)), Xq, Yq, 'linear');
-            q(ii, i) = sum(sum(Jgrid .* W .* alpha2D ./ k2D .* sQ_i .* sPhi_ii));
+            q(ii, i) = sum(sum(Jgrid .* W .* alpha2D_i ./ k2D_i .* sQ_i .* sPhi_ii));
+            % q(ii, i) = sum(sum(Jgrid .* W .* alpha2D ./ k2D .* sQ_i .* sPhi_ii));
         end
     end
 
     % Optimize
     scale = sqrt(lam(1:K));
-    % [Cth, Gth, q_est] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
-    % [alpha_opt, q_adj, residual] = optCthGth2((theta-g0)', q, Ts, Cth, Gth, scale);
-    % [alpha_opt2, u_sim] = optCthGth3(Cth, Gth, rPhi, T, theta', q, tlist);
-    % [C_opt, G_opt] = optCthGth2((theta-g0)', q, Ts, Cth, Gth);
+    [Cth, Gth, q_est] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
+    [alpha_opt, q_adj, residual] = optCthGth2((theta-g0)', q, Ts, Cth, Gth, scale);
 
     % % ----------------------------------------------------
     % % Reconstruct

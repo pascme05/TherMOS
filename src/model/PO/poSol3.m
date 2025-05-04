@@ -135,8 +135,8 @@ function out = poSol3(mdl, data, ~)
     %----------------------------------------
     % Integration 2D
     %----------------------------------------
-    % sAlpha = interp2(Xinit, Yinit, sAlpha, Xq, Yq, 'linear');
-    % sK     = interp2(Xinit, Yinit, sK, Xq, Yq, 'linear');
+    alpha2D_i = interp2(Xinit, Yinit, sAlpha, Xq, Yq, 'linear');
+    k2D_i = interp2(Xinit, Yinit, sK, Xq, Yq, 'linear');
 
     %----------------------------------------
     % Heat Generation
@@ -158,7 +158,8 @@ function out = poSol3(mdl, data, ~)
         for ii = 1:K
             sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
             sQ_i = interp2(Xinit, Yinit, squeeze(sQ(i, :, :)), Xq, Yq, 'linear');
-            q(ii, i) = sum(sum(Jgrid .* W .* sAlpha ./ sK .* sQ_i .* sPhi_ii));
+            % q(ii, i) = sum(sum(Jgrid .* W .* sAlpha ./ sK .* sQ_i .* sPhi_ii));
+            q(ii, i) = sum(sum(Jgrid .* W .* alpha2D_i ./ k2D_i .* sQ_i .* sPhi_ii));
         end
     end
 
@@ -227,7 +228,6 @@ function out = poSol3(mdl, data, ~)
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     T_est = theta_hat * rPhi' + T0.*ones(Nt,N);
-    err = mean(abs(T_est - T),"all")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
