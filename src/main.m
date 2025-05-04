@@ -323,9 +323,7 @@ function [] = main(setup, path)
     % Calc
     %----------------------------------------
     if para.Dat.gen.dOut == 2
-        [~, ~, data.tr] = calcGrad(data.tr);
         [~, ~, data.te] = calcGrad(data.te);
-        [~, ~, data.vl] = calcGrad(data.vl);
         [~, ~, data.pr] = calcGrad(data.pr);
     else
         disp("INFO: 1D data no field calculation")

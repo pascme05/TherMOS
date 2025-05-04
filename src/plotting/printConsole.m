@@ -50,7 +50,7 @@ function [] = printConsole(data, results, setup, mdl, para)
         selY = para.Dat.gen.inpY;                                           % y-position for 1D temporal plots
         xInp = data.tr.Data.geo(:,1);                                       % sampled input values x (m)
         yInp = data.tr.Data.geo(:,2);                                       % sampled input values y (m)
-        [minVal, minId] = min(abs(xInp-selX-min(xInp)) + abs(yInp-selY-min(yInp)));
+        [~, minId] = min(abs(xInp-selX-min(xInp)) + abs(yInp-selY-min(yInp)));
     else
         nY = length(results.err.tot.MAE);
         minId = linspace(1, length(nY), length(nY));
@@ -157,7 +157,7 @@ function [] = printConsole(data, results, setup, mdl, para)
     % Training and Testing Times
     %===================================================
     fprintf('INFO: Training time (sec): %5.2f \n', mdl.timeTrain);
-    fprintf('INFO: Inference time (us/sample): %5.2f \n', data.pr.testTime*1e6/Nt);
+    fprintf('INFO: Inference time (ms/sample): %5.2f \n', data.pr.testTime*1e3/Nt);
 
     %===================================================
     % Memory Requirements

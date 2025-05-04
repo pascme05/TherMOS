@@ -146,7 +146,7 @@ setup.datSep = 1;                                                           % in
 %----------------------------------------
 % File based
 setup.trFile = ["exp11"];                                                   % list of training files (strings) at least one
-setup.teFile = "exp22";                                                     % testing file (string) exactly one
+setup.teFile = "exp11";                                                     % testing file (string) exactly one
 setup.vlFile = ["exp11"];                                                   % list of validation files (strings) at least one
 
 % Sheet based

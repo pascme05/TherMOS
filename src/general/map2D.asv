@@ -1,0 +1,172 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
+% Topic: Power Electronics, Model Order Reduction                         %
+% File: map2D                                                             %
+% Date: 13.08.2024                                                        %
+% Author: Dr. Pascal A. Schirmer                                          %
+% Version: V.0.1                                                          %
+% Copyright: Pascal Schirmer                                              %
+% Comments:                                                               %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Description
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% This function maps a snapshot quantity to a 2D field variable
+% -------------------------------------------------------------------------
+% Inp:  1) Tin:         Input snapshot matrix NtxN
+%       2) xInp/yInp:   Spatial input variables
+%       3) xOut/yOut:   Spatial output variables
+%       4) Inter:       Interpolation method 1) nearest, 2) linear
+% Out:  1) Tout:        Output 2D temperature field 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Function
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Init
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Parameters
+    %===================================================
+    [Nt, ~] = size(Tin);                                                    % number of samples Nt and spatial points N
+    x_min = min(xInp);
+    x_max = max(xInp);
+    y_min = min(yInp);
+    y_max = max(yInp);
+    Nx = length(xOut);
+    Ny = length(yOut);
+    Tout = zeros(Ny, Nx, Nt);                                               % More memory-efficient ordering
+
+    %===================================================
+    % Variables
+    %===================================================
+    x_grid = linspace(x_min, x_max, Nx);
+    y_grid = linspace(y_min, y_max, Ny);
+    
+    %===================================================
+    % Interpolation
+    %===================================================
+    if inter == 1
+        method = 'nearest';
+    elseif inter == 2
+        method = 'linear';
+    elseif inter == 3
+        method = 'natural';
+    else
+        method = 'nearest';
+    end
+    method = 'natural';
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Calculation
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Create the new target grid
+    %===================================================
+    [Xq, Yq] = meshgrid(x_grid, y_grid);
+    
+    %===================================================
+    % Get Determinant
+    %===================================================
+    % Geometry interpolants
+    Fx = scatteredInterpolant(xInp(:), yInp(:), xInp(:), 'linear', 'nearest');
+    Fy = scatteredInterpolant(xInp(:), yInp(:), yInp(:), 'linear', 'nearest');
+
+    X_geo = Fx(Xq, Yq);
+    Y_geo = Fy(Xq, Yq);
+
+    % Numerical gradient for Jacobian determinant
+    [dX_dxi, dX_deta] = gradient(X_geo);
+    [dY_dxi, dY_deta] = gradient(Y_geo);
+    J_det = abs(dX_dxi .* dY_deta - dX_deta .* dY_dxi);
+    
+    [area, tri, xm, ym] = getTriangleInfo(xInp, yInp);
+
+    %===================================================
+    % Interpolation
+    %===================================================
+    %----------------------------------------
+    % Create interpolant once
+    %----------------------------------------
+    F = scatteredInterpolant(xInp, yInp, Tin(1,:)', method, 'nearest');
+    
+    %----------------------------------------
+    % Process each time step
+    %----------------------------------------
+    for i = 1:Nt
+        F.Values = Tin(i,:)';
+        Tout(:,:,i) = F(Xq, Yq);
+    end
+    
+    % % Process in parallel
+    % parfor i = 1:Nt
+    %     F_local = F;                    
+    %     F_local.Values = Tin(i,:)';
+    %     Tout(:,:,i) = F_local(Xq, Yq);
+    % end
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Output
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    Tout = permute(Tout, [3 1 2]);
+end
+
+function [area, tri, xm, ym] = getTriangleInfo(xInp, yInp)
+    % Create triangulation
+    dt = delaunayTriangulation(xInp(:), yInp(:));
+    tri = dt.ConnectivityList;   % (nTri x 3)
+    pts = dt.Points;             % (nPts x 2)
+
+    % Get coordinates for each triangle vertex
+    x1 = pts(tri(:,1), 1); y1 = pts(tri(:,1), 2);
+    x2 = pts(tri(:,2), 1); y2 = pts(tri(:,2), 2);
+    x3 = pts(tri(:,3), 1); y3 = pts(tri(:,3), 2);
+
+    % Compute Jacobian determinant (2x triangle area)
+    detJ = (x2 - x1) .* (y3 - y1) - (x3 - x1) .* (y2 - y1);
+    area = 0.5 * abs(detJ);  % Scalar area per triangle
+
+    % Return triangle centroids (for midpoint rule)
+    xm = (x1 + x2 + x3) / 3;
+    ym = (y1 + y2 + y3) / 3;
+end
+
+function integral = integrate_over_triangulation(Tin, xInp, yInp)
+    dt = delaunayTriangulation(xInp(:), yInp(:));
+    tri = dt.ConnectivityList;
+    pts = dt.Points;
+    numElems = size(tri, 1);
+    integral = 0;
+
+    % Midpoint quadrature over each triangle
+    for e = 1:numElems
+        nodes = tri(e, :);
+        x = pts(nodes, 1);
+        y = pts(nodes, 2);
+
+        % Compute triangle area
+        J = [x(2)-x(1), x(3)-x(1); y(2)-y(1), y(3)-y(1)];
+        detJ = abs(det(J));
+        area = 0.5 * detJ;
+
+        % Midpoint (simple quadrature)
+        xm = mean(x);
+        ym = mean(y);
+
+        % Interpolate data at midpoint
+        F = scatteredInterpolant(xInp, yInp, Tin', 'natural', 'nearest');
+        f_val = F(xm, ym);
+
+        % Add contribution
+        integral = integral + area * f_val;
+    end
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% References
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% [1] REF-1

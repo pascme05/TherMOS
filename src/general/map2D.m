@@ -39,7 +39,7 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
     y_max = max(yInp);
     Nx = length(xOut);
     Ny = length(yOut);
-    Tout = zeros(Nt, Ny, Nx);
+    Tout = zeros(Ny, Nx, Nt);                                               % More memory-efficient ordering
 
     %===================================================
     % Variables
@@ -54,9 +54,12 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
         method = 'nearest';
     elseif inter == 2
         method = 'linear';
+    elseif inter == 3
+        method = 'natural';
     else
         method = 'nearest';
     end
+    method = 'linear';
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -69,18 +72,30 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
     %===================================================
     % Interpolation
     %===================================================
-    % for i = 1:Nt
-    %     Tout(i,:,:) = griddata(xInp, yInp, Tin(i,:), Xq, Yq, method);
-    % end
+    %----------------------------------------
+    % Create interpolant once
+    %----------------------------------------
+    F = scatteredInterpolant(xInp, yInp, Tin(1,:)', method, 'nearest');
+    
+    %----------------------------------------
+    % Process each time step
+    %----------------------------------------
     for i = 1:Nt
-        F = scatteredInterpolant(xInp, yInp, Tin(i,:)', method, 'nearest');
-        Tout(i,:,:) = F(Xq, Yq);
+        F.Values = Tin(i,:)';
+        Tout(:,:,i) = F(Xq, Yq);
     end
+    
+    % % Process in parallel
+    % parfor i = 1:Nt
+    %     F_local = F;                    
+    %     F_local.Values = Tin(i,:)';
+    %     Tout(:,:,i) = F_local(Xq, Yq);
+    % end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    Tout = squeeze(Tout);
+    Tout = permute(Tout, [3 1 2]);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

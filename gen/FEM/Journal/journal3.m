@@ -24,19 +24,19 @@ clc
 % Dimension 
 %---------------------------------------------------
 % General
-M = 100;                                                                     % Number of X points
-N = 106;                                                                     % Number of Y points
+M = 51;                                                                    % Number of X points
+N = 67;                                                                    % Number of Y points
 l = 50e-3;                                                                  % x length (m)
-b = 2650e-6;                                                                % width (m)
+b = 1650e-6;                                                                % width (m)
 h = 50e-6;                                                                  % y length (m)
-dx = 50e-6;                                                                 % internal FEM resolution (m)
+dx = 25e-6;                                                                 % internal FEM resolution (m)
 Vol = 8*l*b*h;                                                              % Volume (m³)
 
 % Board
 b_Cu = 100e-6;
 b_Di = 50e-6;
-b_Al = 1.5e-3;
-b_Ga = 1.0e-3;
+b_Al = 1.0e-3;
+b_Ga = 0.5e-3;
 
 % Switch
 l_Sw = 8e-3;
@@ -48,32 +48,32 @@ A_sw = l_Sw*b_Cu;
 %---------------------------------------------------
 % Material 
 %---------------------------------------------------
-matK = [400, 2, 90, 4];                                                          % Thermal conductivity (W/mK)
-matRho = [8933, 2200, 2680, 3300];                                                      % Material density (kg/m3)
-matCp = [380, 800, 1000, 1500];                                                         % Specific heat capacity (J/kgK)
+matK = [400, 2, 90, 4];                                                     % Thermal conductivity (W/mK)
+matRho = [8933, 2200, 2680, 3300];                                          % Material density (kg/m3)
+matCp = [380, 800, 1000, 1500];                                             % Specific heat capacity (J/kgK)
 
 %---------------------------------------------------
 % losses 
 %---------------------------------------------------
 Pv = 20;                                                                    % Power losses per switch (W)
-q = Pv/A_sw;                                                                   % Volumetric heat generation (W/m3)
+q = Pv/A_sw/h_Sw/4;                                                         % Volumetric heat generation (W/m3)
 
 %---------------------------------------------------
 % Load Case 
 %---------------------------------------------------
 Ta = 55;                                                                    % ambient temperature (degC)
-fl = 20000;                                                                  % heat flux boundary (W/m2)
+fl = 2000;                                                                  % heat flux boundary (W/m2)
 hc = 1000;                                                                  % heat transfer coefficient (W/m2K)
 Tinit = 55;                                                                 % Initial temperature (degC)
-Tend = 100;                                                                 % end value time (sec)
-dt = 1;                                                                     % sampling time (sec)
+Tend = 50;                                                                 % end value time (sec)
+dt = 0.2;                                                                     % sampling time (sec)
 tlist = 0:dt:Tend-dt;                                                       % time vector (sec)
 
 %---------------------------------------------------
 % Settings
 %---------------------------------------------------
 plotting = 1;
-saving = 0;
+saving = 1;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Define Geometry
@@ -81,6 +81,7 @@ saving = 0;
 %---------------------------------------------------
 % Outline 
 %---------------------------------------------------
+% PCB
 R4 = [3,4,0,l,l,0,0,0,b_Ga,b_Ga]'; % Gapfiller
 R3 = [3,4,0,l,l,0,b_Ga,b_Ga,b_Ga+b_Al,b_Ga+b_Al]'; % Aluminium Core
 R2 = [3,4,0,l,l,0,b_Ga+b_Al,b_Ga+b_Al,b_Ga+b_Al+b_Di,b_Ga+b_Al+b_Di]'; % Dielectrica
@@ -96,11 +97,6 @@ R_Cu2 = [3, 4, 15e-3,  23e-3,  23e-3,  15e-3, z_bot, z_bot, z_top, z_top]';
 R_Cu3 = [3, 4, 23e-3,  27e-3,  27e-3,  23e-3, z_bot, z_bot, z_top, z_top]';
 R_Cu4 = [3, 4, 27e-3,  35e-3,  35e-3,  27e-3, z_bot, z_bot, z_top, z_top]';
 R_Cu5 = [3, 4, 35e-3,  50e-3,  50e-3,  35e-3, z_bot, z_bot, z_top, z_top]';
-
-% R4 = [3,4,0,l,l,0,0,0,b_Cu,b_Cu]'; % Copper Trace
-% R3 = [3,4,0,l,l,0,b_Cu,b_Cu,b_Cu+b_Di,b_Cu+b_Di]'; % Dielectrica
-% R2 = [3,4,0,l,l,0,b_Cu+b_Di,b_Cu+b_Di,b_Cu+b_Di+b_Al,b_Cu+b_Di+b_Al]'; % Aluminium Core
-% R1 = [3,4,0,l,l,0,b_Cu+b_Di+b_Al,b_Cu+b_Di+b_Al,b_Cu+b_Di+b_Al+b_Ga,b_Cu+b_Di+b_Al+b_Ga]'; % Gapfiller
 
 %---------------------------------------------------
 % Combine the regions into a single geometry
@@ -128,13 +124,13 @@ pdegplot(thermalmodel,"EdgeLabels","on","FaceAlpha",0.5,"FaceLabels","on")
 thermalProperties(thermalmodel,"ThermalConductivity",matK(1),'Face',[1,2,3,4,5], ...
                                "MassDensity",matRho(1), ...
                                "SpecificHeat",matCp(1));
-thermalProperties(thermalmodel,"ThermalConductivity",matK(2),'Face',[6], ...
+thermalProperties(thermalmodel,"ThermalConductivity",matK(2),'Face',6, ...
                                "MassDensity",matRho(2), ...
                                "SpecificHeat",matCp(2));
-thermalProperties(thermalmodel,"ThermalConductivity",matK(3),'Face',[7], ...
+thermalProperties(thermalmodel,"ThermalConductivity",matK(3),'Face',7, ...
                                "MassDensity",matRho(3), ...
                                "SpecificHeat",matCp(3));
-thermalProperties(thermalmodel,"ThermalConductivity",matK(4),'Face',[8], ...
+thermalProperties(thermalmodel,"ThermalConductivity",matK(4),'Face',8, ...
                                "MassDensity",matRho(4), ...
                                "SpecificHeat",matCp(4));
 
@@ -148,19 +144,19 @@ thermalIC(thermalmodel,Tinit);
 % Boundary Conditions 
 %---------------------------------------------------
 % % Temperature
-% thermalBC(thermalmodel,"Edge",[1],'Temperature',Ta);
+% thermalBC(thermalmodel,"Edge",1,'Temperature',Ta);
 
 % Convection
-thermalBC(thermalmodel,"Edge",[1],'ConvectionCoefficient',h, ...
+thermalBC(thermalmodel,"Edge",1,'ConvectionCoefficient',hc, ...
                                 'AmbientTemperature',Ta);
 
-% Heat Flux
-thermalBC(thermalmodel,"Edge",[6, 8],'HeatFlux',fl);
+% % Heat Flux
+% thermalBC(thermalmodel,"Edge",[6, 8],'HeatFlux',fl);
 
 %---------------------------------------------------
 % Heat Sources
 %---------------------------------------------------
-% internalHeatSource(thermalmodel,q,'Face',[1,3]);
+internalHeatSource(thermalmodel,q,'Face',[1,3]);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Solve Model
@@ -195,7 +191,7 @@ for i = 1:size(T,1)
     if results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 15e-3 && results.Mesh.Nodes(1,i) <= 23e-3
         Q(i,:) = q;
     elseif results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 27e-3 && results.Mesh.Nodes(1,i) <= 35e-3
-        % Q(i,:) = q/2;
+        Q(i,:) = q;
     else
         % Q(i,:) = q/2;
     end

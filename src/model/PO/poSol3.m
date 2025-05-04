@@ -86,6 +86,7 @@ function out = poSol3(mdl, data, ~)
     rPhi = mdl.rPhi;
     K = mdl.K;
     scale = mdl.alpha;
+    Jgrid = mdl.Jgrid;
 
     %===================================================
     % Variables
@@ -124,12 +125,18 @@ function out = poSol3(mdl, data, ~)
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
+    % Shift Coordinate System
+    %===================================================
+    xInp = xInp - min(xInp);
+    yInp = yInp - min(yInp);
+
+    %===================================================
     % Mean Centering
     %===================================================
-    Tavg = mdl.Tavg;                                                      % average temperature over time steps (°C)
+    % Tavg = mdl.Tavg;                                                      % average temperature over time steps (°C)
     % Tavg = 0;
     T0 = T(1,:);                                                     % initial temperature (°C)
-    Ta = Ta - Tavg';
+    % Ta = Ta - Tavg';
 
     %===================================================
     % 2D Reshaping
@@ -145,9 +152,9 @@ function out = poSol3(mdl, data, ~)
     %----------------------------------------
     % Boundary
     %----------------------------------------
-    hc2D = squeeze(map2D(hc', xInp, yInp, x, y, 1));
-    fl2D = squeeze(map2D(fl', xInp, yInp, x, y, 1));
-    Ta2D = squeeze(map2D(Ta', xInp, yInp, x, y, 1));
+    % hc2D = squeeze(map2D(hc', xInp, yInp, x, y, 1));
+    % fl2D = squeeze(map2D(fl', xInp, yInp, x, y, 1));
+    % Ta2D = squeeze(map2D(Ta', xInp, yInp, x, y, 1));
     
     % %----------------------------------------
     % % Sample BC
@@ -192,30 +199,30 @@ function out = poSol3(mdl, data, ~)
     %===================================================
     % Gradient
     %===================================================
-    %----------------------------------------
-    % Extend
-    %----------------------------------------
-    sT02 = zeros(length(y)+2, length(x)+2);
-
-    % Place the original matrix in the center
-    sT02(2:end-1, 2:end-1) = sT0;
-    
-    % Add the vector to the edges
-    sT02(1, 2:end-1) = Ta2D(1,:);   
-    sT02(2:end-1, 1) = Ta2D(:,1);  
-    sT02(end, 2:end-1) = Ta2D(end,:);  
-    sT02(2:end-1, end) = Ta2D(:,end);   
-    
-    % Compute corner values as averages
-    sT02(1,1) = Ta2D(1,1);  
-    sT02(1,end) = Ta2D(1,end);
-    sT02(end,1) = Ta2D(end,1);
-    sT02(end,end) = Ta2D(end,end);
+    % %----------------------------------------
+    % % Extend
+    % %----------------------------------------
+    % sT02 = zeros(length(y)+2, length(x)+2);
+    % 
+    % % Place the original matrix in the center
+    % sT02(2:end-1, 2:end-1) = sT0;
+    % 
+    % % Add the vector to the edges
+    % sT02(1, 2:end-1) = Ta2D(1,:);   
+    % sT02(2:end-1, 1) = Ta2D(:,1);  
+    % sT02(end, 2:end-1) = Ta2D(end,:);  
+    % sT02(2:end-1, end) = Ta2D(:,end);   
+    % 
+    % % Compute corner values as averages
+    % sT02(1,1) = Ta2D(1,1);  
+    % sT02(1,end) = Ta2D(1,end);
+    % sT02(end,1) = Ta2D(end,1);
+    % sT02(end,end) = Ta2D(end,end);
 
     %----------------------------------------
     % Calc
     %----------------------------------------
-    [dT0dx2, dT0dy2] = gradient(sT02, dx, dy);
+    % [dT0dx2, dT0dy2] = gradient(sT02, dx, dy);
     [dT0dx, dT0dy] = gradient(sT0, dx, dy);
 
     % %----------------------------------------
@@ -254,7 +261,7 @@ function out = poSol3(mdl, data, ~)
             sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
             sQ_i = interp2(Xinit, Yinit, squeeze(sQ(i, :, :)), Xq, Yq, 'linear');
 
-            q2(ii, i) = sum(sum(W .* sAlpha ./ sK .* sQ_i .* sPhi_ii));
+            q2(ii, i) = sum(sum(Jgrid .* W .* sAlpha ./ sK .* sQ_i .* sPhi_ii));
         end
     end
     q = q2;
