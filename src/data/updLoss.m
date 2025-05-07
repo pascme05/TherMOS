@@ -3,7 +3,7 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: updLoss                                                           %
-% Date: 18.12.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -48,10 +48,6 @@ function [data, para] = updLoss(data, para)
     eps = para.Par.gen.eps;                                                 % lower numerical bound
     [~, N_tr] = size(data.tr.X2);                                           % number of training datasets used for fitting
     [~, N_vl] = size(data.vl.X2);                                           % number of validation datasets used for fitting
-
-    %===================================================
-    % Variables
-    %===================================================
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing

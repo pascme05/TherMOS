@@ -3,7 +3,7 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: concatData                                                        %
-% Date: 18.12.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -37,7 +37,6 @@ function out = concatData(data, setup, para)
     % Parameters
     %===================================================
     [~, N] = size(data.y);                                                  % number of profiles in data
-    % [Nt,~] = size(data.y{1,1});                                             % number of timesteps
     Ts = data.Ts;                                                           % sampling time data (sec)
      
     %===================================================

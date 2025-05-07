@@ -3,7 +3,7 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: dimData                                                           %
-% Date: 19.12.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -31,8 +31,8 @@ function out = dimData(data, setup, para)
     Ts = data.Ts;                                                           % sampling time (sec)
     [~, N] = size(data.y2);                                                 % number of profiles in data
     dim = size(data.Data.geo,2);                                            % dimension of raw data input
-    pos = para.Dat.gen.cutVal;                                              % position for reducing from 3D -> 2D
-    ax = para.Dat.gen.cut;                                                  % axis which is being removed
+    % pos = para.Dat.gen.cutVal;                                              % position for reducing from 3D -> 2D
+    % ax = para.Dat.gen.cut;                                                  % axis which is being removed
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
@@ -48,7 +48,7 @@ function out = dimData(data, setup, para)
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Reduction 3D -> 2D
+    % Reduction 3D -> 2D (PS 07.05.2025: to be implemented)
     %===================================================
     if setup.datDim == 3 && para.Dat.gen.dOut == 2
         %----------------------------------------
@@ -174,7 +174,9 @@ function out = dimData(data, setup, para)
     % ID Data 2D 
     %===================================================
     else
+        %----------------------------------------
         % Find Minimum
+        %----------------------------------------
         if data.Dim == 2
             [~,idInp] = min(sum(abs(data.Data.geo - [para.Dat.gen.inpX, para.Dat.gen.inpY]),2));
             [~,idOut] = min(sum(abs(data.Data.geo - [para.Dat.gen.outX, para.Dat.gen.outY]),2));
@@ -182,8 +184,10 @@ function out = dimData(data, setup, para)
             [~,idInp] = min(sum(abs(data.Data.geo - [para.Dat.gen.inpX, para.Dat.gen.inpY, para.Dat.gen.inpZ]),2));
             [~,idOut] = min(sum(abs(data.Data.geo - [para.Dat.gen.outX, para.Dat.gen.outY, para.Dat.gen.outZ]),2));
         end
-
+        
+        %----------------------------------------
         % Extract Data
+        %----------------------------------------
         for i = 1:N
             if i == 1
                 out.idData = iddata(data.y2{1,i}(:,idOut),data.X2{1,i}(:,idInp),Ts);

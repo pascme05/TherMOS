@@ -3,7 +3,7 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: templateFnc                                                       %
-% Date: 19.12.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -81,6 +81,7 @@ function [q, qk, out] = calcGrad(data)
         q(i, :, :) = k .* squeeze(qk(i,:,:));
     end
 
+    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

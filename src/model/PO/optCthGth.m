@@ -1,23 +1,46 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
+% Topic: Power Electronics, Model Order Reduction                         %
+% File: optCthGth                                                         %
+% Date: 07.05.2025                                                        %
+% Author: Dr. Pascal A. Schirmer                                          %
+% Version: V.0.1                                                          %
+% Copyright: Pascal Schirmer                                              %
+% Comments: reviewed                                                      %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Description
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Here goes the description of the function.
+% -------------------------------------------------------------------------
+% Inp:  1) Input-1
+%       2) Input-2
+% Out:  1) Output-1
+%       2) Output-2
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Function
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function [C_opt, G_opt, q_est] = optCthGth(u, q, dt, C_init, G_init, lam)
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Init
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    disp("INFO: Optimizing Cth and Gth")
 
-    [K, ~] = size(u);
-
-    % Compute du/dt using finite difference
-    du_dt = diff(u, 1, 2) / dt;  % size: K x (T-1)
-    du_dt = gradient(u, dt, 2);
-    u_mid = u(:, 1:end-1);       % size: K x (T-1)
-    u_mid = u;
-    q_mid = q(:, 1:end-1);       % size: K x (T-1)
-    q_mid = q;
-
-    % Initial guess using provided estimates
-    x0 = [C_init(:); G_init(:)];
-
-    % Loss function
-    loss_fn = @(x) residual_fn(x, du_dt, u_mid, q_mid, K, lam);
-    % loss_fn = @(x) trapezoidal_residual_fn(x, u, q, dt, K);
-
-    % Optimization options
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Init
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Parameters
+    %===================================================
+    [K, ~] = size(u);                                                       % number of POD modes
+    
+    %===================================================
+    % Optimizer
+    %===================================================
     options = optimoptions('fminunc', ...
         'Display', 'iter', ...
         'MaxIterations', 1000, ...
@@ -26,24 +49,66 @@ function [C_opt, G_opt, q_est] = optCthGth(u, q, dt, C_init, G_init, lam)
         'FunctionTolerance', 1e-12, ...
         'Algorithm', 'quasi-newton');
 
-    % Run optimization
-    [x_opt, ~] = fminunc(loss_fn, x0, options);
 
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Pre-processing
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Compute du/dt using gradient
+    %===================================================
+    du_dt = gradient(u, dt, 2);
+    u_mid = u;
+    q_mid = q;
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Calculation
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Initial guess using provided estimates
+    %===================================================
+    x0 = [C_init(:); G_init(:)];
+    
+    %===================================================
+    % Loss function
+    %===================================================
+    loss_fn = @(x) residual_fn(x, du_dt, u_mid, q_mid, K, lam);
+    
+    %===================================================
+    % Run optimization
+    %===================================================
+    [x_opt, ~] = fminunc(loss_fn, x0, options);
+    
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Post-Processing
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
     % Reshape results
+    %===================================================
     C_opt = reshape(x_opt(1:K*K), K, K);
     G_opt = reshape(x_opt(K*K+1:end), K, K);
     
+    %===================================================
     % Compute estimated q using optimized parameters
+    %===================================================
     du_dt = gradient(u, dt, 2);  % K x T
     q_est = C_opt * du_dt + G_opt * u;  % K x T
+    
 
-    % Optional: show results
-    fprintf('Init Cth:\n'); disp(C_init);
-    fprintf('Optimized Cth:\n'); disp(C_opt);
-    fprintf('Init Gth:\n'); disp(G_init);
-    fprintf('Optimized Gth:\n'); disp(G_opt);
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Output
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % fprintf('Init Cth:\n'); disp(C_init);
+    % fprintf('Optimized Cth:\n'); disp(C_opt);
+    % fprintf('Init Gth:\n'); disp(G_init);
+    % fprintf('Optimized Gth:\n'); disp(G_opt);
 end
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Helper Function
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function err = residual_fn(x, du_dt, u, q, K, lam)
     % Unpack C and G
     C = reshape(x(1:K*K), K, K);
@@ -57,20 +122,7 @@ function err = residual_fn(x, du_dt, u, q, K, lam)
     err = sum((residual(:)).^2);  % sum of squared error
 end
 
-% function err = trapezoidal_residual_fn(x, u, q, dt, K)
-%     C = reshape(x(1:K*K), K, K);
-%     G = reshape(x(K*K+1:end), K, K);
-% 
-%     [~, T] = size(u);
-%     num_steps = T - 1;
-%     err = 0;
-% 
-%     for t = 1:num_steps
-%         du = (u(:, t+1) - u(:, t)) / dt;
-%         u_avg = 0.5 * (u(:, t+1) + u(:, t));
-%         q_avg = 0.5 * (q(:, t+1) + q(:, t));
-% 
-%         residual = q_avg - (C * du + G * u_avg);
-%         err = err + sum(residual.^2);  % squared norm
-%     end
-% end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% References
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% [1] REF-1

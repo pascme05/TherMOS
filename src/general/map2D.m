@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: map2D                                                             %
-% Date: 13.08.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -33,13 +33,13 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
     % Parameters
     %===================================================
     [Nt, ~] = size(Tin);                                                    % number of samples Nt and spatial points N
-    x_min = min(xInp);
-    x_max = max(xInp);
-    y_min = min(yInp);
-    y_max = max(yInp);
-    Nx = length(xOut);
-    Ny = length(yOut);
-    Tout = zeros(Ny, Nx, Nt);                                               % More memory-efficient ordering
+    x_min = min(xInp);                                                      % minimum input value x spacing (m)
+    x_max = max(xInp);                                                      % maximum input value x spacing (m)
+    y_min = min(yInp);                                                      % minimum input value y spacing (m)
+    y_max = max(yInp);                                                      % maximum input value y spacing (m)
+    Nx = length(xOut);                                                      % number of output samples x
+    Ny = length(yOut);                                                      % number of output samples y
+    Tout = zeros(Ny, Nx, Nt);                                               % Output temperature matrix
 
     %===================================================
     % Variables
@@ -84,13 +84,6 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
         F.Values = Tin(i,:)';
         Tout(:,:,i) = F(Xq, Yq);
     end
-    
-    % % Process in parallel
-    % parfor i = 1:Nt
-    %     F_local = F;                    
-    %     F_local.Values = Tin(i,:)';
-    %     Tout(:,:,i) = F_local(Xq, Yq);
-    % end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output

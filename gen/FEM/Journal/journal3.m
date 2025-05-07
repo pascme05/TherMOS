@@ -25,11 +25,11 @@ clc
 %---------------------------------------------------
 % General
 M = 51;                                                                    % Number of X points
-N = 67;                                                                    % Number of Y points
+N = 34;                                                                    % Number of Y points
 l = 50e-3;                                                                  % x length (m)
 b = 1650e-6;                                                                % width (m)
 h = 50e-6;                                                                  % y length (m)
-dx = 25e-6;                                                                 % internal FEM resolution (m)
+dx = 50e-6;                                                                 % internal FEM resolution (m)
 Vol = 8*l*b*h;                                                              % Volume (m³)
 
 % Board
@@ -66,7 +66,7 @@ fl = 2000;                                                                  % he
 hc = 1000;                                                                  % heat transfer coefficient (W/m2K)
 Tinit = 55;                                                                 % Initial temperature (degC)
 Tend = 50;                                                                 % end value time (sec)
-dt = 0.2;                                                                     % sampling time (sec)
+dt = 0.1;                                                                     % sampling time (sec)
 tlist = 0:dt:Tend-dt;                                                       % time vector (sec)
 
 %---------------------------------------------------
@@ -156,7 +156,7 @@ thermalBC(thermalmodel,"Edge",1,'ConvectionCoefficient',hc, ...
 %---------------------------------------------------
 % Heat Sources
 %---------------------------------------------------
-internalHeatSource(thermalmodel,q,'Face',[1,3]);
+internalHeatSource(thermalmodel,q,'Face',[1]);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Solve Model
@@ -191,7 +191,7 @@ for i = 1:size(T,1)
     if results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 15e-3 && results.Mesh.Nodes(1,i) <= 23e-3
         Q(i,:) = q;
     elseif results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 27e-3 && results.Mesh.Nodes(1,i) <= 35e-3
-        Q(i,:) = q;
+        Q(i,:) = 0;
     else
         % Q(i,:) = q/2;
     end

@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: main                                                              %
-% Date: 13.08.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -37,7 +37,7 @@ function [] = main(setup, path)
     disp('===================================================')
     disp('Author:             Dr. Pascal A. Schirmer')
     disp('Version:            V.0.1')
-    disp('Date:               13.08.2024')
+    disp('Date:               07.05.2024')
     disp('Copyright:          Pascal Schirmer')
     disp('===================================================')
     fprintf('Setup File:\t\t\t%s\n', setup.name);
@@ -83,7 +83,7 @@ function [] = main(setup, path)
     data = loadData(para, setup);
 
     %===================================================
-    % Sanity Check Data (tbi)
+    % Sanity Check Data (PS 07.05.2025: tbi)
     %===================================================
     % Remove NaNs and Infs
     % Calc Storage limits

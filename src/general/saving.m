@@ -3,7 +3,7 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: saving                                                            %
-% Date: 19.12.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -16,10 +16,11 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Here goes the description of the function.
 % -------------------------------------------------------------------------
-% Inp:  1) Input-1
-%       2) Input-2
-% Out:  1) Output-1
-%       2) Output-2
+% Inp:  1) data:    all data files
+%       2) setup:   all setup files
+%       3) para:    all parameter files
+%       4) path:    all paths
+% Out:  
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
@@ -33,7 +34,8 @@ function [] = saving(data, setup, para, path)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    time = datestr(datetime('now'), 'yyyy-mm-dd_HH-MM-SS');
+    % time = datestr(datetime('now'), 'yyyy-mm-dd_HH-MM-SS');
+    time = string(datetime('now','Format','yyyy-MM-dd_HH-mm-ss'));
     nameData = 'result_data_' + setup.name + '_' + time + '.mat';
     namePara = 'result_para_' + setup.name + '_' + time + '.mat';
     nameSetup = 'result_setup_' + setup.name + '_' + time + '.mat';

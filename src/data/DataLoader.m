@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: DataLoader                                                        %
-% Date: 13.08.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -64,21 +64,18 @@ classdef DataLoader
             % 1D Xlsx
             %----------------------------------------
             if obj.Type == "xlsx"
-                % Loading
                 data = loadXlsx(obj, FileName, SheetName, stat, setup);
 
             %----------------------------------------
             % 1D Mat
             %----------------------------------------
             elseif obj.Type == "mat" && obj.Dim == 1
-                % Loading
                 data = loadMat1D(obj, FileName, stat, setup);
 
             %----------------------------------------
             % 2D Mat
             %----------------------------------------
             elseif obj.Type == "mat" && obj.Dim >= 2
-                % Loading
                 data = loadMat2D(obj, FileName);
 
             %----------------------------------------

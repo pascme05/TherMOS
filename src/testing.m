@@ -3,7 +3,7 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: testing                                                           %
-% Date: 19.12.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -172,7 +172,7 @@ function [pred, grt, mdl] = testing(mdl, data, setup, para, path)
         % Fitting 
         %----------------------------------------
         timeStart = tic;
-        pred = poSol3(mdl, data.te, para);
+        pred = poSol(mdl, data.te, para);
         pred.testTime = toc(timeStart);
 
         %----------------------------------------

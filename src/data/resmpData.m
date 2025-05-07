@@ -3,7 +3,7 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: resmpData                                                         %
-% Date: 18.12.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -31,8 +31,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    Ts = para.Exp.gen.Ts;                                                   % target sampling time (sec)
-    Ts_data = data.t(2) - data.t(1);                                        % current samplin time (sec)
+    Ts = para.Exp.gen.Ts;                                                   % target sampling rate (sec)
+    Ts_data = data.t(2) - data.t(1);                                        % current sampling rate (sec)
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Data

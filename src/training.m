@@ -3,7 +3,7 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: training                                                          %
-% Date: 19.12.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -110,7 +110,7 @@ function mdl = training(data, setup, para, path)
         % Fitting 
         %----------------------------------------
         timeStart = tic;
-        mdl = poFit3(data.tr, data.vl, para);
+        mdl = poFit(data.tr, data.vl, para);
         mdl.timeTrain = toc(timeStart);
 
         %----------------------------------------
@@ -154,15 +154,21 @@ function mdl = training(data, setup, para, path)
     % Deep Learning
     %===================================================
     if setup.selDL ~= 0
+        %----------------------------------------
         % Fitting
+        %----------------------------------------
         timeStart = tic;
         mdl.sys = dlFit(data.tr, data.vl, para);
         mdl.timeTrain = toc(timeStart);
-
+        
+        %----------------------------------------
         % Model Size
+        %----------------------------------------
         mdl.size = 1;
-
+        
+        %----------------------------------------
         % Saving
+        %----------------------------------------
         mdlName = 'mdl_dl_' + setup.name + '.mat';
         filename = fullfile(path.mdl, mdlName);
         save(filename, 'mdl');

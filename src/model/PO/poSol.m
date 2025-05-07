@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: ssSol                                                             %
+% File: poSol                                                             %
 % Date: 13.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -30,7 +30,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function out = poSol(mdl, data, para)
+function out = poSol(mdl, data, ~)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -46,8 +46,8 @@ function out = poSol(mdl, data, para)
     % General
     %----------------------------------------
     [Nt, N] = size(data.y);                                                 % number of time steps (Nt) and snapshots (N)
-    eps = para.Mdl.gen.eps;                                                 % numerical lower bound
     Ts = data.Ts;                                                           % sampling time (sec)
+    is_stiff = 1;                                                           % stiff vs. non-stiff solvers
 
     %----------------------------------------
     % Data
@@ -60,18 +60,18 @@ function out = poSol(mdl, data, para)
     rho = data.Data.rho;                                                    % material density (kg/m³)
     Cp = data.Data.Cp;                                                      % specific heat capacity (J/KgK)
     alpha = k ./ (rho.*Cp);                                                 % Thermal diffusivity (m²/s)
-    
+
     %----------------------------------------
     % Model
     %----------------------------------------
     Cth = mdl.Cth;
     Gth = mdl.Gth;
-    dPhidx = mdl.dPhidx;
-    dPhidy = mdl.dPhidy;
     sPhi = mdl.sPhi;
     rPhi = mdl.rPhi;
     K = mdl.K;
-    theta = mdl.theta;
+    scale = mdl.alpha;
+    Jgrid = mdl.Jgrid;
+    W = mdl.W;
 
     %===================================================
     % Variables
@@ -85,14 +85,11 @@ function out = poSol(mdl, data, para)
     y = 0:dy:Ly;                                                            % y vector (m)
     T = data.y;                                                             % temperature snapshots NtxN (°C)
     Q = data.X;                                                             % volumetric heat generation (W/m³)
+    out = data;
     
     %----------------------------------------
     % Init
     %----------------------------------------
-    g0 = zeros(1, K);
-    c = zeros(1, K);
-    cy = zeros(1, K);
-    cx = zeros(1, K);
     q = zeros(K, Nt);
     F = zeros(K, Nt);
 
@@ -100,74 +97,69 @@ function out = poSol(mdl, data, para)
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
+    % Shift Coordinate System
+    %===================================================
+    xInp = xInp - min(xInp);
+    yInp = yInp - min(yInp);
+    
+    %===================================================
     % Mean Centering
     %===================================================
-    Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
-    T0 = T(1,:) - Tavg;                                                     % initial temperature (°C)
+    T0 = T(1,:);                                                            % initial temperature (°C)
     
+    %===================================================
+    % Numerics
+    %===================================================
+    [x_n, ~] = gauss_legendre(length(x));
+    [y_n, ~] = gauss_legendre(length(y));
+
+    % map to [x_min,x_max] and [y_min,y_max]
+    xq_1d = 0.5*(max(x)-min(x))*x_n + 0.5*(max(x)-min(x));
+    yq_1d = 0.5*(max(y)-min(y))*y_n + 0.5*(max(y)-min(y));
+    
+    % form 2D arrays of points & weights
+    [Xq, Yq] = meshgrid(xq_1d, yq_1d);   % Ny×Nx
+    [Xinit, Yinit] = meshgrid(x, y); 
+
     %===================================================
     % 2D Reshaping
     %===================================================
     %----------------------------------------
     % Material Properties
     %----------------------------------------
-    sAlpha = map2D(alpha', xInp, yInp, x, y);
+    sAlpha = map2D(alpha', xInp, yInp, x, y, 1);
     sAlpha = reshape(sAlpha, [length(y), length(x)]);
-    sK = map2D(k', xInp, yInp, x, y);
+    sK = map2D(k', xInp, yInp, x, y, 1);
     sK= reshape(sK, [length(y), length(x)]);
-    
+
+    %----------------------------------------
+    % Integration 2D
+    %----------------------------------------
+    alpha2D_i = interp2(Xinit, Yinit, sAlpha, Xq, Yq, 'linear');
+    k2D_i = interp2(Xinit, Yinit, sK, Xq, Yq, 'linear');
+
     %----------------------------------------
     % Heat Generation
     %----------------------------------------
-    sQ = map2D(Q, xInp, yInp, x, y);
-
-    %----------------------------------------
-    % Temperatures
-    %----------------------------------------
-    sT0 = map2D(T0, xInp, yInp, x, y);
-    
-    %===================================================
-    % Gradient
-    %===================================================
-    [dT0dx, dT0dy] = gradient(sT0, dx, dy);
+    sQ = map2D(Q, xInp, yInp, x, y, 2);
 
     %===================================================
     % Init Values
     %===================================================
-    g0 = T0 * rPhi;
-    % for i = 1:K
-    %     g0(1, i) = trapz(dx, trapz(dy, sT0 .* sPhi(:, :, i), 1), 2) / ...
-    %                trapz(dx, trapz(dy, sPhi(:, :, i) .* sPhi(:, :, i), 1), 2);
-    % end
+    g0 = zeros(K,1);
 
     %===================================================
     % Source Terms
     %===================================================
     %----------------------------------------
-    % Boundary Term
-    %----------------------------------------
-    for i = 1:K
-        % Interior contributions
-        c(i) = trapz(dx, trapz(dy, sAlpha .* (dPhidx(:, :, i) .* dT0dx + dPhidy(:, :, i) .* dT0dy), 1), 2) / dx / dy;
-        
-        % Boundary contributions in Y-direction
-        tempY = sAlpha .* sPhi(:, :, i) .* dT0dx;
-        cy(i) = trapz(dy, tempY(:, end) - tempY(:, 1), 1) / dy;
-        
-        % Boundary contributions in X-direction
-        tempX = sAlpha .* sPhi(:, :, i) .* dT0dy;
-        cx(i) = trapz(dx, tempX(end, :) - tempX(1, :), 2) / dx;
-    end
-    c = c - (cx + cy);
-
-    %----------------------------------------
     % Heat Generation
     %----------------------------------------
-    % q = ((alpha ./ k .* Q')' * rPhi)';
-
     for i = 1:Nt
         for ii = 1:K
-            q(ii, i) = trapz(dx, trapz(dy, sAlpha ./ sK .* squeeze(sQ(i, :, :)) .* squeeze(sPhi(:, :, ii)), 1), 2) / dx / dy;
+            sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
+            sQ_i = interp2(Xinit, Yinit, squeeze(sQ(i, :, :)), Xq, Yq, 'linear');
+            % q(ii, i) = sum(sum(Jgrid .* W .* sAlpha ./ sK .* sQ_i .* sPhi_ii));
+            q(ii, i) = sum(sum(Jgrid .* W .* alpha2D_i ./ k2D_i .* sQ_i .* sPhi_ii));
         end
     end
 
@@ -175,8 +167,26 @@ function out = poSol(mdl, data, para)
     % Source Term
     %----------------------------------------
     for i = 1:Nt
-        F(:, i) = (q(:, i) + c');
+        F(:, i) = scale.*q(:, i); 
     end
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Pre-Processing
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Normalisation Values
+    %===================================================
+    q_scale = max(abs(F(:)));
+    tau = max(max(Cth/Gth)); 
+    % q_scale = 1;
+    % tau = 1;
+    
+    %===================================================
+    % Normalisation
+    %===================================================
+    Cth = Cth / tau;
+    Gth = Gth * tau;
+    F = F / q_scale * tau;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -185,28 +195,47 @@ function out = poSol(mdl, data, para)
     % Init
     %===================================================
     % Variables
-    tlist = linspace(0, Nt*Ts-Ts, Nt)';
+    tlist = linspace(0, Nt*Ts-Ts, Nt)' / tau / tau;
     
-    % Solver
-    odeoptions = odeset('Mass', Cth, 'JConstant', 'on', ...
-                        'RelTol', 1e-3, 'AbsTol', 1e-5, ...
-                        'Jacobian', -Gth);
-
+    % Choose solver dynamically
+    % is_stiff = max(eig(Gth/Cth)) > tau; % Example stiffness criterion
+    
     %===================================================
     % Solve
     %===================================================
-    sol = ode15s(@(t,y) odefnc2(t,y,Gth,F',tlist),tlist,g0,odeoptions);
-    theta_hat = deval(sol,tlist)';
+    % Solver options
+    if is_stiff == 1
+        odeoptions = odeset('Mass', Cth, 'JConstant', 'on', ...
+                            'RelTol', 1e-5, 'AbsTol', 1e-7, ...
+                            'Jacobian', -Gth);
+        sol = ode23s(@(t,y) odefnc2(t,y,Gth,F',tlist),tlist,g0,odeoptions);
+        theta_hat = deval(sol, tlist)';
+    else
+        odeoptions = odeset('RelTol', 1e-5, 'AbsTol', 1e-7);
+        sol = ode45(@(t, y) odefnc2(t, y, Gth/Cth, F', tlist), tlist, g0, odeoptions);
+        theta_hat = deval(sol, tlist)';
+        theta_hat = theta_hat ./ diag(Cth)';
+        % [~, theta_hat] = rk6(tlist, g0, Ts/ tau / tau, Gth/Cth, F');
+        % theta_hat = theta_hat' ./ diag(Cth)';
+    end
+    % u = rk4(Cth, Gth, F, g0, Nt, K, Ts / tau / tau);
+    % [t, y] = rk6(tlist, g0, Ts/ tau / tau, Gth/Cth, F');
+    
+    % Evaluate solution
+    theta_hat = theta_hat * q_scale;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    T_est = theta_hat * rPhi' + T0.*ones(Nt,N);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     out.y = T_est;
-    out.X = Pv;
+    out.X = Q;
+    out.theta_hat = theta_hat;
+    out.theta = (rPhi' * T')';
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
