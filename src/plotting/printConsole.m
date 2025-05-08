@@ -53,7 +53,7 @@ function [] = printConsole(data, results, setup, mdl, para)
         [~, minId] = min(abs(xInp-selX-min(xInp)) + abs(yInp-selY-min(yInp)));
     else
         nY = length(results.err.tot.MAE);
-        minId = linspace(1, length(nY), length(nY));
+        minId = linspace(1, nY, nY);
     end
 
     %===================================================

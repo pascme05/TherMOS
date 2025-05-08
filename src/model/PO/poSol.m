@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: poSol                                                             %
-% Date: 13.08.2024                                                        %
+% Date: 08.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -64,14 +64,14 @@ function out = poSol(mdl, data, ~)
     %----------------------------------------
     % Model
     %----------------------------------------
-    Cth = mdl.Cth;
-    Gth = mdl.Gth;
-    sPhi = mdl.sPhi;
-    rPhi = mdl.rPhi;
-    K = mdl.K;
-    scale = mdl.alpha;
-    Jgrid = mdl.Jgrid;
-    W = mdl.W;
+    Cth = mdl.Cth;                                                          % thermal capacitance matrix (Ws/K)
+    Gth = mdl.Gth;                                                          % thermal conductance matrix (W/K)
+    sPhi = mdl.sPhi;                                                        % spatial modes 2D
+    rPhi = mdl.rPhi;                                                        % spatial modes 1D
+    K = mdl.K;                                                              % number of modes
+    scale = mdl.alpha;                                                      % correction vector
+    Jgrid = mdl.Jgrid;                                                      % Jacobian matrix
+    W = mdl.W;                                                              % Gauss matrix
 
     %===================================================
     % Variables
@@ -90,8 +90,10 @@ function out = poSol(mdl, data, ~)
     %----------------------------------------
     % Init
     %----------------------------------------
-    q = zeros(K, Nt);
-    F = zeros(K, Nt);
+    q = zeros(K, Nt);                                                       % init heat generation (W/m³)
+    F = zeros(K, Nt);                                                       % force vector PDE
+    g0 = zeros(K,1);                                                        % Initial value PDE
+
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
@@ -99,8 +101,8 @@ function out = poSol(mdl, data, ~)
     %===================================================
     % Shift Coordinate System
     %===================================================
-    xInp = xInp - min(xInp);
-    yInp = yInp - min(yInp);
+    xInp = xInp - min(xInp);                                                % normalised coordinate system with x=0
+    yInp = yInp - min(yInp);                                                % normalised coordinate system with y=0
     
     %===================================================
     % Mean Centering
@@ -110,6 +112,10 @@ function out = poSol(mdl, data, ~)
     %===================================================
     % Numerics
     %===================================================
+    %----------------------------------------
+    % Gauss Legendre Integration
+    %----------------------------------------
+    % Transformed coordinates
     [x_n, ~] = gauss_legendre(length(x));
     [y_n, ~] = gauss_legendre(length(y));
 
@@ -118,7 +124,7 @@ function out = poSol(mdl, data, ~)
     yq_1d = 0.5*(max(y)-min(y))*y_n + 0.5*(max(y)-min(y));
     
     % form 2D arrays of points & weights
-    [Xq, Yq] = meshgrid(xq_1d, yq_1d);   % Ny×Nx
+    [Xq, Yq] = meshgrid(xq_1d, yq_1d); 
     [Xinit, Yinit] = meshgrid(x, y); 
 
     %===================================================
@@ -127,9 +133,9 @@ function out = poSol(mdl, data, ~)
     %----------------------------------------
     % Material Properties
     %----------------------------------------
-    sAlpha = map2D(alpha', xInp, yInp, x, y, 1);
+    sAlpha = map2D(alpha', xInp, yInp, x, y, 2);
     sAlpha = reshape(sAlpha, [length(y), length(x)]);
-    sK = map2D(k', xInp, yInp, x, y, 1);
+    sK = map2D(k', xInp, yInp, x, y, 2);
     sK= reshape(sK, [length(y), length(x)]);
 
     %----------------------------------------
@@ -144,11 +150,6 @@ function out = poSol(mdl, data, ~)
     sQ = map2D(Q, xInp, yInp, x, y, 2);
 
     %===================================================
-    % Init Values
-    %===================================================
-    g0 = zeros(K,1);
-
-    %===================================================
     % Source Terms
     %===================================================
     %----------------------------------------
@@ -156,9 +157,11 @@ function out = poSol(mdl, data, ~)
     %----------------------------------------
     for i = 1:Nt
         for ii = 1:K
+            % Interpolation
             sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
             sQ_i = interp2(Xinit, Yinit, squeeze(sQ(i, :, :)), Xq, Yq, 'linear');
-            % q(ii, i) = sum(sum(Jgrid .* W .* sAlpha ./ sK .* sQ_i .* sPhi_ii));
+
+            % Integration
             q(ii, i) = sum(sum(Jgrid .* W .* alpha2D_i ./ k2D_i .* sQ_i .* sPhi_ii));
         end
     end
@@ -203,25 +206,36 @@ function out = poSol(mdl, data, ~)
     %===================================================
     % Solve
     %===================================================
-    % Solver options
     if is_stiff == 1
+        %----------------------------------------
+        % Solver options
+        %----------------------------------------
         odeoptions = odeset('Mass', Cth, 'JConstant', 'on', ...
                             'RelTol', 1e-5, 'AbsTol', 1e-7, ...
                             'Jacobian', -Gth);
-        sol = ode23s(@(t,y) odefnc2(t,y,Gth,F',tlist),tlist,g0,odeoptions);
+
+        %----------------------------------------
+        % Solution
+        %----------------------------------------
+        sol = ode23s(@(t,y) podPDE(t,y,Gth,F',tlist),tlist,g0,odeoptions);
         theta_hat = deval(sol, tlist)';
     else
+        %----------------------------------------
+        % Solver options
+        %----------------------------------------
         odeoptions = odeset('RelTol', 1e-5, 'AbsTol', 1e-7);
-        sol = ode45(@(t, y) odefnc2(t, y, Gth/Cth, F', tlist), tlist, g0, odeoptions);
+        
+        %----------------------------------------
+        % Solution
+        %----------------------------------------
+        sol = ode45(@(t, y) podPDE(t, y, Gth/Cth, F', tlist), tlist, g0, odeoptions);
         theta_hat = deval(sol, tlist)';
         theta_hat = theta_hat ./ diag(Cth)';
-        % [~, theta_hat] = rk6(tlist, g0, Ts/ tau / tau, Gth/Cth, F');
-        % theta_hat = theta_hat' ./ diag(Cth)';
     end
-    % u = rk4(Cth, Gth, F, g0, Nt, K, Ts / tau / tau);
-    % [t, y] = rk6(tlist, g0, Ts/ tau / tau, Gth/Cth, F');
     
-    % Evaluate solution
+    %===================================================
+    % Scale Theta
+    %===================================================
     theta_hat = theta_hat * q_scale;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -246,6 +260,31 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%===================================================
+% POD PDE
+%===================================================
+function f = podPDE(t, u, Gth, q, qt)
+    %----------------------------------------
+    % Time Interpolation
+    %----------------------------------------
+    % Use first value if t is before qt range
+    if t < qt(1)
+        q1 = q(1); 
+
+    % Use last value if t is after qt range
+    elseif t > qt(end)
+        q1 = q(end);
+
+    % Interpolate within range
+    else
+        q1 = interp1(qt, q, t); 
+    end
+
+    %----------------------------------------
+    % PDE
+    %----------------------------------------
+    f = -Gth * u + q1';
+end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% References

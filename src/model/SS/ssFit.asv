@@ -50,11 +50,6 @@ function mdl = ssFit(data, ~, para)
     %===================================================
     % Model Parameter
     %===================================================
-    dataTrain = data.idData;                                                % Training data
-
-    %===================================================
-    % Model Parameter
-    %===================================================
     dis = para.Mdl.ss.dis;
     noise = para.Mdl.ss.noise;
     init = para.Mdl.ss.init;
@@ -75,22 +70,31 @@ function mdl = ssFit(data, ~, para)
     % Solver Options
     %===================================================
     %----------------------------------------
-    % Solver initial conditions
+    % Discretization type
     %----------------------------------------
-    if init == 1
-        opt.InitialState = 'zero';
-    else
-        opt.InitialState = 'estimate';
-    end
-
-    %----------------------------------------
-    % Stability constraint
-    %----------------------------------------
-    if sta == 2
-        opt.EnforceStability = true;
-    else
-        opt.EnforceStability = false;
-    end
+    % if dis == 1
+    %     opt.Focus = 'simulation';
+    % else
+    %     opt.Focus = 'prediction';
+    % end
+    
+    % %----------------------------------------
+    % % Solver initial conditions
+    % %----------------------------------------
+    % if init == 1
+    %     opt.InitialState = 'zero';
+    % else
+    %     opt.InitialState = 'estimate';
+    % end
+    % 
+    % %----------------------------------------
+    % % Stability constraint
+    % %----------------------------------------
+    % if sta == 2
+    %     opt.EnforceStability = true;
+    % else
+    %     opt.EnforceStability = false;
+    % end
 
     %===================================================
     % Fitting
@@ -101,19 +105,11 @@ function mdl = ssFit(data, ~, para)
     if para.Mdl.gen.opt == 1
         % Noise
         if noise == 2
-            if dis == 1
-                [sys,~] = n4sid(dataTrain, 1:Kmax,'DisturbanceModel','estimate', opt, 'Ts', Ts);
-            else
-                sys = ssest(dataTrain, 1:Kmax, 'DisturbanceModel','estimate', opt, 'Ts', Ts);
-            end
+            sys = ssest(data.idData, 1:Kmax, 'DisturbanceModel','estimate', opt, 'Ts', Ts);
         
         % No Noise
         else
-            if dis == 1
-                [sys,~] = n4sid(trainID, 1:Kmax,'DisturbanceModel','none', opt, 'Ts', Ts);
-            else
-                sys = ssest(data.idData, 1:Kmax, 'DisturbanceModel','none', opt, 'Ts', Ts);
-            end
+            sys = ssest(data.idData, 1:Kmax, 'DisturbanceModel','none', opt, 'Ts', Ts);
         end
 
     %----------------------------------------
@@ -122,19 +118,12 @@ function mdl = ssFit(data, ~, para)
     else
         % Noise
         if noise == 2
-            if dis == 1
-                [sys,~] = n4sid(dataTrain, K,'DisturbanceModel','estimate', opt, 'Ts', Ts);
-            else
-                sys = ssest(dataTrain, K, opt, 'DisturbanceModel','estimate', 'Ts', Ts);
-            end
+            sys = ssest(data.idData, K, opt, 'DisturbanceModel','estimate');
         
         % No Noise
         else
-            if dis == 1
-                [sys,~] = n4sid(dataTrain, K,'DisturbanceModel','none', opt, 'Ts', Ts);
-            else
-                sys = ssest(dataTrain, K, opt, 'DisturbanceModel','none', 'Ts', Ts);
-            end
+            sys = ssest(data.idData, K, opt, 'DisturbanceModel','none');
+            [mdl.ss,~] = n4sid(trainID,nx1_ss,'DisturbanceModel','none',setMdl_ss);
         end
     end
 
@@ -144,9 +133,9 @@ function mdl = ssFit(data, ~, para)
     %===================================================
     % Convert to continuous
     %===================================================
-    if dis == 2
-        sys = d2c(sys, 'foh');
-    end
+    % if dis == 2
+    %     sys = d2c(sys, 'foh');
+    % end
 
     %===================================================
     % Fitting

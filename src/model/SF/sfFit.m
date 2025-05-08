@@ -3,7 +3,7 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: sfFit                                                             %
-% Date: 13.08.2024                                                        %
+% Date: 08.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -19,8 +19,8 @@
 %
 %                       C*dT/dt = P(t) - G*T
 %
-% where T is the temperature vector, u is the loss vector, and C is the
-% thermal capacitance matrix 
+% where T is the temperature vector, P is the loss vector, C is the
+% thermal capacitance matrix, and G the thermal conductance matrix. 
 % -------------------------------------------------------------------------
 % Inp:  1) data:    Training input data struct
 %       2) val:     Validation input data struct
@@ -54,9 +54,9 @@ function mdl = sfFit(data, ~, para)
     %===================================================
     % Variables
     %===================================================
-    Pv = data.X;
-    T = data.y;
-    t = data.t;
+    Pv = data.X;                                                            % power losses (W)
+    T = data.y;                                                             % training temperatures (°C)
+    t = data.t;                                                             % time vector (sec)
 
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -70,7 +70,8 @@ function mdl = sfFit(data, ~, para)
     %===================================================
     % Optimisation options
     %===================================================
-    opt = optimoptions('lsqnonlin', 'Display', 'iter', 'TolFun', tol, 'MaxIter', maxIter);
+    opt = optimoptions('lsqnonlin', 'Display', 'iter', 'TolFun', tol, ...
+                       'MaxIter', maxIter);
     
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -126,14 +127,20 @@ end
 % Cost Function
 %===================================================
 function error = objective_dgl(x, t, P, T_true, M, N)
+    %----------------------------------------
     % Extract parameters from x
+    %----------------------------------------
     Cth = reshape(x(1:M*N), [M, N]);
     Gth = reshape(x(M*N+1:end), [M, N]);
-
-    % Predict temperatures using the current parameters
+    
+    %----------------------------------------
+    % Predict temperatures
+    %----------------------------------------
     T_pred = calcT(t, P, Cth, Gth);
-
-    % Compute the error (sum of squared differences)
+    
+    %----------------------------------------
+    % Compute the error
+    %----------------------------------------
     error = (T_true - T_pred).^2;
 end
 
@@ -141,11 +148,18 @@ end
 % Calc Temperature
 %===================================================
 function T_pred = calcT(t, P, Cth, Gth)
+    %----------------------------------------
+    % Init
+    %----------------------------------------
     Nt = length(t);
     dt = t(2) - t(1);
     M = size(Cth, 1);
     N = size(Cth, 2);
     T_pred = zeros(Nt, M);
+
+    %----------------------------------------
+    % Calc Prediction
+    %----------------------------------------
     for i = 1:M
         for k = 2:Nt
             for j = 1:N

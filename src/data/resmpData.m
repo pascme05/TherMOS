@@ -32,7 +32,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     Ts = para.Exp.gen.Ts;                                                   % target sampling rate (sec)
-    Ts_data = data.t(2) - data.t(1);                                        % current sampling rate (sec)
+    Ts_data = mean(diff(data.t));                                           % current sampling rate (sec)
+    Tend = data.t(end);                                                     % length (sec)
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Data
@@ -62,8 +63,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     %===================================================
     % Time Vector
     %===================================================
-    tRef = 0:Ts:outDim(1)*Ts_data - Ts_data;
-    tDat = 0:Ts_data:outDim(1)*Ts_data - Ts_data;
+    tRef = 0:Ts:Tend - Ts;
+    tDat = data.t;
     
     %===================================================
     % Init Output
@@ -100,7 +101,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     %----------------------------------------
     if (length(outDim) - 1) == 1
         for i = 1:outDim(2)
-            yOut(:,i) = interp1(tDat, data.y(:,i), tRef, intp);
+            % yOut(:,i) = interp1(tDat, data.y(:,i), tRef, intp);
+            yOut(:,i) = resample(timeseries(data.y(:,i),tDat),tRef).Data;
         end
     
     %----------------------------------------
@@ -140,7 +142,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     %----------------------------------------
     if (length(inpDim) - 1) == 1
         for i = 1:inpDim(2)
-            xOut(:,i) = interp1(tDat, data.X(:,i), tRef, intp);
+            % xOut(:,i) = interp1(tDat, data.X(:,i), tRef, intp);
+            xOut(:,i) = resample(timeseries(data.X(:,i),tDat),tRef).Data;
         end
     
     %----------------------------------------
@@ -180,7 +183,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     %----------------------------------------
     if (length(refDim) - 1) == 1
         for i = 1:refDim(2)
-            rOut(:,i) = interp1(tDat, data.r(:,i), tRef, intp);
+            % rOut(:,i) = interp1(tDat, data.r(:,i), tRef, intp);
+            rOut(:,i) = resample(timeseries(data.r(:,i),tDat),tRef).Data;
         end
     
     %----------------------------------------

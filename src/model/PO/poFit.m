@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: poFit                                                             %
-% Date: 13.08.2024                                                        %
+% Date: 08.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -44,7 +44,6 @@ function mdl = poFit(data, ~, para)
     Ts = data.Ts;                                                           % sampling time (sec)
     Kmax = para.Mdl.gen.Kmax;                                               % maximum number of modes
     Emax = para.Mdl.gen.Emax;                                               % maximum energy captured (%)
-    E = 0;                                                                  % captured energy by POD
     eps = para.Mdl.gen.eps;                                                 % numerical lower bound
     
     %----------------------------------------
@@ -76,8 +75,8 @@ function mdl = poFit(data, ~, para)
     %===================================================
     % Shift Coordinate System
     %===================================================
-    xInp = xInp - min(xInp);
-    yInp = yInp - min(yInp);
+    xInp = xInp - min(xInp);                                                % normalised coordinate system with x=0
+    yInp = yInp - min(yInp);                                                % normalised coordinate system with y=0
 
     %===================================================
     % Mean Centering
@@ -101,7 +100,8 @@ function mdl = poFit(data, ~, para)
     %----------------------------------------
     % Init
     %----------------------------------------
-    n = 1;
+    n = 1;                                                                  % initial number of modes
+    E = 0;                                                                  % captured energy by POD
 
     %----------------------------------------
     % Energy
@@ -137,6 +137,10 @@ function mdl = poFit(data, ~, para)
     %===================================================
     % Numerics
     %===================================================
+    %----------------------------------------
+    % Gauss Legendre Integration Matrix (W)
+    %----------------------------------------
+    % Transformed coordinates
     [x_n, w_x] = gauss_legendre(length(x));
     [y_n, w_y] = gauss_legendre(length(y));
 
@@ -147,11 +151,14 @@ function mdl = poFit(data, ~, para)
     wq_y  = 0.5*(max(y)-min(y))*w_y;
     
     % form 2D arrays of points & weights
-    [Xq, Yq] = meshgrid(xq_1d, yq_1d);   % Ny×Nx
+    [Xq, Yq] = meshgrid(xq_1d, yq_1d); 
     [Xinit, Yinit] = meshgrid(x, y); 
     W = wq_y(:) * wq_x(:)';
     % W = ones(size(W));
-
+    
+    %----------------------------------------
+    % Jacobian Area Mapping (J)
+    %----------------------------------------
     Jgrid = jacobian2D(xInp, yInp, xq_1d, yq_1d, 0.1);
     % Jgrid = ones(size(Jgrid));
 
@@ -161,9 +168,9 @@ function mdl = poFit(data, ~, para)
     %----------------------------------------
     % Converting 2D
     %----------------------------------------
-    alpha2D = squeeze(map2D(alpha', xInp, yInp, x, y, 1));
+    alpha2D = squeeze(map2D(alpha', xInp, yInp, x, y, 2));
     sQ = map2D(Q, xInp, yInp, x, y, 2);
-    k2D = squeeze(map2D(k', xInp, yInp, x, y, 1));
+    k2D = squeeze(map2D(k', xInp, yInp, x, y, 2));
     
     %----------------------------------------
     % Integration 2D
@@ -203,7 +210,7 @@ function mdl = poFit(data, ~, para)
     end
 
     % Reshape
-    sPhi = map2D(rPhi', xInp, yInp, x, y, 1);
+    sPhi = map2D(rPhi', xInp, yInp, x, y, 2);
     if K == 1
         sPhi = squeeze(sPhi);
     else
@@ -233,18 +240,21 @@ function mdl = poFit(data, ~, para)
     % Thermal Capacitance
     %----------------------------------------
     if K == 1
+        % Interpolation
         sPhi_i_q = interp2(Xinit, Yinit, squeeze(sPhi(:,:)), Xq, Yq, 'linear');
         sPhi_ii_q = interp2(Xinit, Yinit, squeeze(sPhi(:,:)), Xq, Yq, 'linear');
+
+        % Integration
         Cth = sum(sum(Jgrid .* W .* sPhi_ii_q .* sPhi_i_q));
     else
         for i = 1:K
             for ii = 1:K
+                % Interpolation
                 sPhi_i_q = interp2(Xinit, Yinit, squeeze(sPhi(:,:,i)), Xq, Yq, 'linear');
                 sPhi_ii_q = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
-                Cth(i, ii) = sum(sum(Jgrid .* W .* sPhi_ii_q .* sPhi_i_q));
 
-                % % Symmetry
-                % Cth(i, ii) = Cth(ii, i);   
+                % Integration
+                Cth(i, ii) = sum(sum(Jgrid .* W .* sPhi_ii_q .* sPhi_i_q)); 
             end
         end
     end
@@ -277,7 +287,6 @@ function mdl = poFit(data, ~, para)
                 dPhidy_i = interp2(Xinit, Yinit, squeeze(dPhidy(:,:,i)), Xq, Yq, 'linear');
                 dPhidy_ii = interp2(Xinit, Yinit, squeeze(dPhidy(:,:,ii)), Xq, Yq, 'linear');
 
-
                 % Boundary Free
                 Gth(i, ii) = sum(sum(Jgrid .* W .* squeeze(alpha2D .* (dPhidx_ii .* dPhidx_i + dPhidy_i .* dPhidy_ii))));
     
@@ -285,14 +294,7 @@ function mdl = poFit(data, ~, para)
                 tempX2 = alpha2D .* Jgrid .* sPhi_ii .* dPhidx_i;
                 tempY2 = alpha2D .* Jgrid .* sPhi_ii .* dPhidy_i;
                 Gx(i, ii) = sum(wq_y .* tempX2(:,1)) + sum(wq_y .* tempX2(:,end)); 
-                Gy(i, ii) = sum(wq_x' .* tempY2(1,:)) + sum(wq_x' .* tempY2(end,:)); 
-                % wq_y_resized = repmat(wq_y(:), [length(tempX2(:))/length(wq_y(:)), 1]);
-                % wq_x_resized = repmat(wq_x(:), [length(tempY2(:))/length(wq_x(:)), 1]);
-                % Gx(i, ii) = sum(wq_y_resized(:) .* tempX2(:)); 
-                % Gy(i, ii) = sum(wq_x_resized(:) .* tempY2(:));
-
-                % % Symmetry
-                % Gth(i, ii) = Gth(ii, i);                  
+                Gy(i, ii) = sum(wq_x' .* tempY2(1,:)) + sum(wq_x' .* tempY2(end,:));                  
             end
         end
     end
@@ -317,10 +319,12 @@ function mdl = poFit(data, ~, para)
     % Project Heat Losses
     for i = 1:Nt
         for ii = 1:K
+            % Interpolation
             sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
             sQ_i = interp2(Xinit, Yinit, squeeze(sQ(i, :, :)), Xq, Yq, 'linear');
+
+            % Integration
             q(ii, i) = sum(sum(Jgrid .* W .* alpha2D_i ./ k2D_i .* sQ_i .* sPhi_ii));
-            % q(ii, i) = sum(sum(Jgrid .* W .* alpha2D ./ k2D .* sQ_i .* sPhi_ii));
         end
     end
 
@@ -335,7 +339,7 @@ function mdl = poFit(data, ~, para)
     % % Init
     % temp = zeros(Nt, length(y), length(x));
     % T_hat = zeros(Nt, length(y), length(x));
-    % T2D = map2D(T, xInp, yInp, x, y, 1);
+    % T2D = map2D(T, xInp, yInp, x, y, 2);
     % 
     % % Reconstruct
     % for i = 1:K

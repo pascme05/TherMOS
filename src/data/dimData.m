@@ -30,7 +30,7 @@ function out = dimData(data, setup, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     Ts = data.Ts;                                                           % sampling time (sec)
     [~, N] = size(data.y2);                                                 % number of profiles in data
-    dim = size(data.Data.geo,2);                                            % dimension of raw data input
+    dim = data.Dim;                                                         % dimension of raw data input
     % pos = para.Dat.gen.cutVal;                                              % position for reducing from 3D -> 2D
     % ax = para.Dat.gen.cut;                                                  % axis which is being removed
 

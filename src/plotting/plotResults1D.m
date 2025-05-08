@@ -100,7 +100,7 @@ function [] = plotResults1D(data, results, setup)
     % Boxplot
     %----------------------------------------
     subplot(2,2, [1, 2]);
-    boxplot(data.tr.X, namesInp);
+    boxplot(data.tr.X, 'Labels', namesInp);
     ylabel('Input Features')
     title('Boxplot of Training Input Features')
     grid on;
