@@ -110,9 +110,9 @@ function mdl = ssFit(data, ~, para)
         % No Noise
         else
             if dis == 1
-                [sys,~] = n4sid(trainID, 1:Kmax,'DisturbanceModel','none', opt, 'Ts', Ts);
+                [sys,~] = n4sid(dataTrain, 1:Kmax,'DisturbanceModel','none', opt, 'Ts', Ts);
             else
-                sys = ssest(data.idData, 1:Kmax, 'DisturbanceModel','none', opt, 'Ts', Ts);
+                sys = ssest(dataTrain, 1:Kmax, 'DisturbanceModel','none', opt, 'Ts', Ts);
             end
         end
 

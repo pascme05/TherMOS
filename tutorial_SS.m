@@ -157,9 +157,9 @@ setup.teFile = "data_Tutorial_1D";                                          % te
 setup.vlFile = ["data_Tutorial_1D"];                                        % list of validation files (strings) at least one
 
 % Sheet based
-setup.trSheet = ["OP2"];                                             % list of training sheets (strings) at least one
-setup.teSheet = "OP2";                                                      % testing sheet (string) exactly one
-setup.vlSheet = ["OP2"];                                                    % list of validation sheets (strings) at least one
+setup.trSheet = ["OP1", "OP2"];                                             % list of training sheets (strings) at least one
+setup.teSheet = "OP3";                                                      % testing sheet (string) exactly one
+setup.vlSheet = ["OP3"];                                                    % list of validation sheets (strings) at least one
 
 % ID based
 setup.trID = [];                                                            % list of training IDs (if empty all remaining ones are used)
@@ -173,9 +173,9 @@ setup.rVl = 0.2;                                                            % pe
 %----------------------------------------
 % Inputs and Output Mapping
 %----------------------------------------
-setup.inp = ["P_Pri", "P_Sec"];                                    % list of input feature (strings)
-setup.out = ["T_Pri", "T_Sec"];                                    % list of temperature outputs (strings) 
-setup.ref = ["Tc", "Tc"];                                             % list of reference temperatures (strings)
+setup.inp = ["P_Pri", "P_Sec", "P_Cor"];                                    % list of input feature (strings)
+setup.out = ["T_Pri", "T_Sec", "T_Cor"];                                    % list of temperature outputs (strings) 
+setup.ref = ["Tc", "Tc", "Tc"];                                             % list of reference temperatures (strings)
 
 %===================================================
 % Model

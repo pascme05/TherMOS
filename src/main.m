@@ -160,6 +160,7 @@ function [] = main(setup, path)
         [data.te, ~] = normData(data.te, para, 2);
         [data.vl, ~] = normData(data.vl, para, 2);
     else
+        para.Dat.normVal.y.max = 1;
         disp("INFO: Data normalistion deactivated")
     end
     fprintf('\n');
@@ -304,6 +305,7 @@ function [] = main(setup, path)
         data.tr = offAdd(data.tr, para);
         data.te = offAdd(data.te, para);
         data.vl = offAdd(data.vl, para);
+        data.pr = offAdd(data.pr, para);
     else
         disp("INFO: Offset removal deactivated")
     end

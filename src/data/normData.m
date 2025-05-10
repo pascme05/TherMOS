@@ -99,10 +99,16 @@ function [data, para] = normData(data, para, sel)
         % Inv Norm
         if sel == 3
             data.X = data.X .* (maxX - minX) + minX;
+            for i = 1:numel(data.X2)
+                data.X2{i} = data.X2{i} .* (maxX - minX) + minX;
+            end
 
         % Norm
         else
             data.X = (data.X - minX) ./ (maxX - minX);
+            for i = 1:numel(data.X2)
+                data.X2{i} = (data.X2{i} - minX) ./ (maxX - minX);
+            end
         end
 
         % Msg
@@ -115,10 +121,16 @@ function [data, para] = normData(data, para, sel)
         % Inv Norm
         if sel == 3
             data.X = data.X .* (maxX - minX) + avgX;
+            for i = 1:numel(data.X2)
+                data.X2{i} = data.X2{i} .* (maxX - minX) + avgX;
+            end
 
         % Norm
         else
             data.X = (data.X - avgX) ./ (maxX - minX);
+            for i = 1:numel(data.X2)
+                data.X2{i} = (data.X2{i} - avgX) ./ (maxX - minX);
+            end
         end
 
         % Msg
@@ -131,10 +143,16 @@ function [data, para] = normData(data, para, sel)
         % Inv Norm
         if sel == 3
             data.X = data.X .* stdX + avgX;
+            for i = 1:numel(data.X2)
+                data.X2{i} = data.X2{i} .* stdX + avgX;
+            end
 
         % Norm
         else
             data.X = (data.X - avgX) ./ stdX;
+            for i = 1:numel(data.X2)
+                data.X2{i} = (data.X2{i} - avgX) ./ stdX;
+            end
         end
 
         % Msg
@@ -163,10 +181,20 @@ function [data, para] = normData(data, para, sel)
         % Inv Norm
         if sel == 3
             data.y = data.y .* (maxY - minY) + minY;
+            % data.r = data.r .* (maxY - minY) + minY;
+            for i = 1:numel(data.y2)
+                data.y2{i} = data.y2{i} .* (maxY - minY) + minY;
+                % data.r2{i} = data.r2{i} .* (maxY - minY) + minY;
+            end
 
         % Norm
         else
             data.y = (data.y - minY) ./ (maxY - minY);
+            % data.r = (data.r - minY) ./ (maxY - minY);
+            for i = 1:numel(data.y2)
+                data.y2{i} = (data.y2{i} - minY) ./ (maxY - minY);
+                % data.r2{i} = (data.r2{i} - minY) ./ (maxY - minY);
+            end
         end
 
         % Msg
@@ -179,10 +207,20 @@ function [data, para] = normData(data, para, sel)
         % Inv Norm
         if sel == 3
             data.y = data.y .* (maxY - minY) + avgY;
+            % data.r = data.r .* (maxY - minY) + avgY;
+            for i = 1:numel(data.y2)
+                data.y2{i} = data.y2{i} .* (maxY - minY) + avgY;
+                % data.r2{i} = data.r2{i} .* (maxY - minY) + avgY;
+            end
 
         % Norm
         else
             data.y = (data.y - avgY) ./ (maxY - minY);
+            % data.r = (data.r - avgY) ./ (maxY - minY);
+            for i = 1:numel(data.y2)
+                data.y2{i} = (data.y2{i} - minY) .* (maxY - minY) + avgY;
+                % data.r2{i} = (data.r2{i} - minY) .* (maxY - minY) + avgY;
+            end
         end
 
         % Msg
@@ -195,10 +233,20 @@ function [data, para] = normData(data, para, sel)
         % Inv Norm
         if sel == 3
             data.y = data.y .* stdY + avgY;
+            % data.r = data.r .* stdY + avgY;
+            for i = 1:numel(data.y2)
+                data.y2{i} = data.y2{i} .* stdY + avgY;
+                % data.r2{i} = data.r2{i} .* stdY + avgY;
+            end
 
         % Norm
         else
             data.y = (data.y - avgY) ./ stdY;
+            % data.r = (data.r - avgY) ./ stdY;
+            for i = 1:numel(data.y2)
+                data.y2{i} = (data.y2{i} - avgY) ./ stdY;
+                % data.r2{i} = (data.r2{i} - avgY) ./ stdY;
+            end
         end
 
         % Msg
