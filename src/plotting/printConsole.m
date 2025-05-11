@@ -34,7 +34,7 @@ function [] = printConsole(data, results, setup, mdl, para)
     % Parameters
     %===================================================
     dim = setup.datDim;                                                     % dimension of the dataset
-    [Nt, ~] = size(data.pr.y);
+    [Nt, nXY] = size(data.pr.y);
     namesOut = setup.out;
  
 
@@ -157,7 +157,7 @@ function [] = printConsole(data, results, setup, mdl, para)
     % Training and Testing Times
     %===================================================
     fprintf('INFO: Training time (sec): %5.2f \n', mdl.timeTrain);
-    fprintf('INFO: Inference time (ms/sample): %5.2f \n', data.pr.testTime*1e3/Nt);
+    fprintf('INFO: Inference time (µs/sample): %5.2f \n', data.pr.testTime*1e6/Nt/nXY);
 
     %===================================================
     % Memory Requirements

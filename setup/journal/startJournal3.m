@@ -145,9 +145,9 @@ setup.datSep = 1;                                                           % in
 % Training and Testing Selection
 %----------------------------------------
 % File based
-setup.trFile = ["journal3"];                                                % list of training files (strings) at least one
-setup.teFile = "journal3";                                                  % testing file (string) exactly one
-setup.vlFile = ["journal3"];                                                % list of validation files (strings) at least one
+setup.trFile = ["journal3", "journal32"];                                                % list of training files (strings) at least one
+setup.teFile = "journal32";                                                  % testing file (string) exactly one
+setup.vlFile = ["journal31"];                                                % list of validation files (strings) at least one
 
 % Sheet based
 setup.trSheet = ["train-1", "train-2", "train-3"];                          % list of training sheets (strings) at least one
@@ -186,7 +186,8 @@ setup.selSF = 0;                                                            % SF
 %----------------------------------------
 % Analytical 2D Models
 %----------------------------------------
-setup.selPO = 1;                                                            % PO-Model (Proper-Orthogonal) 0) de-activated, 1) activated
+setup.selPO = 0;                                                            % PO-Model (Proper-Orthogonal) 0) de-activated, 1) activated
+setup.selPS = 1;                                                            % PO-SS-Model (Proper-Orthogonal State Space) 0) de-activated, 1) activated
 
 %----------------------------------------
 % Machine/Deep Learning (tbi)

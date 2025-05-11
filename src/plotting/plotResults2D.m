@@ -425,7 +425,7 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     % Mode Error
     for i = 1:K_max
         subplot(2, K_max, i+K_max);
-        err = (pred.theta(:,i)-pred.theta_hat(:,i)-pred.theta(1,i));
+        err = (pred.theta(:,i)-pred.theta(1,i)-pred.theta_hat(:,i))/(pred.theta(end,i)-pred.theta(1,i))*100;
         plot(t_test, err);
         ylabel("Mag Error (%)");
         xlabel("t (sec)");

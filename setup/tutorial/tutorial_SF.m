@@ -194,6 +194,7 @@ setup.selSF = 1;                                                            % SF
 % Analytical 2D Models
 %----------------------------------------
 setup.selPO = 0;                                                            % PO-Model (Proper-Orthogonal) 0) de-activated, 1) activated
+setup.selPS = 0;                                                            % PO-SS-Model (Proper-Orthogonal State Space) 0) de-activated, 1) activated
 
 %----------------------------------------
 % Machine/Deep Learning (tbi)
