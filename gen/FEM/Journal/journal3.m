@@ -156,7 +156,7 @@ thermalBC(thermalmodel,"Edge",1,'ConvectionCoefficient',hc, ...
 %---------------------------------------------------
 % Heat Sources
 %---------------------------------------------------
-internalHeatSource(thermalmodel,q,'Face',[1]);
+internalHeatSource(thermalmodel,q,'Face',[1, 3]);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Solve Model
@@ -191,7 +191,7 @@ for i = 1:size(T,1)
     if results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 15e-3 && results.Mesh.Nodes(1,i) <= 23e-3
         Q(i,:) = q;
     elseif results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 27e-3 && results.Mesh.Nodes(1,i) <= 35e-3
-        Q(i,:) = 0;
+        Q(i,:) = q;
     else
         % Q(i,:) = q/2;
     end

@@ -125,6 +125,31 @@ function mdl = training(data, setup, para, path)
         filename = fullfile(path.mdl, mdlName);
         save(filename, 'mdl');
     end
+    
+    %===================================================
+    % POD-SS Model
+    %===================================================
+    if setup.selPS == 1
+        %----------------------------------------
+        % Fitting 
+        %----------------------------------------
+        timeStart = tic;
+        mdl = psFit(data.tr, data.vl, para);
+        mdl.timeTrain = toc(timeStart);
+
+        %----------------------------------------
+        % Model Size 
+        %----------------------------------------
+        mdl.size = numel(mdl.sPhi) + numel(mdl.sys.A) + numel(mdl.sys.B) + ...
+                   numel(mdl.sys.C);
+
+        %----------------------------------------
+        % Saving
+        %----------------------------------------
+        mdlName = 'mdl_ps_' + setup.name + '.mat';
+        filename = fullfile(path.mdl, mdlName);
+        save(filename, 'mdl');
+    end
 
     %===================================================
     % Machine Learning

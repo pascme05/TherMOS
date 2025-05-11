@@ -183,6 +183,41 @@ function [pred, grt, mdl] = testing(mdl, data, setup, para, path)
         grt.r = data.te.r;
         grt.off = data.te.off;
     end
+    
+    %===================================================
+    % POD-ss Model
+    %===================================================
+    if setup.selPS == 1
+        %----------------------------------------
+        % Loading
+        %----------------------------------------
+        if isempty(mdl)
+            try
+                mdlName = 'mdl_ps_' + setup.name + '.mat';
+                filename = fullfile(path.mdl, mdlName);
+                load(filename, 'mdl');
+                disp('INFO: Model loaded successfully.');
+            catch ME
+                disp('WARN: Failed to load the model.');
+                disp(['Error: ', ME.message]);
+            end
+        end
+
+        %----------------------------------------
+        % Fitting 
+        %----------------------------------------
+        timeStart = tic;
+        pred = psSol(mdl, data.te, para);
+        pred.testTime = toc(timeStart);
+
+        %----------------------------------------
+        % Formatting 
+        %----------------------------------------
+        grt.y = data.te.y;
+        grt.X = data.te.X;
+        grt.r = data.te.r;
+        grt.off = data.te.off;
+    end
 
     %===================================================
     % ML Model
