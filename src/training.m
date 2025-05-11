@@ -158,7 +158,7 @@ function mdl = training(data, setup, para, path)
         % Fitting
         %----------------------------------------
         timeStart = tic;
-        mdl.sys = dlFit(data.tr, data.vl, para);
+        mdl.sys = dlFit(data.tr, data.vl, para, setup);
         mdl.timeTrain = toc(timeStart);
         
         %----------------------------------------

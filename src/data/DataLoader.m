@@ -127,6 +127,8 @@ classdef DataLoader
                 end
                 rowsToKeep = ismember(obj.Data.id, ID);
                 obj.Data = obj.Data(rowsToKeep, :);
+                Ts_ID = obj.Data.time(2) - obj.Data.time(1);
+                obj.Data.time = linspace(obj.Data.time(1),Ts_ID*length(obj.Data.time),length(obj.Data.time))';
                 disp('INFO: ID based data');
 
             % Split based
@@ -202,6 +204,8 @@ classdef DataLoader
                 end
                 rowsToKeep = ismember(obj.Data.id, ID);
                 obj.Data = obj.Data(rowsToKeep, :);
+                Ts_ID = obj.Data.time(2) - obj.Data.time(1);
+                obj.Data.time = linspace(0,Ts_ID*(length(obj.Data.time)-1),length(obj.Data.time))';
                 disp('INFO: ID based data');
 
             % Split based

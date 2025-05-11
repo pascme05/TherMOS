@@ -111,7 +111,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     elseif (length(outDim) - 1) == 2
         for i = 1:outDim(2)
             for ii = 1:outDim(3)
-                yOut(:,i,ii) = interp1(tDat, data.y(:,i,ii), tRef, intp);
+                % yOut(:,i,ii) = interp1(tDat, data.y(:,i,ii), tRef, intp);
+                yOut(:,i,ii) = resample(timeseries(data.y(:,i,ii),tDat),tRef).Data;
             end
         end
 
@@ -122,7 +123,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
         for i = 1:outDim(2)
             for ii = 1:outDim(3)
                 for iii = 1:outDim(4)
-                    yOut(:,i,ii) = interp1(tDat, data.y(:,i,ii,iii), tRef, intp);
+                    % yOut(:,i,ii) = interp1(tDat, data.y(:,i,ii,iii), tRef, intp);
+                    yOut(:,i,ii,iii) = resample(timeseries(data.y(:,i,ii,iii),tDat),tRef).Data;
                 end
             end
         end
@@ -152,7 +154,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     elseif (length(inpDim) - 1) == 2
         for i = 1:inpDim(2)
             for ii = 1:inpDim(3)
-                xOut(:,i,ii) = interp1(tDat, data.X(:,i,ii), tRef, intp);
+                % xOut(:,i,ii) = interp1(tDat, data.X(:,i,ii), tRef, intp);
+                xOut(:,i,ii) = resample(timeseries(data.X(:,i,ii),tDat),tRef).Data;
             end
         end
 
@@ -163,7 +166,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
         for i = 1:inpDim(2)
             for ii = 1:inpDim(3)
                 for iii = 1:inpDim(4)
-                    xOut(:,i,ii) = interp1(tDat, data.X(:,i,ii,iii), tRef, intp);
+                    % xOut(:,i,ii) = interp1(tDat, data.X(:,i,ii,iii), tRef, intp);
+                    xOut(:,i,ii,iii) = resample(timeseries(data.X(:,i,ii,iii),tDat),tRef).Data;
                 end
             end
         end
@@ -193,7 +197,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     elseif (length(refDim) - 1) == 2
         for i = 1:refDim(2)
             for ii = 1:refDim(3)
-                rOut(:,i,ii) = interp1(tDat, data.r(:,i,ii), tRef, intp);
+                % rOut(:,i,ii) = interp1(tDat, data.r(:,i,ii), tRef, intp);
+                rOut(:,i,ii) = resample(timeseries(data.r(:,i,ii),tDat),tRef).Data;
             end
         end
 
@@ -204,7 +209,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
         for i = 1:refDim(2)
             for ii = 1:refDim(3)
                 for iii = 1:refDim(4)
-                    rOut(:,i,ii) = interp1(tDat, data.r(:,i,ii,iii), tRef, intp);
+                    % rOut(:,i,ii) = interp1(tDat, data.r(:,i,ii,iii), tRef, intp);
+                    rOut(:,i,ii,iii) = resample(timeseries(data.r(:,i,ii,iii),tDat),tRef).Data;
                 end
             end
         end
