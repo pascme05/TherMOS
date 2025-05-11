@@ -53,7 +53,7 @@ function out = dlSol(mdl, data, para)
     err = Inf;                                                              % initial error
     maxSteps = para.Mdl.gen.nSub;                                           % maximum amount of optimisation steps
     W = para.Mdl.dl.W;                                                      % Length of each sequence (window size)
-    stride = para.Mdl.dl.stride;                                            % Step size to slide the windoww
+    stride = 1;                                                             % Step size to slide the window
 
     %===================================================
     % Variables
@@ -69,26 +69,28 @@ function out = dlSol(mdl, data, para)
     %===================================================
     % Padding Data
     %===================================================
-    padding = W - 1;
-    padPv = padarray(Pv', [0 padding 0], 'replicate', 'pre')';
+    padLen = W - 1;
+    padPv = padarray(Pv', [0 padLen], 'replicate', 'pre')';  % T+W-1 × F
 
     %===================================================
     % Window Data
     %===================================================
     % Init
-    testX = zeros(F, W, Nt);
+    numWin = Nt;   
 
-    % Calc
-    for i = 1:Nt
-        startIdx = (i - 1) * stride + 1;
-        endIdx = startIdx + W - 1;
-        testX(:, :, i) = padPv(startIdx:endIdx, :)';
+    % Preallocate 3D array
+    testX_mat = zeros(F, W, numWin);
+
+    % Windowing
+    for idx = 1:numWin
+        startIdx = (idx - 1) * stride + 1;
+        testX_mat(:, :, idx) = padPv(startIdx:startIdx+W-1, :)';  % F × W
     end
 
     %===================================================
     % Reshape Input
     %===================================================
-    testX = squeeze(mat2cell(testX, F, W, ones(1, Nt)));
+    testX = permute(testX_mat, [2, 1, 3]);
 
     %===================================================
     % Scaling Function

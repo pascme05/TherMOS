@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: main                                                              %
-% Date: 13.08.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -37,7 +37,7 @@ function [] = main(setup, path)
     disp('===================================================')
     disp('Author:             Dr. Pascal A. Schirmer')
     disp('Version:            V.0.1')
-    disp('Date:               13.08.2024')
+    disp('Date:               07.05.2024')
     disp('Copyright:          Pascal Schirmer')
     disp('===================================================')
     fprintf('Setup File:\t\t\t%s\n', setup.name);
@@ -83,7 +83,7 @@ function [] = main(setup, path)
     data = loadData(para, setup);
 
     %===================================================
-    % Sanity Check Data (tbi)
+    % Sanity Check Data (PS 07.05.2025: tbi)
     %===================================================
     % Remove NaNs and Infs
     % Calc Storage limits
@@ -160,6 +160,7 @@ function [] = main(setup, path)
         [data.te, ~] = normData(data.te, para, 2);
         [data.vl, ~] = normData(data.vl, para, 2);
     else
+        para.Dat.normVal.y.max = 1;
         disp("INFO: Data normalistion deactivated")
     end
     fprintf('\n');
@@ -304,6 +305,7 @@ function [] = main(setup, path)
         data.tr = offAdd(data.tr, para);
         data.te = offAdd(data.te, para);
         data.vl = offAdd(data.vl, para);
+        data.pr = offAdd(data.pr, para);
     else
         disp("INFO: Offset removal deactivated")
     end
@@ -323,9 +325,7 @@ function [] = main(setup, path)
     % Calc
     %----------------------------------------
     if para.Dat.gen.dOut == 2
-        [~, ~, data.tr] = calcGrad(data.tr);
         [~, ~, data.te] = calcGrad(data.te);
-        [~, ~, data.vl] = calcGrad(data.vl);
         [~, ~, data.pr] = calcGrad(data.pr);
     else
         disp("INFO: 1D data no field calculation")
@@ -393,7 +393,7 @@ function [] = main(setup, path)
     %----------------------------------------
     % Printing Console
     %----------------------------------------
-    printConsole(data, results, setup, mdl);
+    printConsole(data, results, setup, mdl, para);
     fprintf('\n');
 
     %===================================================

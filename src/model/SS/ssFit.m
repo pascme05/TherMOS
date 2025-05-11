@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: ssFit                                                             %
-% Date: 13.08.2024                                                        %
+% Date: 08.05.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -50,6 +50,11 @@ function mdl = ssFit(data, ~, para)
     %===================================================
     % Model Parameter
     %===================================================
+    dataTrain = data.idData;                                                % Training data
+
+    %===================================================
+    % Model Parameter
+    %===================================================
     dis = para.Mdl.ss.dis;
     noise = para.Mdl.ss.noise;
     init = para.Mdl.ss.init;
@@ -70,15 +75,6 @@ function mdl = ssFit(data, ~, para)
     % Solver Options
     %===================================================
     %----------------------------------------
-    % Discretization type
-    %----------------------------------------
-    if dis == 1
-        opt.Focus = 'simulation';
-    else
-        opt.Focus = 'prediction';
-    end
-    
-    %----------------------------------------
     % Solver initial conditions
     %----------------------------------------
     if init == 1
@@ -86,7 +82,7 @@ function mdl = ssFit(data, ~, para)
     else
         opt.InitialState = 'estimate';
     end
-    
+
     %----------------------------------------
     % Stability constraint
     %----------------------------------------
@@ -105,11 +101,19 @@ function mdl = ssFit(data, ~, para)
     if para.Mdl.gen.opt == 1
         % Noise
         if noise == 2
-            sys = ssest(data.idData, 1:Kmax, 'DisturbanceModel','estimate', opt, 'Ts', Ts);
+            if dis == 1
+                [sys,~] = n4sid(dataTrain, 1:Kmax,'DisturbanceModel','estimate', opt, 'Ts', Ts);
+            else
+                sys = ssest(dataTrain, 1:Kmax, 'DisturbanceModel','estimate', opt, 'Ts', Ts);
+            end
         
         % No Noise
         else
-            sys = ssest(data.idData, 1:Kmax, 'DisturbanceModel','none', opt, 'Ts', Ts);
+            if dis == 1
+                [sys,~] = n4sid(dataTrain, 1:Kmax,'DisturbanceModel','none', opt, 'Ts', Ts);
+            else
+                sys = ssest(dataTrain, 1:Kmax, 'DisturbanceModel','none', opt, 'Ts', Ts);
+            end
         end
 
     %----------------------------------------
@@ -118,11 +122,19 @@ function mdl = ssFit(data, ~, para)
     else
         % Noise
         if noise == 2
-            sys = ssest(data.idData, K, opt, 'DisturbanceModel','estimate', 'Ts', Ts);
+            if dis == 1
+                [sys,~] = n4sid(dataTrain, K,'DisturbanceModel','estimate', opt, 'Ts', Ts);
+            else
+                sys = ssest(dataTrain, K, opt, 'DisturbanceModel','estimate', 'Ts', Ts);
+            end
         
         % No Noise
         else
-            sys = ssest(data.idData, K, opt, 'DisturbanceModel','none', 'Ts', Ts);
+            if dis == 1
+                [sys,~] = n4sid(dataTrain, K,'DisturbanceModel','none', opt, 'Ts', Ts);
+            else
+                sys = ssest(dataTrain, K, opt, 'DisturbanceModel','none', 'Ts', Ts);
+            end
         end
     end
 

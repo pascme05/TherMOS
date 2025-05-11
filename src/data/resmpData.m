@@ -3,7 +3,7 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: resmpData                                                         %
-% Date: 18.12.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -31,8 +31,9 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    Ts = para.Exp.gen.Ts;                                                   % target sampling time (sec)
-    Ts_data = data.t(2) - data.t(1);                                        % current samplin time (sec)
+    Ts = para.Exp.gen.Ts;                                                   % target sampling rate (sec)
+    Ts_data = mean(diff(data.t));                                           % current sampling rate (sec)
+    Tend = data.t(end);                                                     % length (sec)
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Data
@@ -62,8 +63,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     %===================================================
     % Time Vector
     %===================================================
-    tRef = 0:Ts:outDim(1)*Ts_data - Ts_data;
-    tDat = 0:Ts_data:outDim(1)*Ts_data - Ts_data;
+    tRef = 0:Ts:Tend - Ts;
+    tDat = data.t;
     
     %===================================================
     % Init Output
@@ -100,7 +101,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     %----------------------------------------
     if (length(outDim) - 1) == 1
         for i = 1:outDim(2)
-            yOut(:,i) = interp1(tDat, data.y(:,i), tRef, intp);
+            % yOut(:,i) = interp1(tDat, data.y(:,i), tRef, intp);
+            yOut(:,i) = resample(timeseries(data.y(:,i),tDat),tRef).Data;
         end
     
     %----------------------------------------
@@ -109,7 +111,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     elseif (length(outDim) - 1) == 2
         for i = 1:outDim(2)
             for ii = 1:outDim(3)
-                yOut(:,i,ii) = interp1(tDat, data.y(:,i,ii), tRef, intp);
+                % yOut(:,i,ii) = interp1(tDat, data.y(:,i,ii), tRef, intp);
+                yOut(:,i,ii) = resample(timeseries(data.y(:,i,ii),tDat),tRef).Data;
             end
         end
 
@@ -120,7 +123,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
         for i = 1:outDim(2)
             for ii = 1:outDim(3)
                 for iii = 1:outDim(4)
-                    yOut(:,i,ii) = interp1(tDat, data.y(:,i,ii,iii), tRef, intp);
+                    % yOut(:,i,ii) = interp1(tDat, data.y(:,i,ii,iii), tRef, intp);
+                    yOut(:,i,ii,iii) = resample(timeseries(data.y(:,i,ii,iii),tDat),tRef).Data;
                 end
             end
         end
@@ -140,7 +144,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     %----------------------------------------
     if (length(inpDim) - 1) == 1
         for i = 1:inpDim(2)
-            xOut(:,i) = interp1(tDat, data.X(:,i), tRef, intp);
+            % xOut(:,i) = interp1(tDat, data.X(:,i), tRef, intp);
+            xOut(:,i) = resample(timeseries(data.X(:,i),tDat),tRef).Data;
         end
     
     %----------------------------------------
@@ -149,7 +154,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     elseif (length(inpDim) - 1) == 2
         for i = 1:inpDim(2)
             for ii = 1:inpDim(3)
-                xOut(:,i,ii) = interp1(tDat, data.X(:,i,ii), tRef, intp);
+                % xOut(:,i,ii) = interp1(tDat, data.X(:,i,ii), tRef, intp);
+                xOut(:,i,ii) = resample(timeseries(data.X(:,i,ii),tDat),tRef).Data;
             end
         end
 
@@ -160,7 +166,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
         for i = 1:inpDim(2)
             for ii = 1:inpDim(3)
                 for iii = 1:inpDim(4)
-                    xOut(:,i,ii) = interp1(tDat, data.X(:,i,ii,iii), tRef, intp);
+                    % xOut(:,i,ii) = interp1(tDat, data.X(:,i,ii,iii), tRef, intp);
+                    xOut(:,i,ii,iii) = resample(timeseries(data.X(:,i,ii,iii),tDat),tRef).Data;
                 end
             end
         end
@@ -180,7 +187,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     %----------------------------------------
     if (length(refDim) - 1) == 1
         for i = 1:refDim(2)
-            rOut(:,i) = interp1(tDat, data.r(:,i), tRef, intp);
+            % rOut(:,i) = interp1(tDat, data.r(:,i), tRef, intp);
+            rOut(:,i) = resample(timeseries(data.r(:,i),tDat),tRef).Data;
         end
     
     %----------------------------------------
@@ -189,7 +197,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     elseif (length(refDim) - 1) == 2
         for i = 1:refDim(2)
             for ii = 1:refDim(3)
-                rOut(:,i,ii) = interp1(tDat, data.r(:,i,ii), tRef, intp);
+                % rOut(:,i,ii) = interp1(tDat, data.r(:,i,ii), tRef, intp);
+                rOut(:,i,ii) = resample(timeseries(data.r(:,i,ii),tDat),tRef).Data;
             end
         end
 
@@ -200,7 +209,8 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
         for i = 1:refDim(2)
             for ii = 1:refDim(3)
                 for iii = 1:refDim(4)
-                    rOut(:,i,ii) = interp1(tDat, data.r(:,i,ii,iii), tRef, intp);
+                    % rOut(:,i,ii) = interp1(tDat, data.r(:,i,ii,iii), tRef, intp);
+                    rOut(:,i,ii,iii) = resample(timeseries(data.r(:,i,ii,iii),tDat),tRef).Data;
                 end
             end
         end

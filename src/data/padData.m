@@ -3,7 +3,7 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: padData                                                           %
-% Date: 19.12.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -45,10 +45,10 @@ function data = padData(data, para)
         %===================================================
         data.X = [zeros(pad, size(data.X,2)); data.X];
         data.y = [zeros(pad, size(data.y,2)); data.y];
-        data.r = [zeros(pad, size(data.r,2)); data.r];
-        data.id = [zeros(pad, size(data.id,2)); data.id];
+        data.r = [data.r(1)*ones(pad, size(data.r,2)); data.r];
+        data.id = [data.id(1)*ones(pad, size(data.id,2)); data.id];
         data.t = [zeros(pad, 1); data.t];  
-        data.off = [zeros(pad, size(data.off,2)); data.off];
+        data.off = [data.off(1)*ones(pad, size(data.off,2)); data.off];
 
         %===================================================
         % Padding Structured
@@ -56,9 +56,9 @@ function data = padData(data, para)
         for i = 1:N
             data.X2{1,i} = [zeros(pad, size(data.X2{1,i},2)); data.X2{1,i}];
             data.y2{1,i} = [zeros(pad, size(data.y2{1,i},2)); data.y2{1,i}];
-            data.r2{1,i} = [zeros(pad, size(data.r2{1,i},2)); data.r2{1,i}];
+            data.r2{1,i} = [data.r2{1,i}(1)*ones(pad, size(data.r2{1,i},2)); data.r2{1,i}];
             data.t2{i,1} = [zeros(1,pad), data.t2{i,1}];  
-            data.off2{1,i} = [zeros(pad, size(data.off2{1,i},2)); data.off2{1,i}];
+            data.off2{1,i} = [data.off2{1,i}(1)*ones(pad, size(data.off2{1,i},2)); data.off2{1,i}];
         end
     end
 

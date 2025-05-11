@@ -46,11 +46,6 @@ function mdl = mlFit(data, val, para, setup)
     % Model Parameter
     %===================================================
     %----------------------------------------
-    % K-Nearest Neigbours
-    %----------------------------------------
-    K = para.Mdl.knn.K;                                                     % number of neighbors
-
-    %----------------------------------------
     % Random Forest
     %----------------------------------------
     leaf = para.Mdl.dt.leaf;                                                % number of leaves in the tree
@@ -62,6 +57,23 @@ function mdl = mlFit(data, val, para, setup)
     %----------------------------------------
     C = para.Mdl.svm.C;                                                     % Box constraint SVM
     eps = para.Mdl.svm.eps;                                                 % Epsilon SVM
+    
+    %----------------------------------------
+    % Gaussian Process Regression
+    %----------------------------------------
+    iterGPR = para.Mdl.gpr.iterMax;                                         % Maximum iterations of the GPR model
+
+    %----------------------------------------
+    % Ensemble of Boosted Trees
+    %----------------------------------------
+    cycle = para.Mdl.en.cycle;                                              % Maximum number of learning cycles EN
+    splitEN = para.Mdl.en.split;                                            % Maximum number of splits EN
+
+    %----------------------------------------
+    % Shallow NN
+    %----------------------------------------
+    iterNN = para.Mdl.nn.iterMax;                                           % Maximum number of iterations NN
+    nNodes = para.Mdl.nn.nodes;                                             % Maximum number of nodes NN
 
     %===================================================
     % Variables
@@ -73,42 +85,88 @@ function mdl = mlFit(data, val, para, setup)
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%    
     %===================================================
-    % Optimiser
+    % Kernel Methods
     %===================================================
-    if para.Mdl.knn.ns == 1
-        NSMethod = 'exhaustive';
+    %----------------------------------------
+    % SVM
+    %----------------------------------------
+    if para.Mdl.svm.kernel == 1
+        kernelSVM = 'linear';
+    elseif para.Mdl.svm.kernel == 2
+        kernelSVM = 'polynomial';
+    elseif para.Mdl.svm.kernel == 3
+        kernelSVM = 'rbf';
     else
-        NSMethod = 'kdtree';
+        kernelSVM = 'linear';
     end
 
-    %===================================================
-    % Distance Metric
-    %===================================================
-    if para.Mdl.knn.dist == 1
-        Distance = 'cityblock';
-    elseif para.Mdl.knn.dist == 2
-        Distance = 'chebychev';
-    elseif para.Mdl.knn.dist == 3
-        Distance = 'euclidean';
-    elseif para.Mdl.knn.dist == 4
-        Distance = 'minkowski';
+    %----------------------------------------
+    % GPR
+    %----------------------------------------
+    if para.Mdl.gpr.kernel == 1
+        kernelGPR = 'exponential';
+    elseif para.Mdl.gpr.kernel == 2
+        kernelGPR = 'squaredexponential';
     else
-        Distance = 'euclidean';
+        kernelGPR = 'squaredexponential';
     end
     
     %===================================================
-    % Kernel Method
+    % Basis Functions and Aggregation
     %===================================================
-    if para.Mdl.svm.kernel == 1
-        kernel = 'linear';
-    elseif para.Mdl.knn.dist == 2
-        kernel = 'polynomial';
-    elseif para.Mdl.knn.dist == 3
-        kernel = 'rbf';
+    %----------------------------------------
+    % GPR
+    %----------------------------------------
+    if para.Mdl.gpr.basis == 1
+        basis = 'constant';
+    elseif para.Mdl.gpr.basis == 2
+        basis = 'linear';
+    elseif para.Mdl.gpr.basis == 3
+        basis = 'pureQuadratic';
     else
-        kernel = 'linear';
+        basis = 'linear';
+    end
+
+    %----------------------------------------
+    % EN
+    %----------------------------------------
+    if para.Mdl.en.method == 1
+        method = 'LSBoost';
+    elseif para.Mdl.en.method == 2
+        method = 'Bag';
+    else
+        method = 'LSBoost';
+    end
+    
+    %===================================================
+    % Layer Structure
+    %===================================================
+    %----------------------------------------
+    % Layers
+    %----------------------------------------
+    if para.Mdl.nn.layer == 1
+        layerNN = [nNodes];
+    elseif para.Mdl.nn.layer == 2
+        layerNN = [nNodes, nNodes];
+    elseif para.Mdl.nn.layer == 3
+        layerNN = [nNodes, nNodes, nNodes];
+    else
+        layerNN = [nNodes, nNodes];
+    end
+
+    %----------------------------------------
+    % Activation
+    %----------------------------------------
+    if para.Mdl.nn.act == 1
+        act = 'relu';
+    elseif para.Mdl.nn.act == 2
+        act = 'tanh';
+    elseif para.Mdl.nn.act == 3
+        act = 'sigmoid';
+    else
+        act = 'relu';
     end
 
     %===================================================
@@ -125,7 +183,7 @@ function mdl = mlFit(data, val, para, setup)
         end
     end
     T = T / N;
-    
+
     %----------------------------------------
     % Validation
     %----------------------------------------
@@ -138,11 +196,11 @@ function mdl = mlFit(data, val, para, setup)
     end
     T_vl = T_vl / N_vl;
 
-    %===================================================
-    % Init Value
-    %===================================================
-    T_vl = T_vl - T_vl(1);
-    T = T - T(1);
+    % %===================================================
+    % % Init Value
+    % %===================================================
+    % T_vl = T_vl - T_vl(1);
+    % T = T - T(1);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -152,27 +210,14 @@ function mdl = mlFit(data, val, para, setup)
     %===================================================
     if para.Mdl.gen.opt == 1
         %----------------------------------------
-        % K-Nearest Neigbours
-        %----------------------------------------
-        if setup.selML == 1
-            % Optimise
-            mdl = fitcknn(Pv_vl,T_vl,'OptimizeHyperparameters','auto',...
-                                 'HyperparameterOptimizationOptions',...
-                                  struct('AcquisitionFunctionName', ...
-                                         'expected-improvement-plus'));
-
-            % Parameter
-            K = mdl.NumNeighbors;
-
-        %----------------------------------------
         % Random Forest
         %----------------------------------------
-        elseif setup.selML == 2
+        if setup.selML == 2
             % Optimise
             mdl = fitrtree(Pv_vl,T_vl,'OptimizeHyperparameters','auto',...
-                                  'HyperparameterOptimizationOptions',...
-                                   struct('AcquisitionFunctionName', ...
-                                          'expected-improvement-plus'));
+                                      'HyperparameterOptimizationOptions',...
+                                       struct('AcquisitionFunctionName', ...
+                                              'expected-improvement-plus'));
 
             % Parameter
             leaf = mdl.ModelParameters.MinLeaf;
@@ -185,15 +230,36 @@ function mdl = mlFit(data, val, para, setup)
         elseif setup.selML == 3
             % Optimise
             mdl = fitrsvm(Pv_vl,T_vl,'OptimizeHyperparameters','auto',...
-                                 'HyperparameterOptimizationOptions',...
-                                  struct('AcquisitionFunctionName', ...
-                                         'expected-improvement-plus'));
+                                     'HyperparameterOptimizationOptions',...
+                                      struct('AcquisitionFunctionName', ...
+                                             'expected-improvement-plus'));
 
             % Parameter
             C = max(mdl.BoxConstraints);
             eps = mdl.Epsilon;
-            kernel = mdl.KernelParameters.Function;
+            kernelSVM = mdl.KernelParameters.Function;
         
+        %----------------------------------------
+        % Gaussian Process Regression
+        %----------------------------------------
+        elseif setup.selML == 4
+        
+        %----------------------------------------
+        % Ensemble of Boosted Trees
+        %----------------------------------------
+        elseif setup.selML == 5
+            % Optimise
+            t = templateTree('Surrogate','on');
+            mdl = fitrensemble(Pv_vl,T_vl,'MPG','Learners',t, ...
+                                          'OptimizeHyperparameters',...
+                                          {'NumLearningCycles',...
+                                           'MaxNumSplits'});
+
+            % Parameter
+            cycle = mdl.NumLearningCycles;
+            splitEN = mdl.MaxNumSplits;
+
+
         %----------------------------------------
         % Invalid
         %----------------------------------------
@@ -206,16 +272,13 @@ function mdl = mlFit(data, val, para, setup)
     % Fixed Order Model
     %===================================================
     %----------------------------------------
-    % K-Nearest Neigbours
+    % Linear Regression
     %----------------------------------------
     if setup.selML == 1
-        mdl = fitcknn(Pv,T,'NumNeighbors',K,...
-                       'NSMethod',NSMethod, ...
-                       'Distance',Distance,...
-                       'Standardize',1);
+        mdl = fitlm(Pv, T);
     
     %----------------------------------------
-    % Random Forest
+    % Decision Tree
     %----------------------------------------
     elseif setup.selML == 2
         mdl = fitrtree(Pv, T, ...
@@ -230,13 +293,40 @@ function mdl = mlFit(data, val, para, setup)
     %----------------------------------------
     elseif setup.selML == 3
         mdl = fitrsvm(Pv, T, ...
-                  'KernelFunction', kernel, ...
+                  'KernelFunction', kernelSVM, ...
                   'KernelScale', 'auto', ...
                   'BoxConstraint', C, ...
                   'Epsilon', eps, ...
                   'Standardize', true, ...
                   'Solver', 'SMO', ...
                   'Verbose', 1);
+    
+    %----------------------------------------
+    % Gaussian Process Regression
+    %----------------------------------------
+    elseif setup.selML == 4
+        mdl = fitrgp(Pv, T,'KernelFunction',kernelGPR,...
+                           'BasisFunction', basis,...
+                           'IterationLimitBCD', iterGPR, ...
+                           'Verbose', 1);
+
+    %----------------------------------------
+    % Ensemble of Boosted Trees
+    %----------------------------------------
+    elseif setup.selML == 5
+        mdl = fitrensemble(Pv, T, 'Method', method, ...
+                                  'NumLearningCycles', cycle, ...
+                                  'Learners', templateTree('MaxNumSplits', splitEN));
+
+    %----------------------------------------
+    % Shallow NN
+    %----------------------------------------
+    elseif setup.selML == 6
+        mdl = fitrnet(Pv, T, 'Standardize', true, ...
+                             'LayerSizes', layerNN, ...
+                             'Activations', act, ...
+                             'Verbose', 1,...
+                             'IterationLimit', iterNN);
     
     %----------------------------------------
     % Invalid

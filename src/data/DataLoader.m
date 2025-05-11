@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: DataLoader                                                        %
-% Date: 13.08.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -64,21 +64,18 @@ classdef DataLoader
             % 1D Xlsx
             %----------------------------------------
             if obj.Type == "xlsx"
-                % Loading
                 data = loadXlsx(obj, FileName, SheetName, stat, setup);
 
             %----------------------------------------
             % 1D Mat
             %----------------------------------------
             elseif obj.Type == "mat" && obj.Dim == 1
-                % Loading
                 data = loadMat1D(obj, FileName, stat, setup);
 
             %----------------------------------------
             % 2D Mat
             %----------------------------------------
             elseif obj.Type == "mat" && obj.Dim >= 2
-                % Loading
                 data = loadMat2D(obj, FileName);
 
             %----------------------------------------
@@ -130,6 +127,8 @@ classdef DataLoader
                 end
                 rowsToKeep = ismember(obj.Data.id, ID);
                 obj.Data = obj.Data(rowsToKeep, :);
+                Ts_ID = obj.Data.time(2) - obj.Data.time(1);
+                obj.Data.time = linspace(obj.Data.time(1),Ts_ID*length(obj.Data.time),length(obj.Data.time))';
                 disp('INFO: ID based data');
 
             % Split based
@@ -205,6 +204,8 @@ classdef DataLoader
                 end
                 rowsToKeep = ismember(obj.Data.id, ID);
                 obj.Data = obj.Data(rowsToKeep, :);
+                Ts_ID = obj.Data.time(2) - obj.Data.time(1);
+                obj.Data.time = linspace(0,Ts_ID*(length(obj.Data.time)-1),length(obj.Data.time))';
                 disp('INFO: ID based data');
 
             % Split based

@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: sfSol                                                             %
-% Date: 13.08.2024                                                        %
+% Date: 08.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -19,8 +19,8 @@
 %
 %                       C*dT/dt = P(t) - G*T
 %
-% where T is the temperature vector, u is the loss vector, and C is the
-% thermal capacitance matrix 
+% where T is the temperature vector, P is the loss vector, C is the
+% thermal capacitance matrix, and G the thermal conductance matrix. 
 % -------------------------------------------------------------------------
 % Inp:  1) mdl:     Fitted model parameters
 %       2) data:    Testing input data struct
@@ -97,7 +97,7 @@ function out = sfSol(mdl, data, para)
     %===================================================
     % Correcting Offset
     %===================================================
-    T_est = T_est + Toff;
+    % T_est = T_est + Toff;
 
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -119,10 +119,17 @@ end
 % Calc Temperature
 %===================================================
 function Tnew = calcT(t, P, Cth, Gth, Told)
+    %----------------------------------------
+    % Init
+    %----------------------------------------
     dt = t(2) - t(1);
     M = size(Cth, 1);
     N = size(Cth, 2);
     Tnew = zeros(1, M);
+
+    %----------------------------------------
+    % Calculation
+    %----------------------------------------
     for i = 1:M
         for j = 1:N
             Tnew(1, i) = Told(i) + (dt / Cth(i, j)) * (P(j) - Gth(i, j) * Told(i));

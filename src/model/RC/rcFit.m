@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: rcFit                                                             %
-% Date: 13.08.2024                                                        %
+% Date: 08.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -286,15 +286,20 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Additional Functions
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%===================================================
+% Zth Function
+%===================================================
 function Zth_fit = fncZth(params, t, K)
-    % Initialize Rth and Cth   
+    %----------------------------------------
+    % Initialize  
+    %----------------------------------------
     Rth = params(1:K);
     tau = params(K+1:end);
-    
-    % Initialize the thermal impedance response
     Zth_fit = zeros(size(t));
     
-    % Calculate the contribution of each RC pair
+    %----------------------------------------
+    % Calculate RC contribution
+    %----------------------------------------
     for i = 1:K
         Zth_fit = Zth_fit + Rth(i) * (1 - exp(-t / tau(i)));
     end

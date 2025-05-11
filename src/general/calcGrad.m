@@ -3,7 +3,7 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: templateFnc                                                       %
-% Date: 19.12.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -42,12 +42,12 @@ function [q, qk, out] = calcGrad(data)
     % Variables
     %===================================================
     T = data.y;
-    q = data.X;
     xInp = data.Data.geo(:,1);                                              % sampled input values x (m)
     yInp = data.Data.geo(:,2);                                              % sampled input values y (m)
     x = 0:dx:Lx;                                                            % x vector (m)
     y = 0:dy:Ly;                                                            % y vector (m)
-    qk = zeros(Nt, length(y), length(x));                                   % init heat flux
+    qk = zeros(Nt, length(y), length(x));                                   % init gradient
+    q = zeros(Nt, length(y), length(x));                                    % init heat flux
 
     %===================================================
     % Model
@@ -58,9 +58,11 @@ function [q, qk, out] = calcGrad(data)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % 2D Mapping
+    %===================================================
     k = squeeze(map2D(k', xInp, yInp, x, y, 1));
     T = squeeze(map2D(T, xInp, yInp, x, y, 1));
-    q = squeeze(map2D(q, xInp, yInp, x, y, 1));
     
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -79,6 +81,7 @@ function [q, qk, out] = calcGrad(data)
         q(i, :, :) = k .* squeeze(qk(i,:,:));
     end
 
+    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

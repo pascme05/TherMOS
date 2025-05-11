@@ -26,8 +26,8 @@ clc
 M = 20;                                                                     % Number of X points
 N = 20;                                                                     % Number of Y points
 l = 0.20;                                                                   % x length (m)
-h = 0.20;                                                                   % y length (m)
-dx = 0.01;                                                                 % internal FEM resolution (m)
+h = 0.30;                                                                   % y length (m)
+dx = 0.01;                                                                  % internal FEM resolution (m)
 
 %---------------------------------------------------
 % Material 
@@ -41,9 +41,9 @@ matCp = 800;                                                                % Sp
 %---------------------------------------------------
 Ta = 20;                                                                    % ambient temperature (degC)
 fl = 100;                                                                   % heat flux boundary (W/m2)
-hc = 1000;                                                                  % heat transfer coefficient (W/m2K)
+hc = 500;                                                                   % heat transfer coefficient (W/m2K)
 Tinit = 20;                                                                 % Initial temperature (degC)
-Tend = 5000;                                                                % end value time (sec)
+Tend = 3000;                                                                % end value time (sec)
 q = 1000000;                                                                % Volumetric heat generation (W/m3)
 dt = 10;                                                                    % sampling time (sec)
 tlist = 0:dt:Tend-dt;                                                       % time vector (sec)
@@ -97,10 +97,10 @@ thermalBC(thermalmodel,"Edge",[1,2,3],'Temperature',Ta);
 % hc = 0;
 % fl = 0;
 
-% % Convection
-% thermalBC(thermalmodel,"Edge",4,'ConvectionCoefficient',h, ...
-%                                 'AmbientTemperature',Ta);
-% fl = 0;
+% Convection
+thermalBC(thermalmodel,"Edge",4,'ConvectionCoefficient',hc, ...
+                                'AmbientTemperature',Ta);
+fl = 0;
 
 % % Heat Flux
 % thermalBC(thermalmodel,"Edge",4,'HeatFlux',fl);
@@ -120,6 +120,8 @@ T = results.Temperature;
 xyz = thermalmodel.Mesh.Nodes;
 dx = (l)/M;
 dy = (h)/N;
+xy = zeros(2*N+1,2*M+1);
+T1 = zeros(length(tlist),2*N+1,2*M+1);
 for k = -M:1:M
     for kk = -N:1:N
         [minD, idx] = min(sum(abs(xyz-[dx*k; dy*kk].*ones(size(xyz))),1));
@@ -135,8 +137,6 @@ end
 % Define Variables 
 %---------------------------------------------------
 Cp = matCp * ones(length(T),1);
-dx = dx;
-dy = dy;
 geo = results.Mesh.Nodes';
 k = matK * ones(length(T),1);
 Lx = 2*l;

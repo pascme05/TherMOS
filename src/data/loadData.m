@@ -3,7 +3,7 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: loadData                                                          %
-% Date: 18.12.2024                                                        %
+% Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
@@ -291,16 +291,16 @@ function data = loadData(para, setup)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %----------------------------------------
+    %===================================================
     % Msg
-    %----------------------------------------
+    %===================================================
     disp("----------------------------------------");
     disp("Concatenating Data")
     disp("----------------------------------------");
     
-    %----------------------------------------
+    %===================================================
     % Calc
-    %----------------------------------------
+    %===================================================
     data.tr = concatData(data.tr, setup, para);
     data.te = concatData(data.te, setup, para);
     data.vl = concatData(data.vl, setup, para);

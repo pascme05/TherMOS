@@ -25,12 +25,13 @@
 % Inp:  1) data:    Training input data struct
 %       2) val:     Validation input data struct
 %       3) para:    All simulation parameters of the current simulation
+%       4) setup:   All setup files for the simulation
 % Out:  1) mdl:     Trained model
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function mdl = dlFit(data, val, para)
+function mdl = dlFit(data, val, para, setup)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -42,8 +43,8 @@ function mdl = dlFit(data, val, para)
     %===================================================
     % General Parameter
     %===================================================
-    [Nt, N] = size(data.y);                                                 % number of training samples Nt and temperature nodes N
-    [Nt_vl, ~] = size(val.y);                                               % number of training samples Nt and temperature nodes N
+    [T, M] = size(data.y);                                                  % number of training samples Nt and temperature nodes N
+    [T_val, ~] = size(val.y);                                               % number of validation samples Nt and temperature nodes N
     [~, F] = size(data.X);                                                  % number of features F
     W = para.Mdl.dl.W;                                                      % Length of each sequence (window size)
     stride = para.Mdl.dl.stride;                                            % Step size to slide the window
@@ -58,6 +59,7 @@ function mdl = dlFit(data, val, para)
     lrDropFa = para.Mdl.dl.lrDropFa;
     valFreq = para.Mdl.dl.valFreq;
     batch = para.Mdl.dl.batch;
+    shuOpt  = para.Mdl.dl.shu;
 
     %===================================================
     % Variables
@@ -65,14 +67,14 @@ function mdl = dlFit(data, val, para)
     %----------------------------------------
     % Training
     %----------------------------------------
-    Pv = data.X;
-    T = data.y;
+    X = data.X;
+    Y = data.y;
 
     %----------------------------------------
     % Validation
     %----------------------------------------
-    Pv_vl = val.X;
-    T_vl = val.y;
+    X_val = val.X;
+    Y_val = val.y;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
@@ -83,72 +85,50 @@ function mdl = dlFit(data, val, para)
     %----------------------------------------
     % Training
     %----------------------------------------
-    % Init
-    numWindows = floor((Nt - W) / stride) + 1;
-    trainX = zeros(F, W, numWindows);
-    trainY = zeros(N, numWindows);
-
-    % Calc
-    for i = 1:numWindows
-        startIdx = (i - 1) * stride + 1;
-        endIdx = startIdx + W - 1;
-        trainX(:, :, i) = Pv(startIdx:endIdx, :)';
-        trainY(:, i) = T(endIdx, :)';
+    % Calculate number of windows
+    numWin = floor((T - W) / stride) + 1;
+    
+    % Preallocate arrays
+    Xtrain = zeros(W, F, numWin);   % [time, features, batch]
+    Ytrain = zeros(M, numWin);      % [response, batch]
+    
+    % Efficient windowing loop
+    for idx = 1:numWin
+        i = (idx - 1) * stride + 1;
+        Xtrain(:, :, idx) = X(i:i+W-1, :);        % W x F
+        Ytrain(:, idx) = Y(i+W-1, :)';            % M x 1
     end
 
     %----------------------------------------
     % Validation
     %----------------------------------------
-    % Init
-    numWindows = floor((Nt_vl - W) / stride) + 1;
-    valX = zeros(F, W, numWindows);
-    valY = zeros(N, numWindows);
-
-    % Calc
-    for i = 1:numWindows
-        startIdx = (i - 1) * stride + 1;
-        endIdx = startIdx + W - 1;
-        valX(:, :, i) = Pv_vl(startIdx:endIdx, :)';
-        valY(:, i) = T_vl(endIdx, :)';
+    % Calculate number of windows
+    numWin_val = floor((T_val - W) / stride) + 1;
+    
+    % Preallocate arrays
+    Xval = zeros(W, F, numWin_val);     % [time, features, batch]
+    Yval = zeros(M, numWin_val);        % [response, batch]
+    
+    % Efficient windowing loop
+    for idx = 1:numWin_val
+        i = (idx - 1) * stride + 1;
+        Xval(:, :, idx) = X_val(i:i+W-1, :);     % W x F
+        Yval(:, idx) = Y_val(i+W-1, :)';         % M x 1
     end
-
-    %===================================================
-    % Reshape Data
-    %===================================================
-    trainX = squeeze(mat2cell(trainX, F, W, ones(1, length(trainY))));
-    valX = squeeze(mat2cell(valX, F, W, ones(1, length(valY))));
 
     %===================================================
     % Shuffel
     %===================================================
-    if para.Mdl.dl.shu == 1
-        shu = 'never';
-    elseif para.Mdl.dl.shu == 2
-        shu = 'once';
-    elseif para.Mdl.dl.shu == 3
-        shu = 'every-epoch';
-    else
-        shu = 'every-epoch';
+    switch shuOpt
+        case 1, shu = 'never';
+        case 2, shu = 'once';
+        case 3, shu = 'every-epoch';
+        otherwise, shu = 'every-epoch';
     end
 
     %===================================================
     % Training Options
     %===================================================
-    % options = trainingOptions("adam", ...
-    % MaxEpochs=epoch, ...
-    % GradientThreshold = gradTh, ...
-    % MiniBatchSize = batch, ...
-    % Shuffle = shu, ...
-    % LearnRateSchedule="piecewise", ...
-    % InitialLearnRate=initLr, ...
-    % SequenceLength="shortest", ...
-    % Plots="none", ...
-    % ValidationData = {valX, valY'}, ...
-    % LearnRateDropPeriod = lrDropPr, ...
-    % LearnRateDropFactor = lrDropFa, ...
-    % ValidationFrequency = valFreq, ...
-    % Verbose= 1);
-
     options = trainingOptions('adam', ...
                               'MaxEpochs', epoch, ...
                               'MiniBatchSize', batch, ...
@@ -157,11 +137,18 @@ function mdl = dlFit(data, val, para)
                               'InitialLearnRate', initLr, ...
                               'LearnRateSchedule', 'piecewise', ...
                               'LearnRateDropPeriod', lrDropPr, ...
-                              'LearnRateDropFactor', lrDropFa, ...
-                              'ValidationData', {valX, valY'}, ...
-                              'ValidationFrequency', valFreq, ...
+                              'LearnRateDropFactor', lrDropFa, ...            
                               'Verbose', 1, ...
-                              'Plots', 'none');
+                              'ValidationData', {Xval, Yval'}, ...
+                              'ValidationFrequency', valFreq, ...
+                              'ValidationPatience', 10, ...   
+                              'OutputNetwork', 'best-validation-loss',...
+                              'VerboseFrequency', 20, ...                 
+                              'ExecutionEnvironment', 'auto', ...
+                              'Plots', 'none');   
+
+
+                              
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -169,25 +156,56 @@ function mdl = dlFit(data, val, para)
     %===================================================
     % Model
     %===================================================
-    layers = [ ...
-              sequenceInputLayer(F, Normalization="zscore")
-              lstmLayer(32, OutputMode="last")
-              reluLayer
-              fullyConnectedLayer(32)
-              reluLayer
-              fullyConnectedLayer(N)
-              regressionLayer];
+    if setup.selDL == 1
+        layers = [
+            sequenceInputLayer(F, 'Normalization', 'zscore')
+            convolution1dLayer(5, 64, 'Padding', 'same')
+            batchNormalizationLayer
+            reluLayer
+            convolution1dLayer(3, 32, 'Padding', 'same')
+            reluLayer
+            globalAveragePooling1dLayer
+            fullyConnectedLayer(32)
+            reluLayer
+            fullyConnectedLayer(M)
+        ];
+    
+    elseif setup.selDL == 2
+        layers = [ ...
+            sequenceInputLayer(F, Normalization="zscore")
+            lstmLayer(64, OutputMode="last")
+            reluLayer
+            fullyConnectedLayer(64)
+            reluLayer
+            fullyConnectedLayer(M)
+        ];
+
+    elseif setup.selDL == 3
+        layers = [
+            sequenceInputLayer(F, 'Normalization', 'zscore')
+            convolution1dLayer(3, 32, 'Padding', 'same') 
+            reluLayer
+            lstmLayer(64, 'OutputMode', 'last')
+            fullyConnectedLayer(32)
+            reluLayer
+            fullyConnectedLayer(M)
+        ];
+
+    else
+        disp('Error: No valid choice of DL model.')
+    end
 
     %===================================================
     % Fitting
     %===================================================
-    mdl = trainNetwork(trainX, trainY', layers, options);
+    mdl = trainnet(Xtrain, Ytrain',layers,"mse",options);
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     disp("DONE: Training a Deep Learning Model")
 end
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% References

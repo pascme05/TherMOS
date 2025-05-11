@@ -20,26 +20,42 @@
 %       2) results: All obtained accuracy values and results
 %       3) setup:   All simulation setup parameters
 %       4) mdl:     All model parameters
+%       5) para:    All parameters
 % Out:  1) None
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [] = printConsole(data, results, setup, mdl)
+function [] = printConsole(data, results, setup, mdl, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
     % Parameters
     %===================================================
+    dim = setup.datDim;                                                     % dimension of the dataset
     [Nt, ~] = size(data.pr.y);
-    nY = length(results.err.tot.MAE);
     namesOut = setup.out;
  
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % 2D Data
+    %===================================================
+    if dim == 2
+        nY = 1;
+        selX = para.Dat.gen.inpX;                                           % x-position for 1D temporal plots                           
+        selY = para.Dat.gen.inpY;                                           % y-position for 1D temporal plots
+        xInp = data.tr.Data.geo(:,1);                                       % sampled input values x (m)
+        yInp = data.tr.Data.geo(:,2);                                       % sampled input values y (m)
+        [~, minId] = min(abs(xInp-selX-min(xInp)) + abs(yInp-selY-min(yInp)));
+    else
+        nY = length(results.err.tot.MAE);
+        minId = linspace(1, nY, nY);
+    end
+
     %===================================================
     % Performance Values
     %===================================================
@@ -114,10 +130,10 @@ function [] = printConsole(data, results, setup, mdl)
     for i = 1:nY
         fprintf('|  %-7s | %5.2f | %5.2f | %6.2f | %5.2f | %6.2f | %5.2f | %5.2f | %6.2f | %5.2f | %5.2f | %6.2f | %5.2f |\n', ...
             namesOut(i), ... 
-            MAE_tot(i), MAE_ss(i), MAE_tr(i), ...  % MAE values
-            MSE_tot(i), MSE_ss(i), MSE_tr(i), ...  % MSE values
-            MAX_tot(i), MAX_ss(i), MAX_tr(i), ...  % MAX values
-            NRS_tot(i), NRS_ss(i), NRS_tr(i));     % NRMSE values
+            MAE_tot(minId(i)), MAE_ss(minId(i)), MAE_tr(minId(i)), ...  % MAE values
+            MSE_tot(minId(i)), MSE_ss(minId(i)), MSE_tr(minId(i)), ...  % MSE values
+            MAX_tot(minId(i)), MAX_ss(minId(i)), MAX_tr(minId(i)), ...  % MAX values
+            NRS_tot(minId(i)), NRS_ss(minId(i)), NRS_tr(minId(i)));     % NRMSE values
     end
     
     %===================================================
@@ -141,7 +157,7 @@ function [] = printConsole(data, results, setup, mdl)
     % Training and Testing Times
     %===================================================
     fprintf('INFO: Training time (sec): %5.2f \n', mdl.timeTrain);
-    fprintf('INFO: Inference time (us/sample): %5.2f \n', data.pr.testTime*1e6/Nt);
+    fprintf('INFO: Inference time (ms/sample): %5.2f \n', data.pr.testTime*1e3/Nt);
 
     %===================================================
     % Memory Requirements

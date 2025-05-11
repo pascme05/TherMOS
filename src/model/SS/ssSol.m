@@ -3,11 +3,11 @@
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
 % File: ssSol                                                             %
-% Date: 13.08.2024                                                        %
+% Date: 08.05.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
 % Copyright: Pascal Schirmer                                              %
-% Comments:                                                               %
+% Comments: reviewed                                                      %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -50,15 +50,26 @@ function out = ssSol(mdl, data, para)
     eps = para.Par.gen.eps;                                                 % lower numerical bound
     Nt = length(data.X(:,1));                                               % number of time steps
     K = length(size(mdl.sys.A));                                            % model order
+    maxErr = para.Par.gen.err;                                              % maximum error bound convergence
 
     %===================================================
     % Variables
     %===================================================
-    t = data.t;
+    t = data.t;                                                             % time vector (sec)
     Pv = data.X;                                                            % power losses input (W)
     Toff = data.r;                                                          % temperature offset/reference (°C)
     T_est = zeros(Nt,K);                                                    % init nodes temperatures
-    out = data;     
+    out = data;                                                             % init output data
+    
+    %===================================================
+    % Compare Solver Settings
+    %===================================================
+    if para.Mdl.ss.init == 1
+        opt = compareOptions();
+    else
+        opt = compareOptions('InitialCondition','z');
+    end
+    opt = compareOptions('InitialCondition','z');
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
@@ -81,27 +92,56 @@ function out = ssSol(mdl, data, para)
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Feedthrough
+    % Feedback
     %===================================================
     if Rohm ~= 0
-        for i = 1:length(t)
-            %----------------------------------------
-            % Update power
-            %----------------------------------------
-            Pv(i,:) = Pv(i,:) .* theta(T_est(i-1,:) + Toff(i-1,:));
+        %----------------------------------------
+        % Init
+        %----------------------------------------
+        err = Inf;
+        Pv2 = Pv;
+        testID2 = data.idData;
 
-            
-            %----------------------------------------
-            % Solve Nodes
-            %----------------------------------------
-            [T_est(i, :), ~, ~] = lsim(mdl.sys, Pv(i, :), t(i), x0);
+        %----------------------------------------
+        % Iterate
+        %----------------------------------------
+        while err > maxErr
+            % Linear Solver 
+            if para.Mdl.ss.sol == 1
+                [T_old, ~, ~] = lsim(mdl.sys, Pv2, t, x0);
+                Pv2 = Pv2 .* theta(T_old + Toff);
+                T_est = lsim(mdl.sys, Pv2, t, x0);
+    
+            % Matlab Compare
+            else
+                [T_old, ~, ~] = compare(testID2, mdl.sys, opt);
+                T_old = T_old.OutputData;
+                testID2.InputData = testID2.InputData .* theta(T_old + Toff);
+                [T_est, ~, ~] = compare(testID2, mdl.sys, opt);
+                T_est = T_est.OutputData;
+            end
+
+            % Update Error
+            err = mean(abs*(T_old-T_est).*para.Dat.normVal.y.max);
         end
 
     %===================================================
-    % Feedback
+    % Feedthrough
     %===================================================
     else
-        [T_est, ~, ~] = lsim(mdl.sys, Pv, t, x0);
+        %----------------------------------------
+        % Linear Solver 
+        %----------------------------------------
+        if para.Mdl.ss.sol == 1
+            [T_est, ~, ~] = lsim(mdl.sys, Pv, t, x0);
+
+        %----------------------------------------
+        % Matlab Compare
+        %----------------------------------------
+        else
+            [T_est, ~, ~] = compare(data.idData, mdl.sys, opt);
+            T_est = T_est.OutputData;
+        end
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -110,7 +150,7 @@ function out = ssSol(mdl, data, para)
     %===================================================
     % Correcting Offset
     %===================================================
-    T_est = T_est + Toff;
+    % T_est = T_est + Toff;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
