@@ -45,7 +45,7 @@ function [xOut, yOut, rOut, tRef]  = resmpData(data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Sanity Check
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    if (Ts_data-Ts) < 1e-12
+    if abs(Ts_data-Ts) < 1e-12
         fprintf('INFO: Data sampling period equals target: %.2f sec \n', Ts);
         fprintf('\n');
         yOut = data.y;
