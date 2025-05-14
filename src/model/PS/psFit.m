@@ -147,7 +147,7 @@ function mdl = psFit(data, ~, para)
     %----------------------------------------
     elseif para.Mdl.pod.sel == 3
         E = sum(abs(lam(1:para.Mdl.pod.K))) / sum(abs(lam));
-        K = setup.mdl.pod.K;
+        K = para.Mdl.pod.K;
 
     %----------------------------------------
     % Fixed
@@ -161,6 +161,7 @@ function mdl = psFit(data, ~, para)
     % Msg
     %----------------------------------------
     fprintf('INFO: Number of used eigenvalues (model order) K: %i \n', K);
+    fprintf('INFO: Number of used states (state space model) Ks: %i \n', Ks);
     fprintf('INFO: Cumulative correlation energy Em: %f \n', E*100)
     
     %===================================================

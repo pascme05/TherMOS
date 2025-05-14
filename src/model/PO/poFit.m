@@ -118,7 +118,7 @@ function mdl = poFit(data, ~, para)
     %----------------------------------------
     elseif para.Mdl.pod.sel == 3
         E = sum(abs(lam(1:para.Mdl.pod.K))) / sum(abs(lam));
-        K = setup.mdl.pod.K;
+        K = para.Mdl.pod.K;
 
     %----------------------------------------
     % Fixed

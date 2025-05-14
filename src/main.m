@@ -58,6 +58,9 @@ function [] = main(setup, path)
     fprintf('SS-Mdl:\t\t\t\t%d\n', setup.selSS);
     fprintf('SF-Mdl:\t\t\t\t%d\n', setup.selSF);
     fprintf('PO-Mdl:\t\t\t\t%d\n', setup.selPO);
+    fprintf('PS-Mdl:\t\t\t\t%d\n', setup.selPS);
+    fprintf('ML-Mdl:\t\t\t\t%d\n', setup.selML);
+    fprintf('DL-Mdl:\t\t\t\t%d\n', setup.selDL);
     disp('===================================================')
     disp('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
     disp('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
@@ -85,6 +88,16 @@ function [] = main(setup, path)
     %===================================================
     % Sanity Check Data (PS 07.05.2025: tbi)
     %===================================================
+    %----------------------------------------
+    % Model Order and Data Dimensions
+    %----------------------------------------
+    if (data.tr.Dim >= 2 && (setup.selPO + setup.selPS) == 0)
+        error("ERROR: 2D/3D data input and 1D model"); 
+    end
+    if (data.tr.Dim < 2 && setup.selPO == 1) || (data.tr.Dim < 2 && setup.selPS == 1)
+        error("ERROR: 1D data input and 2D model");
+    end
+
     % Remove NaNs and Infs
     % Calc Storage limits
     % Check data dimensions
