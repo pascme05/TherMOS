@@ -129,7 +129,7 @@ setup.config = "tutorial_DL";                                               % na
 setup.plotOut = 2;                                                          % 0) model output is not plotted, 1) model output is plotted, 2) plotting one figure per output
 setup.plotMdl = 0;                                                          % 0) model structure is not plotted, 1) model structure is plotted
 setup.featRank = 0;                                                         % 0) No feature ranking, 1) feature ranking
-setup.save = 0;                                                             % 0) output data not saved, 1) output data saved
+setup.save = 1;                                                             % 0) output data not saved, 1) output data saved
 
 %----------------------------------------
 % Training and Testing
@@ -163,7 +163,7 @@ setup.vlSheet = ["OP3"];                                                    % li
 
 % ID based
 setup.trID = [];                                                            % list of training IDs (if empty all remaining ones are used)
-setup.teID = [60];                                                          % list of testing IDs
+setup.teID = [60];                                                  % list of testing IDs 60, 62, 74
 setup.vlID = [10, 48, 63];                                                  % list of validation IDS
 
 % Ratio based
@@ -173,7 +173,7 @@ setup.rVl = 0.2;                                                            % pe
 %----------------------------------------
 % Inputs and Output Mapping
 %----------------------------------------
-setup.inp = ["Ta", "Tc", "Us", "Is", "Ss", "Tm", "Wm", "Iw"];               % list of input feature (strings)
+setup.inp = ["Ta", "Tc", "Us", "Is"];                                       % list of input feature (strings) "Ta", "Tc", "Us", "Is", "Ss", "Tm", "Wm", "Iw"
 setup.out = ["T_sw", "T_st", "T_so", "T_rm"];                               % list of temperature outputs (strings) 
 setup.ref = ["Tc", "Tc", "Tc", "Tc"];                                       % list of reference temperatures (strings) 
 
@@ -188,7 +188,6 @@ setup.selRC = 0;                                                            % RC
 
 % Multiple-Input Multiple-Output (MIMO)
 setup.selSS = 0;                                                            % SS-Model (State-Space) 0) de-activated, 1) activated
-setup.selSF = 0;                                                            % SF-Model (Structure-Function) 0) de-activated, 1) activated
 
 %----------------------------------------
 % Analytical 2D Models
@@ -200,7 +199,7 @@ setup.selPS = 0;                                                            % PO
 % Machine/Deep Learning (tbi)
 %----------------------------------------
 setup.selML = 0;                                                            % ML-Model (Machine Learning) 0) de-activated, 1) LR, 2) RF, 3) SVR, 4) GRP, 5) EN, 6) NN
-setup.selDL = 2;                                                            % DL-Model (Machine Learning) 0) de-activated, 1) CNN, 2) LSTM, 3) CNN+LSTM
+setup.selDL = 3;                                                            % DL-Model (Machine Learning) 0) de-activated, 1) CNN, 2) LSTM, 3) CNN+LSTM
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

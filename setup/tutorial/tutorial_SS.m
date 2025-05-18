@@ -127,14 +127,14 @@ setup.config = "tutorial_SS";                                               % na
 % Plotting and Saving
 %----------------------------------------
 setup.plotOut = 1;                                                          % 0) model output is not plotted, 1) model output is plotted, 2) plotting one figure per output
-setup.plotMdl = 0;                                                          % 0) model structure is not plotted, 1) model structure is plotted
+setup.plotMdl = 1;                                                          % 0) model structure is not plotted, 1) model structure is plotted
 setup.featRank = 0;                                                         % 0) No feature ranking, 1) feature ranking
 setup.save = 0;                                                             % 0) output data not saved, 1) output data saved
 
 %----------------------------------------
 % Training and Testing
 %----------------------------------------
-setup.train = 1;                                                            % 0) no model training, 1) model training
+setup.train = 0;                                                            % 0) no model training, 1) model training
 setup.test = 1;                                                             % 0) no model testing, 1) model testing
 
 
@@ -157,9 +157,9 @@ setup.teFile = "data_Tutorial_1D";                                          % te
 setup.vlFile = ["data_Tutorial_1D"];                                        % list of validation files (strings) at least one
 
 % Sheet based
-setup.trSheet = ["OP1", "OP2"];                                             % list of training sheets (strings) at least one
-setup.teSheet = "OP3";                                                      % testing sheet (string) exactly one
-setup.vlSheet = ["OP3"];                                                    % list of validation sheets (strings) at least one
+setup.trSheet = ["OP1", "OP3"];                                             % list of training sheets (strings) at least one
+setup.teSheet = "OP2";                                                      % testing sheet (string) exactly one
+setup.vlSheet = ["OP2"];                                                    % list of validation sheets (strings) at least one
 
 % ID based
 setup.trID = [];                                                            % list of training IDs (if empty all remaining ones are used)
@@ -188,7 +188,6 @@ setup.selRC = 0;                                                            % RC
 
 % Multiple-Input Multiple-Output (MIMO)
 setup.selSS = 1;                                                            % SS-Model (State-Space) 0) de-activated, 1) activated
-setup.selSF = 0;                                                            % SF-Model (Structure-Function) 0) de-activated, 1) activated
 
 %----------------------------------------
 % Analytical 2D Models

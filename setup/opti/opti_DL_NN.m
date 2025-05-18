@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: tutorial_ML                                                       %
+% File: opti_DL_NN                                                        %
 % Date: 18.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -14,7 +14,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This tutorial exemplarly shows the usage of ML models based on
+% This tutorial exemplarly shows the usage of DL models based on
 % temperature measurement of a induction motor with different input
 % features.
 
@@ -113,7 +113,7 @@ setup = struct();
 % General
 %===================================================
 setup.user = "Pascal Schirmer";                                             % name of the user (string)
-setup.name = "tutorial_ML";                                                 % name of the simulation (string)
+setup.name = "opti_DL_NN";                                                  % name of the simulation (string)
 
 %===================================================
 % Experiment
@@ -121,15 +121,15 @@ setup.name = "tutorial_ML";                                                 % na
 %----------------------------------------
 % Configuration
 %----------------------------------------
-setup.config = "tutorial_ML";                                               % name of the config file (string)
+setup.config = "tutorial_DL";                                               % name of the config file (string)
 
 %----------------------------------------
 % Plotting and Saving
 %----------------------------------------
-setup.plotOut = 1;                                                          % 0) model output is not plotted, 1) model output is plotted, 2) plotting one figure per output
+setup.plotOut = 2;                                                          % 0) model output is not plotted, 1) model output is plotted, 2) plotting one figure per output
 setup.plotMdl = 0;                                                          % 0) model structure is not plotted, 1) model structure is plotted
 setup.featRank = 0;                                                         % 0) No feature ranking, 1) feature ranking
-setup.save = 0;                                                             % 0) output data not saved, 1) output data saved
+setup.save = 1;                                                             % 0) output data not saved, 1) output data saved
 
 %----------------------------------------
 % Training and Testing
@@ -163,7 +163,7 @@ setup.vlSheet = ["OP3"];                                                    % li
 
 % ID based
 setup.trID = [];                                                            % list of training IDs (if empty all remaining ones are used)
-setup.teID = [62];                                                          % list of testing IDs
+setup.teID = [60];                                                  % list of testing IDs 60, 62, 74
 setup.vlID = [10, 48, 63];                                                  % list of validation IDS
 
 % Ratio based
@@ -173,9 +173,9 @@ setup.rVl = 0.2;                                                            % pe
 %----------------------------------------
 % Inputs and Output Mapping
 %----------------------------------------
-setup.inp = ["Ta", "Tc", "Us", "Is"];                                       % list of input feature (strings)
-setup.out = ["T_sw"];                                                       % list of temperature outputs (strings) 
-setup.ref = ["Tc"];                                                         % list of reference temperatures (strings)
+setup.inp = ["Ta", "Tc", "Us", "Is"];                                       % list of input feature (strings) "Ta", "Tc", "Us", "Is", "Ss", "Tm", "Wm", "Iw"
+setup.out = ["T_sw", "T_st", "T_so", "T_rm"];                               % list of temperature outputs (strings) 
+setup.ref = ["Tc", "Tc", "Tc", "Tc"];                                       % list of reference temperatures (strings) 
 
 %===================================================
 % Model
@@ -198,8 +198,8 @@ setup.selPS = 0;                                                            % PO
 %----------------------------------------
 % Machine/Deep Learning (tbi)
 %----------------------------------------
-setup.selML = 2;                                                            % ML-Model (Machine Learning) 0) de-activated, 1) LR, 2) RF, 3) SVR, 4) GRP, 5) EN, 6) NN
-setup.selDL = 0;                                                            % DL-Model (Machine Learning) 0) de-activated, 1) activated
+setup.selML = 0;                                                            % ML-Model (Machine Learning) 0) de-activated, 1) LR, 2) RF, 3) SVR, 4) GRP, 5) EN, 6) NN
+setup.selDL = 3;                                                            % DL-Model (Machine Learning) 0) de-activated, 1) CNN, 2) LSTM, 3) CNN+LSTM
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

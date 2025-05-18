@@ -24,10 +24,10 @@ clc
 % Dimension 
 %---------------------------------------------------
 % General
-M = 51;                                                                    % Number of X points
-N = 34;                                                                    % Number of Y points
+M = 51;                                                                     % Number of X points
+N = 44;                                                                     % Number of Y points
 l = 50e-3;                                                                  % x length (m)
-b = 1650e-6;                                                                % width (m)
+b = 2150e-6;                                                                % width (m)
 h = 50e-6;                                                                  % y length (m)
 dx = 50e-6;                                                                 % internal FEM resolution (m)
 Vol = 8*l*b*h;                                                              % Volume (m³)
@@ -35,7 +35,7 @@ Vol = 8*l*b*h;                                                              % Vo
 % Board
 b_Cu = 100e-6;
 b_Di = 50e-6;
-b_Al = 1.0e-3;
+b_Al = 1.5e-3;
 b_Ga = 0.5e-3;
 
 % Switch
@@ -55,7 +55,7 @@ matCp = [380, 800, 1000, 1500];                                             % Sp
 %---------------------------------------------------
 % losses 
 %---------------------------------------------------
-Pv = 20;                                                                    % Power losses per switch (W)
+Pv = 5;                                                                     % Power losses per switch (W)
 q = Pv/A_sw/h_Sw/4;                                                         % Volumetric heat generation (W/m3)
 
 %---------------------------------------------------
