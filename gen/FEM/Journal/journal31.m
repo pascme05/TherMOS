@@ -24,10 +24,10 @@ clc
 % Dimension 
 %---------------------------------------------------
 % General
-M = 51;                                                                    % Number of X points
-N = 34;                                                                    % Number of Y points
+M = 51;                                                                     % Number of X points
+N = 44;                                                                     % Number of Y points
 l = 50e-3;                                                                  % x length (m)
-b = 1650e-6;                                                                % width (m)
+b = 2150e-6;                                                                % width (m)
 h = 50e-6;                                                                  % y length (m)
 dx = 50e-6;                                                                 % internal FEM resolution (m)
 Vol = 8*l*b*h;                                                              % Volume (m³)
@@ -35,7 +35,7 @@ Vol = 8*l*b*h;                                                              % Vo
 % Board
 b_Cu = 100e-6;
 b_Di = 50e-6;
-b_Al = 1.0e-3;
+b_Al = 1.5e-3;
 b_Ga = 0.5e-3;
 
 % Switch
@@ -65,9 +65,11 @@ Ta = 35;                                                                    % am
 fl = 2000;                                                                  % heat flux boundary (W/m2)
 hc = 1000;                                                                  % heat transfer coefficient (W/m2K)
 Tinit = 35;                                                                 % Initial temperature (degC)
-Tend = 50;                                                                 % end value time (sec)
-dt = 1;                                                                     % sampling time (sec)
+Tend = 62;                                                                  % end value time (sec)
+dt = 0.1;                                                                   % sampling time (sec)
 tlist = 0:dt:Tend-dt;                                                       % time vector (sec)
+step = [50, 60];
+Pv_scale = [1.5, 3];
 
 %---------------------------------------------------
 % Settings
@@ -208,7 +210,8 @@ if waveform == 0
     end
 elseif waveform == 1
     for j = 1:length(tlist)
-        if tlist(j) < 40
+        % Stationary
+        if tlist(j) < step(1)
             for i = 1:size(T,1)
                 if results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 15e-3 && results.Mesh.Nodes(1,i) <= 23e-3
                     Q(i,:) = q;
@@ -218,12 +221,26 @@ elseif waveform == 1
                     % Q(i,:) = q/2;
                 end
             end
+        
+        % 10 sec Overload
+        elseif tlist(j) < step(2)
+            for i = 1:size(T,1)
+                if results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 15e-3 && results.Mesh.Nodes(1,i) <= 23e-3
+                    Q(i,:) = Pv_scale(1)*q;
+                elseif results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 27e-3 && results.Mesh.Nodes(1,i) <= 35e-3
+                    Q(i,:) =  Pv_scale(1)*q;
+                else
+                    % Q(i,:) = q/2;
+                end
+            end
+        
+        % 2 sec Overload
         else
             for i = 1:size(T,1)
                 if results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 15e-3 && results.Mesh.Nodes(1,i) <= 23e-3
-                    Q(i,:) = 1.5*q;
+                    Q(i,:) = Pv_scale(2)*q;
                 elseif results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 27e-3 && results.Mesh.Nodes(1,i) <= 35e-3
-                    Q(i,:) = 1.5*q;
+                    Q(i,:) = Pv_scale(2)*q;
                 else
                     % Q(i,:) = q/2;
                 end
@@ -346,48 +363,60 @@ end
 %---------------------------------------------------
 % Define the time-varying heat source (step)
 %---------------------------------------------------
-function Q = heatSourceTime(location,state)
-    % Init
-    Pv1 = 20;
-    Pv2 = 30;
-    q1 = 1/8e-7/0.055/4; % Maximum heat source value
-    step_time = 40; % Time at which the step occurs
-    Q = zeros(1,numel(location.x));
-
-    % Geo
+function Q = heatSourceTime(location, state)
+    % Geometry
     b_Di = 50e-6;
     b_Al = 1.0e-3;
     b_Ga = 0.5e-3;
 
+    % Parameters
+    Pv1 = 20;
+    l_Sw = 8e-3;
+    b_Sw = 100e-6;
+    h_Sw = 5.5e-3;
+    Vol_sw = l_Sw * b_Sw * h_Sw;
+    step = [50, 60];
+    Pv_scale = [1.5, 3];
+    Q = zeros(1,numel(location.x));
+
+    % Logical masks
+    isCopper = location.y >= (b_Ga + b_Al + b_Di);
+    isLeft   = location.x > 15e-3 & location.x <= 23e-3;
+    isRight  = location.x > 27e-3 & location.x <= 35e-3;
+
+    % Active region
+    active = isCopper & (isLeft | isRight);
+    
     % Check for NaNs
     if(isnan(state.time))
       Q(1,:) = NaN;
       return
     end
-
-    % Step Function
-    if state.time < step_time
-        for i = 1:numel(location.x)
-            if location.y(i) >= (b_Ga + b_Al + b_Di) && location.x(i) > 15e-3 && location.x(i) <= 23e-3
-                Q(1,i) = Pv1/q1;
-            elseif location.y(i) >= (b_Ga + b_Al + b_Di) && location.x(i) > 27e-3 && location.x(i) <= 35e-3
-                Q(1,i) = Pv1/q1;
-            else
-                Q(1,i) = 0;
-            end
-        end
+    
+    % Time-dependent power
+    if state.time < step(1)
+        Pv = Pv1 / 4;
+    elseif state.time < step(2)
+        Pv = Pv_scale(1) * Pv1 / 4;
     else
-        for i = 1:numel(location.x)
-            if location.y(i) >= (b_Ga + b_Al + b_Di) && location.x(i) > 15e-3 && location.x(i) <= 23e-3
-                Q(1,i) = Pv2/q1;
-            elseif location.y(i) >= (b_Ga + b_Al + b_Di) && location.x(i) > 27e-3 && location.x(i) <= 35e-3
-                Q(1,i) = Pv2/q1;
-            else
-                Q(1,i) = 0;
-            end
+        Pv = Pv_scale(2) * Pv1 / 4;
+    end
+    
+    % Heat generation rate
+    q_val = Pv / Vol_sw;
+
+    % Compute heat generation
+    for i = 1:length(numel(location.x))
+        % Logical masks
+        isCopper = location.y(i) >= (b_Ga + b_Al + b_Di);
+        isLeft   = location.x(i) > 15e-3 & location.x(i) <= 23e-3;
+        isRight  = location.x(i) > 27e-3 & location.x(i) <= 35e-3;
+        active = isCopper & (isLeft | isRight);
+        if active
+            Q(1,i) = q_val;
         end
     end
 
     % Debug
-    % disp(['Time: ', num2str(state.time), ', Heat Source: ', num2str(Q(1))]);
+    disp(['Time: ', num2str(state.time), ', Heat Source: ', num2str(Q(1))]);
 end
