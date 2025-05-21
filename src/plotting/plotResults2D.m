@@ -109,7 +109,7 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     %----------------------------------------
     % Initial
     [~, selX] = min(abs(x - selX));
-    [~, selY] = min(abs(x - selY));
+    [~, selY] = min(abs(y - selY));
 
     % Limit
     if selX > length(x)
