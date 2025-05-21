@@ -214,8 +214,8 @@ function [] = main(setup, path)
     %----------------------------------------
     % Calc
     %----------------------------------------
-    [data.tr, setup] = dimData(data.tr, setup, para);
-    [data.vl, setup] = dimData(data.vl, setup, para);
+    [data.tr, ~] = dimData(data.tr, setup, para);
+    [data.vl, ~] = dimData(data.vl, setup, para);
     [data.te, setup] = dimData(data.te, setup, para);
     fprintf('\n');
 
