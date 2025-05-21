@@ -96,9 +96,6 @@ function [] = main(setup, path)
     %----------------------------------------
     % Model Order and Data Dimensions
     %----------------------------------------
-    if (data.tr.Dim >= 2 && (setup.selPO + setup.selPS) == 0)
-        error("ERROR: 2D/3D data input and 1D model"); 
-    end
     if (data.tr.Dim < 2 && setup.selPO == 1) || (data.tr.Dim < 2 && setup.selPS == 1)
         error("ERROR: 1D data input and 2D model");
     end
@@ -217,9 +214,9 @@ function [] = main(setup, path)
     %----------------------------------------
     % Calc
     %----------------------------------------
-    data.tr = dimData(data.tr, setup, para);
-    data.vl = dimData(data.vl, setup, para);
-    data.te = dimData(data.te, setup, para);
+    [data.tr, setup] = dimData(data.tr, setup, para);
+    [data.vl, setup] = dimData(data.vl, setup, para);
+    [data.te, setup] = dimData(data.te, setup, para);
     fprintf('\n');
 
 
