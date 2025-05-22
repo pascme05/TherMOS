@@ -107,7 +107,9 @@ function out = rcSol(mdl, data, para)
     %===================================================
     % Correcting Offset
     %===================================================
-    % Tj_est = Tj_est + Toff;
+    if para.Exp.gen.init == 1
+        Tj_est = Tj_est + Toff;
+    end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
