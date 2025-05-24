@@ -114,7 +114,7 @@ setup.name = "journal3";                                                    % na
 %----------------------------------------
 % Configuration
 %----------------------------------------
-setup.config = "journal3";                                                  % name of the config file (string)
+setup.config = "\journal\journal3";                                         % name of the config file (string)
 
 %----------------------------------------
 % Plotting and Saving

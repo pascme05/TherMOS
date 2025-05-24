@@ -121,7 +121,7 @@ setup.name = "tutorial_DL";                                                 % na
 %----------------------------------------
 % Configuration
 %----------------------------------------
-setup.config = "tutorial_DL";                                               % name of the config file (string)
+setup.config = "\tutorial\tutorial_DL";                                     % name of the config file (string)
 
 %----------------------------------------
 % Plotting and Saving

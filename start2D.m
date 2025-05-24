@@ -114,7 +114,7 @@ setup.name = "default2D";                                                   % na
 %----------------------------------------
 % Configuration
 %----------------------------------------
-setup.config = "default2D";                                                 % name of the config file (string)
+setup.config = "\default\default2D";                                        % name of the config file (string)
 
 %----------------------------------------
 % Plotting and Saving

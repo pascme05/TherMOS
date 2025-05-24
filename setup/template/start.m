@@ -114,7 +114,7 @@ setup.name = "default";                                                     % na
 %----------------------------------------
 % Configuration
 %----------------------------------------
-setup.config = "default";                                                   % name of the config file (string)
+setup.config = "\default\default";                                          % name of the config file (string)
 
 %----------------------------------------
 % Plotting and Saving
