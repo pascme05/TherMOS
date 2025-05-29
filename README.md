@@ -21,6 +21,7 @@ while having boundary conditions on system level. The following aspects are cons
 Therefore, the full order model consists next, to the geometry, of two independent reference temperatures and losses. 
 
 ![phyMdl.png](docu%2Ffigures%2FphyMdl.png)
+
 Figure 1: Physical Model describing the generalized architecture that should be modelled using the ROMs.
 
 ## Reduced Order Model
@@ -29,7 +30,7 @@ with high computational load using mathematical techniques. For example the temp
 could then be modeled according to Fourier theory as a spatial temporal variable with infinite 
 number of modes [1]:
 
-$ T(x, y, t) = \sum_{i=1}^{\infty} \theta_i(t) \, \phi_i(x, y) $
+$$ T(x, y, t) = \sum_{i=1}^{\infty} \theta_i(t) \, \phi_i(x, y) $$
 
 Here:  
 - $T(x, y, t)$ is the temperature distribution over space and time  
@@ -38,9 +39,10 @@ Here:
 
 The model coefficients are determined by minimizing the reconstruction error between the full-order model and the reduced-order approximation:
 
-$ \min_{\phi_i(x, y)} \left\| T(x, y, t) - \hat{T}(x, y, t) \right\| $
+$$ \min_{\phi_i(x, y)} \left\| T(x, y, t) - \hat{T}(x, y, t) \right\| $$
 
 ![romMdl.png](docu%2Ffigures%2FromMdl.png)
+
 Figure 2: Example of ROM using a thermal network.
 
 
