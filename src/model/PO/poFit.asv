@@ -156,16 +156,11 @@ function mdl = poFit(data, ~, para)
     W = wq_y(:) * wq_x(:)';
     % W = ones(size(W));
     
-
     %----------------------------------------
     % Jacobian Area Mapping (J)
     %----------------------------------------
     Jgrid = jacobian2D(xInp, yInp, xq_1d, yq_1d, 0.001);
     % Jgrid = ones(size(Jgrid));
-    
-    %----------------------------------------
-    % Spacing
-    %----------------------------------------
 
     %===================================================
     % Boundary Conditions
@@ -231,10 +226,10 @@ function mdl = poFit(data, ~, para)
     % Gradients
     %===================================================
     if K == 1
-        [dPhidx, dPhidy] = gradient(sPhi, x, y);
+        [dPhidx, dPhidy] = gradient(sPhi, dx, dy);
     else
         for i = 1:K
-            [dPhidx(:, :, i), dPhidy(:, :, i)] = gradient(sPhi(:, :, i), x, y);
+            [dPhidx(:, :, i), dPhidy(:, :, i)] = gradient(sPhi(:, :, i), dx, dy);
         end
     end
 
@@ -255,8 +250,8 @@ function mdl = poFit(data, ~, para)
         for i = 1:K
             for ii = 1:K
                 % Interpolation
-                sPhi_i_q = interp2(Xinit, Yinit, squeeze(sPhi(:,:,i)), Xq, Yq, 'linear');
-                sPhi_ii_q = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
+                sPhi_i_q = interp2(Xinit, Yinit, squeeze(sPhi(:,:,i)), Xq, Yq, 'nearest');
+                sPhi_ii_q = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'nearest');
 
                 % Integration
                 Cth(i, ii) = sum(sum(Jgrid .* W .* sPhi_ii_q .* sPhi_i_q)); 
@@ -286,11 +281,11 @@ function mdl = poFit(data, ~, para)
         for i = 1:K
             for ii = 1:K
                 % Interpolation
-                sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
-                dPhidx_i = interp2(Xinit, Yinit, squeeze(dPhidx(:,:,i)), Xq, Yq, 'linear');
-                dPhidx_ii = interp2(Xinit, Yinit, squeeze(dPhidx(:,:,ii)), Xq, Yq, 'linear');
-                dPhidy_i = interp2(Xinit, Yinit, squeeze(dPhidy(:,:,i)), Xq, Yq, 'linear');
-                dPhidy_ii = interp2(Xinit, Yinit, squeeze(dPhidy(:,:,ii)), Xq, Yq, 'linear');
+                sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'nearest');
+                dPhidx_i = interp2(Xinit, Yinit, squeeze(dPhidx(:,:,i)), Xq, Yq, 'nearest');
+                dPhidx_ii = interp2(Xinit, Yinit, squeeze(dPhidx(:,:,ii)), Xq, Yq, 'nearest');
+                dPhidy_i = interp2(Xinit, Yinit, squeeze(dPhidy(:,:,i)), Xq, Yq, 'nearest');
+                dPhidy_ii = interp2(Xinit, Yinit, squeeze(dPhidy(:,:,ii)), Xq, Yq, 'nearest');
 
                 % Boundary Free
                 Gth(i, ii) = sum(sum(Jgrid .* W .* squeeze(alpha2D .* (dPhidx_ii .* dPhidx_i + dPhidy_i .* dPhidy_ii))));
@@ -308,7 +303,7 @@ function mdl = poFit(data, ~, para)
     %----------------------------------------
     % Stiffness Matrices
     %----------------------------------------
-    GC = Gth * pinv(Cth);
+    GC = Gth / Cth;
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
@@ -319,25 +314,24 @@ function mdl = poFit(data, ~, para)
     % Init
     q = zeros(K, Nt);
     g0 = T(1,:) * rPhi;
-    matW = Jgrid .* W .* alpha2D_i ./ k2D_i;
     alpha_opt= ones(K,1);
 
     % Project Heat Losses
     for i = 1:Nt
         for ii = 1:K
             % Interpolation
-            sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'linear');
-            sQ_i = interp2(Xinit, Yinit, squeeze(sQ(i, :, :)), Xq, Yq, 'linear');
+            sPhi_ii = interp2(Xinit, Yinit, squeeze(sPhi(:,:,ii)), Xq, Yq, 'nearest');
+            sQ_i = interp2(Xinit, Yinit, squeeze(sQ(i, :, :)), Xq, Yq, 'nearest');
 
             % Integration
-            q(ii, i) = sum(sum(matW .* sQ_i .* sPhi_ii));
+            q(ii, i) = sum(sum(Jgrid .* W .* alpha2D_i ./ k2D_i .* sQ_i .* sPhi_ii));
         end
     end
 
     % Optimize
     scale = sqrt(lam(1:K));
     [Cth, Gth, ~] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
-    % [alpha_opt, ~, ~] = optAlpha((theta-g0)', q, Ts, Cth, Gth, scale);
+    [alpha_opt, ~, ~] = optAlpha((theta-g0)', q, Ts, Cth, Gth, scale);
 
     % % ----------------------------------------------------
     % % Reconstruct

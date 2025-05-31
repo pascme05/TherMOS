@@ -153,6 +153,11 @@ function out = poSol(mdl, data, ~)
     % Source Terms
     %===================================================
     %----------------------------------------
+    % Init
+    %----------------------------------------
+    matW = Jgrid .* W .* alpha2D_i ./ k2D_i;
+
+    %----------------------------------------
     % Heat Generation
     %----------------------------------------
     for i = 1:Nt
@@ -162,7 +167,7 @@ function out = poSol(mdl, data, ~)
             sQ_i = interp2(Xinit, Yinit, squeeze(sQ(i, :, :)), Xq, Yq, 'linear');
 
             % Integration
-            q(ii, i) = sum(sum(Jgrid .* W .* alpha2D_i ./ k2D_i .* sQ_i .* sPhi_ii));
+            q(ii, i) = sum(sum(matW .* sQ_i .* sPhi_ii));
         end
     end
 
@@ -211,7 +216,7 @@ function out = poSol(mdl, data, ~)
         % Solver options
         %----------------------------------------
         odeoptions = odeset('Mass', Cth, 'JConstant', 'on', ...
-                            'RelTol', 1e-5, 'AbsTol', 1e-7, ...
+                            'RelTol', 1e-9, 'AbsTol', 1e-12, ...
                             'Jacobian', -Gth);
 
         %----------------------------------------
@@ -223,7 +228,7 @@ function out = poSol(mdl, data, ~)
         %----------------------------------------
         % Solver options
         %----------------------------------------
-        odeoptions = odeset('RelTol', 1e-5, 'AbsTol', 1e-7);
+        odeoptions = odeset('RelTol', 1e-9, 'AbsTol', 1e-12);
         
         %----------------------------------------
         % Solution
@@ -277,7 +282,10 @@ function f = podPDE(t, u, Gth, q, qt)
 
     % Interpolate within range
     else
-        q1 = interp1(qt, q, t); 
+        q1 = zeros(1, size(q, 2));
+        for i = 1:size(q, 2)
+            q1(i) = interp1(qt, q(:, i), t);
+        end
     end
 
     %----------------------------------------

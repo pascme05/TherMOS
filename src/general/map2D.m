@@ -59,6 +59,7 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
     else
         method = 'nearest';
     end
+    method = 'linear';
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
