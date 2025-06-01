@@ -153,6 +153,11 @@ function out = poSol(mdl, data, ~)
     % Source Terms
     %===================================================
     %----------------------------------------
+    % Init
+    %----------------------------------------
+    matW = Jgrid .* W .* alpha2D_i ./ k2D_i;
+
+    %----------------------------------------
     % Heat Generation
     %----------------------------------------
     for i = 1:Nt
@@ -162,7 +167,7 @@ function out = poSol(mdl, data, ~)
             sQ_i = interp2(Xinit, Yinit, squeeze(sQ(i, :, :)), Xq, Yq, 'linear');
 
             % Integration
-            q(ii, i) = sum(sum(Jgrid .* W .* alpha2D_i ./ k2D_i .* sQ_i .* sPhi_ii));
+            q(ii, i) = sum(sum(matW .* sQ_i .* sPhi_ii));
         end
     end
 
@@ -189,6 +194,7 @@ function out = poSol(mdl, data, ~)
     %===================================================
     Cth = Cth / tau;
     Gth = Gth * tau;
+    GC = Gth * pinv(Cth);
     F = F / q_scale * tau;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -210,14 +216,24 @@ function out = poSol(mdl, data, ~)
         %----------------------------------------
         % Solver options
         %----------------------------------------
-        odeoptions = odeset('Mass', Cth, 'JConstant', 'on', ...
-                            'RelTol', 1e-5, 'AbsTol', 1e-7, ...
-                            'Jacobian', -Gth);
+        odeoptions = odeset(...
+                            'Mass', Cth, ...
+                            'MStateDependence', 'none', ...
+                            'MassSingular', 'no', ...
+                            'Jacobian', -Gth, ...
+                            'JConstant', 'on', ...
+                            'RelTol', 1e-6, ...
+                            'AbsTol', 1e-8, ...
+                            'Stats', 'on', ...
+                            'InitialStep', Ts, ...
+                            'MaxStep', Ts ...
+                        );
 
         %----------------------------------------
         % Solution
         %----------------------------------------
-        sol = ode23s(@(t,y) podPDE(t,y,Gth,F',tlist),tlist,g0,odeoptions);
+        % sol = ode23s(@(t,y) podPDE(t,y,Gth,F',tlist),tlist,g0,odeoptions);
+        sol = ode15s(@(t, y) podPDE(t, y, Gth, F', tlist), tlist, g0, odeoptions);
         theta_hat = deval(sol, tlist)';
     else
         %----------------------------------------
@@ -228,7 +244,7 @@ function out = poSol(mdl, data, ~)
         %----------------------------------------
         % Solution
         %----------------------------------------
-        sol = ode45(@(t, y) podPDE(t, y, Gth/Cth, F', tlist), tlist, g0, odeoptions);
+        sol = ode45(@(t, y) podPDE(t, y, GC, F', tlist), tlist, g0, odeoptions);
         theta_hat = deval(sol, tlist)';
         theta_hat = theta_hat ./ diag(Cth)';
     end
@@ -277,7 +293,10 @@ function f = podPDE(t, u, Gth, q, qt)
 
     % Interpolate within range
     else
-        q1 = interp1(qt, q, t); 
+        q1 = zeros(1, size(q, 2));
+        for i = 1:size(q, 2)
+            q1(i) = interp1(qt, q(:, i), t);
+        end
     end
 
     %----------------------------------------
