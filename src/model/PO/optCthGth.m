@@ -37,18 +37,12 @@ function [C_opt, G_opt, q_est] = optCthGth(u, q, dt, C_init, G_init, lam)
     % Parameters
     %===================================================
     [K, ~] = size(u);                                                       % number of POD modes
-    
+    lambda_C = 1e-2;
+    lambda_G = 1e-2;
+
     %===================================================
     % Optimizer
     %===================================================
-    options = optimoptions('fminunc', ...
-        'Display', 'iter', ...
-        'MaxIterations', 1000, ...
-        'StepTolerance', 1e-8, ...
-        'OptimalityTolerance', 1e-8, ...
-        'FunctionTolerance', 1e-8, ...
-        'Algorithm', 'quasi-newton');
-
     options = optimoptions('lsqnonlin', ...
         'Display', 'iter', ...
         'MaxIterations', 1000, ...
@@ -58,26 +52,13 @@ function [C_opt, G_opt, q_est] = optCthGth(u, q, dt, C_init, G_init, lam)
         'Algorithm', 'trust-region-reflective');
 
 
-
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Normalize inputs
-    %===================================================
-    % u_norm = u / max(abs(u(:)));
-    % q_norm = q / max(abs(q(:)));
-    % lam_norm = lam;
-    if ~isscalar(lam)
-        lam_norm = lam / max(abs(lam(:)));
-    end
-
-    %===================================================
     % Compute du/dt using gradient
     %===================================================
     du_dt = gradient(u, dt, 2);
-    u_mid = u;
-    q_mid = q;
 
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -91,17 +72,13 @@ function [C_opt, G_opt, q_est] = optCthGth(u, q, dt, C_init, G_init, lam)
     %===================================================
     % Loss function
     %===================================================
-    % loss_fn = @(x) residual_fn(x, du_dt, u_norm, q_norm, K, lam_norm);
-    loss_fn = @(x) residual_vec(x, du_dt, u, q, K, lam);
+    loss_fn = @(x) residual_vec_prior(x, du_dt, u, q, K, C_init, G_init, ...
+                                      lam, lambda_C, lambda_G);
 
-    
-
-    
     %===================================================
     % Run optimization
     %===================================================
-    % [x_opt, ~] = fminunc(loss_fn, x0, options);
-    [x_opt, resnorm, residual, exitflag, output] = lsqnonlin(loss_fn, x0, [], [], options);
+    [x_opt, ~, ~, ~, ~] = lsqnonlin(loss_fn, x0, [], [], options);
     
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -132,26 +109,24 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Helper Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function err = residual_fn(x, du_dt, u, q, K, lam)
-    % Unpack C and G
+function r = residual_vec_prior(x, du_dt, u, q, K, C_init, G_init, lam, lambda_C, lambda_G)
+    % Unpack parameters
     C = reshape(x(1:K*K), K, K);
     G = reshape(x(K*K+1:end), K, K);
 
-    % Predicted q
+    % Predict q
     q_pred = C * du_dt + G * u;
 
-    % Residual error
-    residual = abs(q - q_pred).*lam;
-    err = sum((residual(:)).^2);  % sum of squared error
-end
+    % Data residual
+    r_data = (q - q_pred) .* lam;
+    r_data = r_data(:);
 
-function r = residual_vec(x, du_dt, u, q, K, lam)
-    C = reshape(x(1:K*K), K, K);
-    G = reshape(x(K*K+1:end), K, K);
+    % Regularization residuals toward prior
+    r_C = sqrt(lambda_C) * (C(:) - C_init(:));
+    r_G = sqrt(lambda_G) * (G(:) - G_init(:));
 
-    q_pred = C * du_dt + G * u;
-    r = (q - q_pred) .* lam;  % vector of residuals (no squaring!)
-    r = r(:);  % return as vector for lsqnonlin
+    % Total residual
+    r = [r_data; r_C; r_G];
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

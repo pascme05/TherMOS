@@ -313,16 +313,21 @@ function mdl = poFit(data, ~, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % ----------------------------------------------------
+    %===================================================
     % Optimize Matrices
-    % ----------------------------------------------------
+    %===================================================
+    %----------------------------------------
     % Init
+    %----------------------------------------
     q = zeros(K, Nt);
     g0 = T(1,:) * rPhi;
     matW = Jgrid .* W .* alpha2D_i ./ k2D_i;
     alpha_opt= ones(K,1);
-
+    scale = sqrt(lam(1:K));
+    
+    %----------------------------------------
     % Project Heat Losses
+    %----------------------------------------
     for i = 1:Nt
         for ii = 1:K
             % Interpolation
@@ -333,15 +338,24 @@ function mdl = poFit(data, ~, para)
             q(ii, i) = sum(sum(matW .* sQ_i .* sPhi_ii));
         end
     end
-
+    
+    %----------------------------------------
     % Optimize
-    scale = sqrt(lam(1:K));
+    %----------------------------------------
+    % Opti Cth/Gth wrt G0/C0
     [Cth, Gth, ~] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
+
+    % Opti Steady State Heat Balance
+    
+    % Opti Transient Heat Balance
     % [alpha_opt, ~, ~] = optAlpha((theta-g0)', q, Ts, Cth, Gth, scale);
 
-    % % ----------------------------------------------------
+    % Matrix Conidtioning
+    matCond = cond(Cth) + cond(Gth);
+
+    % %===================================================
     % % Reconstruct
-    % % ----------------------------------------------------
+    % %===================================================
     % % Init
     % temp = zeros(Nt, length(y), length(x));
     % T_hat = zeros(Nt, length(y), length(x));
@@ -375,6 +389,7 @@ function mdl = poFit(data, ~, para)
     mdl.Jgrid = Jgrid;
     mdl.alpha = alpha_opt;
     mdl.W = W;
+    mdl.matCond = matCond;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
