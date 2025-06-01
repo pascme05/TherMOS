@@ -346,6 +346,7 @@ function mdl = poFit(data, ~, para)
     [Cth, Gth, ~] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
 
     % Opti Steady State Heat Balance
+    % [alpha_opt, ~, ~] = optAlphaSS((theta-g0)', q, Gth, scale);
     
     % Opti Transient Heat Balance
     % [alpha_opt, ~, ~] = optAlpha((theta-g0)', q, Ts, Cth, Gth, scale);
