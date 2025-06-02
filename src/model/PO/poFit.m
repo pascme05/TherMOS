@@ -156,11 +156,16 @@ function mdl = poFit(data, ~, para)
     W = wq_y(:) * wq_x(:)';
     % W = ones(size(W));
     
+
     %----------------------------------------
     % Jacobian Area Mapping (J)
     %----------------------------------------
-    Jgrid = jacobian2D(xInp, yInp, xq_1d, yq_1d, 0.1);
+    Jgrid = jacobian2D(xInp, yInp, xq_1d, yq_1d, 0.001);
     % Jgrid = ones(size(Jgrid));
+    
+    %----------------------------------------
+    % Spacing
+    %----------------------------------------
 
     %===================================================
     % Boundary Conditions
@@ -226,10 +231,10 @@ function mdl = poFit(data, ~, para)
     % Gradients
     %===================================================
     if K == 1
-        [dPhidx, dPhidy] = gradient(sPhi, dx, dy);
+        [dPhidx, dPhidy] = gradient(sPhi, x, y);
     else
         for i = 1:K
-            [dPhidx(:, :, i), dPhidy(:, :, i)] = gradient(sPhi(:, :, i), dx, dy);
+            [dPhidx(:, :, i), dPhidy(:, :, i)] = gradient(sPhi(:, :, i), x, y);
         end
     end
 
@@ -303,20 +308,26 @@ function mdl = poFit(data, ~, para)
     %----------------------------------------
     % Stiffness Matrices
     %----------------------------------------
-    GC = Gth / Cth;
+    GC = Gth * pinv(Cth);
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % ----------------------------------------------------
+    %===================================================
     % Optimize Matrices
-    % ----------------------------------------------------
+    %===================================================
+    %----------------------------------------
     % Init
+    %----------------------------------------
     q = zeros(K, Nt);
     g0 = T(1,:) * rPhi;
-    % alpha_opt= ones(K,1);
-
+    matW = Jgrid .* W .* alpha2D_i ./ k2D_i;
+    alpha_opt= ones(K,1);
+    scale = sqrt(lam(1:K));
+    
+    %----------------------------------------
     % Project Heat Losses
+    %----------------------------------------
     for i = 1:Nt
         for ii = 1:K
             % Interpolation
@@ -324,18 +335,31 @@ function mdl = poFit(data, ~, para)
             sQ_i = interp2(Xinit, Yinit, squeeze(sQ(i, :, :)), Xq, Yq, 'linear');
 
             % Integration
-            q(ii, i) = sum(sum(Jgrid .* W .* alpha2D_i ./ k2D_i .* sQ_i .* sPhi_ii));
+            q(ii, i) = sum(sum(matW .* sQ_i .* sPhi_ii));
         end
     end
-
+    
+    %----------------------------------------
     % Optimize
-    scale = sqrt(lam(1:K));
+    %----------------------------------------
+    % Opti Cth/Gth wrt G0/C0
     [Cth, Gth, ~] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
-    [alpha_opt, ~, ~] = optAlpha((theta-g0)', q, Ts, Cth, Gth, scale);
+    
+    % Opti Cth and Gth
+    % [Cth, Gth, ~] = optCthGthUB((theta-g0)', q, Ts, Cth, Gth, scale);
 
-    % % ----------------------------------------------------
+    % Opti Steady State Heat Balance
+    % [alpha_opt, ~, ~] = optAlphaSS((theta-g0)', q, Gth, scale);
+    
+    % Opti Transient Heat Balance
+    % [alpha_opt, ~, ~] = optAlpha((theta-g0)', q, Ts, Cth, Gth, scale);
+
+    % Matrix Conidtioning
+    matCond = cond(Cth) + cond(Gth);
+
+    % %===================================================
     % % Reconstruct
-    % % ----------------------------------------------------
+    % %===================================================
     % % Init
     % temp = zeros(Nt, length(y), length(x));
     % T_hat = zeros(Nt, length(y), length(x));
@@ -369,6 +393,7 @@ function mdl = poFit(data, ~, para)
     mdl.Jgrid = Jgrid;
     mdl.alpha = alpha_opt;
     mdl.W = W;
+    mdl.matCond = matCond;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output

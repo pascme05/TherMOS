@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: opti_DL_Feat                                                      %
+% File: start                                                             %
 % Date: 18.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -13,13 +13,6 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This tutorial exemplarly shows the usage of DL models based on
-% temperature measurement of a induction motor with different input
-% features.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% Toolkit
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % #########################################################################
 % #              Thermal Model Order Reduction (TherMOS)                  #
@@ -113,7 +106,7 @@ setup = struct();
 % General
 %===================================================
 setup.user = "Pascal Schirmer";                                             % name of the user (string)
-setup.name = "opti_DL_Feat";                                                % name of the simulation (string)
+setup.name = "journal3_RC";                                                 % name of the simulation (string)
 
 %===================================================
 % Experiment
@@ -121,15 +114,15 @@ setup.name = "opti_DL_Feat";                                                % na
 %----------------------------------------
 % Configuration
 %----------------------------------------
-setup.config = "\tutorial\tutorial_DL";                                     % name of the config file (string)
+setup.config = "\journal\journal3_RC";                                      % name of the config file (string)
 
 %----------------------------------------
 % Plotting and Saving
 %----------------------------------------
-setup.plotOut = 2;                                                          % 0) model output is not plotted, 1) model output is plotted, 2) plotting one figure per output
-setup.plotMdl = 0;                                                          % 0) model structure is not plotted, 1) model structure is plotted
+setup.plotOut = 1;                                                          % 0) model output is not plotted, 1) model output is plotted, 2) plotting one figure per output
+setup.plotMdl = 1;                                                          % 0) model structure is not plotted, 1) model structure is plotted
 setup.featRank = 0;                                                         % 0) No feature ranking, 1) feature ranking
-setup.save = 1;                                                             % 0) output data not saved, 1) output data saved
+setup.save = 0;                                                             % 0) output data not saved, 1) output data saved
 
 %----------------------------------------
 % Training and Testing
@@ -144,27 +137,27 @@ setup.test = 1;                                                             % 0)
 %----------------------------------------
 % Format and Dimension
 %----------------------------------------
-setup.format = 'mat';                                                       % input data format: "xlsx" or "mat"
+setup.format = 'xlsx';                                                      % input data format: "xlsx" or "mat"
 setup.datDim = 1;                                                           % input data dimension: 1) 1D data, 2) 2D data, 3) 3D data
-setup.datSep = 3;                                                           % input data separation: 1) File based, 2) Sheet based, 3) ID based, 4) Ratio based
+setup.datSep = 1;                                                           % input data separation: 1) File based, 2) Sheet based, 3) ID based, 4) Ratio based
 
 %----------------------------------------
 % Training and Testing Selection
 %----------------------------------------
 % File based
-setup.trFile = ["motorTemp"];                                               % list of training files (strings) at least one
-setup.teFile = "motorTemp";                                                 % testing file (string) exactly one
-setup.vlFile = ["motorTemp"];                                               % list of validation files (strings) at least one
+setup.trFile = ["journal3_1D"];                                             % list of training files (strings) at least one
+setup.teFile = "journal3_1D";                                               % testing file (string) exactly one
+setup.vlFile = ["journal3_1D"];                                             % list of validation files (strings) at least one
 
 % Sheet based
-setup.trSheet = ["OP1", "OP2"];                                             % list of training sheets (strings) at least one
-setup.teSheet = "OP3";                                                      % testing sheet (string) exactly one
-setup.vlSheet = ["OP3"];                                                    % list of validation sheets (strings) at least one
+setup.trSheet = ["step5"];                                                  % list of training sheets (strings) at least one
+setup.teSheet = "seq1";                                                     % testing sheet (string) exactly one
+setup.vlSheet = ["step20"];                                                 % list of validation sheets (strings) at least one
 
 % ID based
 setup.trID = [];                                                            % list of training IDs (if empty all remaining ones are used)
-setup.teID = [60];                                                  % list of testing IDs 60, 62, 74
-setup.vlID = [10, 48, 63];                                                  % list of validation IDS
+setup.teID = [];                                                            % list of testing IDs
+setup.vlID = [];                                                            % list of validation IDS
 
 % Ratio based
 setup.rTr = 0.7;                                                            % percentag of training data (testing data is 1 - rTr)
@@ -173,9 +166,9 @@ setup.rVl = 0.2;                                                            % pe
 %----------------------------------------
 % Inputs and Output Mapping
 %----------------------------------------
-setup.inp = ["Ta", "Tc", "Us", "Is", "Ss", "Tm", "Wm", "Iw"];               % list of input feature (strings) 
-setup.out = ["T_sw", "T_st", "T_so", "T_rm"];                               % list of temperature outputs (strings) 
-setup.ref = ["Tc", "Tc", "Tc", "Tc"];                                       % list of reference temperatures (strings) 
+setup.inp = ["P1"];                                                         % list of input feature (strings)
+setup.out = ["T4"];                                                         % list of temperature outputs (strings) 
+setup.ref = ["Ta"];                                                         % list of reference temperatures (strings)
 
 %===================================================
 % Model
@@ -184,10 +177,11 @@ setup.ref = ["Tc", "Tc", "Tc", "Tc"];                                       % li
 % Analytical 1D Models
 %----------------------------------------
 % Single-Input Single-Output (SISO)
-setup.selRC = 0;                                                            % RC-Model (Foster) 0) de-activated, 1) activated
+setup.selRC = 1;                                                            % RC-Model (Foster) 0) de-activated, 1) activated
 
 % Multiple-Input Multiple-Output (MIMO)
 setup.selSS = 0;                                                            % SS-Model (State-Space) 0) de-activated, 1) activated
+setup.selSF = 0;                                                            % SF-Model (Structure-Function) 0) de-activated, 1) activated
 
 %----------------------------------------
 % Analytical 2D Models
@@ -198,8 +192,8 @@ setup.selPS = 0;                                                            % PO
 %----------------------------------------
 % Machine/Deep Learning (tbi)
 %----------------------------------------
-setup.selML = 0;                                                            % ML-Model (Machine Learning) 0) de-activated, 1) LR, 2) RF, 3) SVR, 4) GRP, 5) EN, 6) NN
-setup.selDL = 3;                                                            % DL-Model (Machine Learning) 0) de-activated, 1) CNN, 2) LSTM, 3) CNN+LSTM
+setup.selML = 0;                                                            % ML-Model (Machine Learning) 0) de-activated, 1) KNN, 2) RF, 3) SVR
+setup.selDL = 0;                                                            % DL-Model (Machine Learning) 0) de-activated, 1) activated
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

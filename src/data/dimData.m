@@ -116,6 +116,8 @@ function [out, setup] = dimData(data, setup, para)
         % Init
         %----------------------------------------
         out = data;
+        dx = data.Data.dx;
+        dy = data.Data.dy;
 
         %----------------------------------------
         % Get positions
@@ -126,7 +128,7 @@ function [out, setup] = dimData(data, setup, para)
         %----------------------------------------
         % Reduce Unstructured Data
         %----------------------------------------
-        out.X = data.X(:,idInp);
+        out.X = data.X(:,idInp) * dx * dy;
         out.y = data.y(:,idOut);
         out.r = data.r(:,idOut);
         out.off = data.off(:,idOut);
@@ -135,7 +137,7 @@ function [out, setup] = dimData(data, setup, para)
         % Reduce Structured Data
         %----------------------------------------
         for i = 1:N
-            out.X2{1,i} = data.X2{1,i}(:,idInp);
+            out.X2{1,i} = data.X2{1,i}(:,idInp) * dx * dy;
             out.y2{1,i} = data.y2{1,i}(:,idOut);
             out.r2{1,i} = data.r2{1,i}(:,idOut);
             out.off2{1,i} = data.off2{1,i}(:,idOut);

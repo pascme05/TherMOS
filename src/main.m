@@ -156,6 +156,24 @@ function [] = main(setup, path)
     data.te = offRemove(data.te, para);
     data.vl = offRemove(data.vl, para);
     fprintf('\n');
+    
+    %===================================================
+    % Adapt data dimension
+    %===================================================
+    %----------------------------------------
+    % Msg
+    %----------------------------------------
+    disp("----------------------------------------");
+    disp("Adapt Dimension")
+    disp("----------------------------------------");
+
+    %----------------------------------------
+    % Calc
+    %----------------------------------------
+    [data.tr, ~] = dimData(data.tr, setup, para);
+    [data.vl, ~] = dimData(data.vl, setup, para);
+    [data.te, setup] = dimData(data.te, setup, para);
+    fprintf('\n');
 
     %===================================================
     % Normalisation
@@ -199,24 +217,6 @@ function [] = main(setup, path)
     else
         disp("INFO: Padding deactivated")
     end
-    fprintf('\n');
-
-    %===================================================
-    % Adapt data dimension
-    %===================================================
-    %----------------------------------------
-    % Msg
-    %----------------------------------------
-    disp("----------------------------------------");
-    disp("Adapt Dimension")
-    disp("----------------------------------------");
-
-    %----------------------------------------
-    % Calc
-    %----------------------------------------
-    [data.tr, ~] = dimData(data.tr, setup, para);
-    [data.vl, ~] = dimData(data.vl, setup, para);
-    [data.te, setup] = dimData(data.te, setup, para);
     fprintf('\n');
 
 

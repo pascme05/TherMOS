@@ -662,9 +662,9 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     grid on;
     legend('True','Pred');
     subplot(2,1,2);
-    predTemp = mean(squeeze(pred.y),[2,3]);
-    trueTemp = mean(squeeze(test.y),[2,3]);
-    err = trueTemp - predTemp;
+    % predTemp = mean(squeeze(pred.y),[2,3]);
+    % trueTemp = mean(squeeze(test.y),[2,3]);
+    err = mean(squeeze(test.y) - squeeze(pred.y),[2,3]);
     plot(t_test, err);
     title("Temperatures Error (T)")
     xlabel("t (sec)");

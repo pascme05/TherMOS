@@ -38,7 +38,7 @@ function [data, para] = normData(data, para, sel)
     %===================================================
     % Extract Input
     %===================================================
-    if sel == 3
+    if sel ~= 1
         maxX = para.Dat.normVal.X.max;
         minX = para.Dat.normVal.X.min;
         avgX = para.Dat.normVal.X.avg;
@@ -53,7 +53,7 @@ function [data, para] = normData(data, para, sel)
     %===================================================
     % Extract Output
     %===================================================
-    if sel == 3
+    if sel ~= 1
         maxY = para.Dat.normVal.y.max;
         minY = para.Dat.normVal.y.min;
         avgY = para.Dat.normVal.y.avg;
@@ -68,7 +68,7 @@ function [data, para] = normData(data, para, sel)
     %===================================================
     % Extract Reference
     %===================================================
-    if sel == 3
+    if sel ~= 1
         maxR = para.Dat.normVal.r.max;
         minR = para.Dat.normVal.r.min;
         avgR = para.Dat.normVal.r.avg;
@@ -80,6 +80,21 @@ function [data, para] = normData(data, para, sel)
         stdR = std(data.r);
     end
     
+    %===================================================
+    % Correct Input
+    %===================================================
+    if sel == 1
+        if maxY == minY
+            minY = 0;
+        end
+        if maxX == minX
+            minX = 0;
+        end
+        if maxR == minR
+            minR = 0;
+        end
+    end
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

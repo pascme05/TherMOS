@@ -114,7 +114,7 @@ setup.name = "journalBusbar";                                               % na
 %----------------------------------------
 % Configuration
 %----------------------------------------
-setup.config = "journal1";                                                  % name of the config file (string)
+setup.config = "\journal\journal1";                                         % name of the config file (string)
 
 %----------------------------------------
 % Plotting and Saving

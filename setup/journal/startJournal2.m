@@ -106,7 +106,7 @@ setup = struct();
 % General
 %===================================================
 setup.user = "Pascal Schirmer";                                             % name of the user (string)
-setup.name = "journal2";                                               % name of the simulation (string)
+setup.name = "journal2";                                                    % name of the simulation (string)
 
 %===================================================
 % Experiment
@@ -114,7 +114,7 @@ setup.name = "journal2";                                               % name of
 %----------------------------------------
 % Configuration
 %----------------------------------------
-setup.config = "journal2";                                                  % name of the config file (string)
+setup.config = "\journal\journal2";                                         % name of the config file (string)
 
 %----------------------------------------
 % Plotting and Saving
