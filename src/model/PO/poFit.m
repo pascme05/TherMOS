@@ -343,16 +343,16 @@ function mdl = poFit(data, ~, para)
     % Optimize
     %----------------------------------------
     % Opti Cth/Gth wrt G0/C0
-    [Cth, Gth, ~] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
+    % [Cth, Gth, ~] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
     
     % Opti Cth and Gth
-    % [Cth, Gth, ~] = optCthGthUB((theta-g0)', q, Ts, Cth, Gth, scale);
+    [Cth, Gth, ~] = optCthGthUB((theta-g0)', q, Ts, Cth, Gth, scale);
 
     % Opti Steady State Heat Balance
     % [alpha_opt, ~, ~] = optAlphaSS((theta-g0)', q, Gth, scale);
     
     % Opti Transient Heat Balance
-    % [alpha_opt, ~, ~] = optAlpha((theta-g0)', q, Ts, Cth, Gth, scale);
+    [alpha_opt, ~, ~] = optAlpha((theta-g0)', q, Ts, Cth, Gth, scale);
 
     % Matrix Conidtioning
     matCond = cond(Cth) + cond(Gth);

@@ -1,0 +1,427 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
+% Topic: Power Electronics, Model Order Reduction                         %
+% File: journal3                                                          %
+% Date: 21.04.2025                                                        %
+% Author: Dr. Pascal A. Schirmer                                          %
+% Version: V.0.1                                                          %
+% Copyright:                                                              %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Format
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+close all
+clear variables
+clc
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Define Parameters and Variables
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%---------------------------------------------------
+% Dimension 
+%---------------------------------------------------
+% General
+M = 51;                                                                     % Number of X points
+N = 44;                                                                     % Number of Y points
+l = 50e-3;                                                                  % x length (m)
+b = 2150e-6;                                                                % width (m)
+h = 50e-6;                                                                  % y length (m)
+dx = 50e-6;                                                                 % internal FEM resolution (m)
+Vol = 8*l*b*h;                                                              % Volume (m³)
+
+% Board
+b_Cu = 100e-6;
+b_Di = 50e-6;
+b_Al = 1.5e-3;
+b_Ga = 0.5e-3;
+
+% Switch
+l_Sw = 8e-3;
+b_Sw = b_Cu;
+h_Sw = 5.5e-3;
+Vol_sw = h_Sw * l_Sw * b_Sw;
+A_sw = l_Sw*b_Cu;
+
+%---------------------------------------------------
+% Material 
+%---------------------------------------------------
+matK = [400, 2, 90, 4];                                                     % Thermal conductivity (W/mK)
+matRho = [8933, 2200, 2680, 3300];                                          % Material density (kg/m3)
+matCp = [380, 800, 1000, 1500];                                             % Specific heat capacity (J/kgK)
+
+%---------------------------------------------------
+% losses 
+%---------------------------------------------------
+Pv = 20;                                                                    % Power losses per switch (W)
+q = Pv/A_sw/h_Sw/4;                                                         % Volumetric heat generation (W/m3)
+
+%---------------------------------------------------
+% Load Case 
+%---------------------------------------------------
+Ta = 35;                                                                    % ambient temperature (degC)
+fl = 2000;                                                                  % heat flux boundary (W/m2)
+hc = 1000;                                                                  % heat transfer coefficient (W/m2K)
+Tinit = 35;                                                                 % Initial temperature (degC)
+Tend = 62;                                                                  % end value time (sec)
+dt = 0.1;                                                                   % sampling time (sec)
+tlist = 0:dt:Tend-dt;                                                       % time vector (sec)
+step = [50, 60];
+Pv_scale = [1.5, 3];
+
+%---------------------------------------------------
+% Settings
+%---------------------------------------------------
+plotting = 1;
+saving = 1;
+waveform = 1;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Define Geometry
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%---------------------------------------------------
+% Outline 
+%---------------------------------------------------
+% PCB
+R4 = [3,4,0,l,l,0,0,0,b_Ga,b_Ga]'; % Gapfiller
+R3 = [3,4,0,l,l,0,b_Ga,b_Ga,b_Ga+b_Al,b_Ga+b_Al]'; % Aluminium Core
+R2 = [3,4,0,l,l,0,b_Ga+b_Al,b_Ga+b_Al,b_Ga+b_Al+b_Di,b_Ga+b_Al+b_Di]'; % Dielectrica
+R1 = [3,4,0,l,l,0,b_Ga+b_Al+b_Di,b_Ga+b_Al+b_Di,b_Ga+b_Al+b_Di+b_Cu,b_Ga+b_Al+b_Di+b_Cu]'; % Copper Trace
+
+% Precompute z‐coordinates for clarity
+z_bot = b_Ga + b_Al + b_Di;
+z_top = b_Ga + b_Al + b_Di + b_Cu;
+
+% Copper split into five pieces along x:
+R_Cu1 = [3, 4,  0e-3,  15e-3,  15e-3,   0e-3, z_bot, z_bot, z_top, z_top]';
+R_Cu2 = [3, 4, 15e-3,  23e-3,  23e-3,  15e-3, z_bot, z_bot, z_top, z_top]';
+R_Cu3 = [3, 4, 23e-3,  27e-3,  27e-3,  23e-3, z_bot, z_bot, z_top, z_top]';
+R_Cu4 = [3, 4, 27e-3,  35e-3,  35e-3,  27e-3, z_bot, z_bot, z_top, z_top]';
+R_Cu5 = [3, 4, 35e-3,  50e-3,  50e-3,  35e-3, z_bot, z_bot, z_top, z_top]';
+
+%---------------------------------------------------
+% Combine the regions into a single geometry
+%---------------------------------------------------
+gd = [R_Cu1, R_Cu2, R_Cu3, R_Cu4, R_Cu5, R2, R3, R4];
+sf = 'R_Cu1+R_Cu2+R_Cu3+R_Cu4+R_Cu5+R2+R3+R4';
+ns = char('R_Cu1','R_Cu2','R_Cu3','R_Cu4','R_Cu5','R2','R3','R4');
+ns = ns';
+g = decsg(gd,sf,ns);
+
+%---------------------------------------------------
+% Model
+%---------------------------------------------------
+thermalmodel = createpde("thermal","transient");
+geometryFromEdges(thermalmodel,g)
+pdegplot(thermalmodel,"EdgeLabels","on","FaceAlpha",0.5,"FaceLabels","on")
+% axis equal
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Define Model
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%---------------------------------------------------
+% Material 
+%---------------------------------------------------
+thermalProperties(thermalmodel,"ThermalConductivity",matK(1),'Face',[1,2,3,4,5], ...
+                               "MassDensity",matRho(1), ...
+                               "SpecificHeat",matCp(1));
+thermalProperties(thermalmodel,"ThermalConductivity",matK(2),'Face',6, ...
+                               "MassDensity",matRho(2), ...
+                               "SpecificHeat",matCp(2));
+thermalProperties(thermalmodel,"ThermalConductivity",matK(3),'Face',7, ...
+                               "MassDensity",matRho(3), ...
+                               "SpecificHeat",matCp(3));
+thermalProperties(thermalmodel,"ThermalConductivity",matK(4),'Face',8, ...
+                               "MassDensity",matRho(4), ...
+                               "SpecificHeat",matCp(4));
+
+
+%---------------------------------------------------
+% Initial Conditions 
+%---------------------------------------------------
+thermalIC(thermalmodel,Tinit);
+
+%---------------------------------------------------
+% Boundary Conditions 
+%---------------------------------------------------
+% % Temperature
+% thermalBC(thermalmodel,"Edge",1,'Temperature',Ta);
+
+% Convection
+thermalBC(thermalmodel,"Edge",1,'ConvectionCoefficient',hc, ...
+                                'AmbientTemperature',Ta);
+
+% % Heat Flux
+% thermalBC(thermalmodel,"Edge",[6, 8],'HeatFlux',fl);
+
+%---------------------------------------------------
+% Heat Sources
+%---------------------------------------------------
+% Const
+if waveform == 0
+    internalHeatSource(thermalmodel,q,'Face',[1,3]);
+
+% Time
+elseif waveform == 1
+    internalHeatSource(thermalmodel,@heatSourceTime,'Face',[1,3]);
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Solve Model
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+generateMesh(thermalmodel,'Hmax',dx,'Hmin',dx,'Hgrad',1.0);
+pdemesh(thermalmodel);
+results = solve(thermalmodel,tlist);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Get results
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%---------------------------------------------------
+% Temperature 
+%---------------------------------------------------
+T = results.Temperature;
+xyz = thermalmodel.Mesh.Nodes;
+dx = (l)/(M-1);
+dy = (b)/(N-1);
+for k = 1:M
+    for kk = 1:N
+        [minD, idx] = min(sum(abs(xyz-[dx*k; dy*kk].*ones(size(xyz))),1));
+        xy(kk,k) = minD;
+        T1(:,kk,k) = T(idx, :);
+    end
+end
+
+%---------------------------------------------------
+% Internal Heat 
+%---------------------------------------------------
+Q = zeros(size(T));
+if waveform == 0
+    for i = 1:size(T,1)
+        if results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 15e-3 && results.Mesh.Nodes(1,i) <= 23e-3
+            Q(i,:) = q;
+        elseif results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 27e-3 && results.Mesh.Nodes(1,i) <= 35e-3
+            Q(i,:) = q;
+        else
+            % Q(i,:) = q/2;
+        end
+    end
+elseif waveform == 1
+    for j = 1:length(tlist)
+        % Stationary
+        if tlist(j) < step(1)
+            for i = 1:size(T,1)
+                if results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 15e-3 && results.Mesh.Nodes(1,i) <= 23e-3
+                    Q(i,:) = q;
+                elseif results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 27e-3 && results.Mesh.Nodes(1,i) <= 35e-3
+                    Q(i,:) = q;
+                else
+                    % Q(i,:) = q/2;
+                end
+            end
+        
+        % 10 sec Overload
+        elseif tlist(j) < step(2)
+            for i = 1:size(T,1)
+                if results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 15e-3 && results.Mesh.Nodes(1,i) <= 23e-3
+                    Q(i,:) = Pv_scale(1)*q;
+                elseif results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 27e-3 && results.Mesh.Nodes(1,i) <= 35e-3
+                    Q(i,:) =  Pv_scale(1)*q;
+                else
+                    % Q(i,:) = q/2;
+                end
+            end
+        
+        % 2 sec Overload
+        else
+            for i = 1:size(T,1)
+                if results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 15e-3 && results.Mesh.Nodes(1,i) <= 23e-3
+                    Q(i,:) = Pv_scale(2)*q;
+                elseif results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di) && results.Mesh.Nodes(1,i) > 27e-3 && results.Mesh.Nodes(1,i) <= 35e-3
+                    Q(i,:) = Pv_scale(2)*q;
+                else
+                    % Q(i,:) = q/2;
+                end
+            end
+        end
+    end
+end
+
+
+%---------------------------------------------------
+% Spatial Parameters
+%---------------------------------------------------
+Cp = matCp(2) * ones(length(T),1);
+k = matK(2) * ones(length(T),1);
+rho = matRho(2) * ones(length(T),1);
+for i = 1:size(T,1)
+    % Copper
+    if results.Mesh.Nodes(2,i) >= (b_Ga + b_Al + b_Di)
+        Cp(i,:) = matCp(1);
+        k(i,:) = matK(1);
+        rho(i,:) = matRho(1);
+    % Dielectrica
+    elseif results.Mesh.Nodes(2,i) >= (b_Ga + b_Al)
+        Cp(i,:) = matCp(2);
+        k(i,:) = matK(2);
+        rho(i,:) = matRho(2);
+    % Aluminium
+    elseif results.Mesh.Nodes(2,i) >= b_Ga
+        Cp(i,:) = matCp(3);
+        k(i,:) = matK(3);
+        rho(i,:) = matRho(3);
+    elseif results.Mesh.Nodes(2,i) < b_Ga
+        Cp(i,:) = matCp(4);
+        k(i,:) = matK(4);
+        rho(i,:) = matRho(4);
+    end
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Output
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%---------------------------------------------------
+% Define Variables 
+%---------------------------------------------------
+Cp = Cp;
+dx = dx;
+dy = dy;
+geo = results.Mesh.Nodes';
+k = k;
+Lx = l;
+Ly = b;
+r = Tinit * ones(size(T))';
+rho = rho;
+t = tlist;
+Ts = dt;
+X = Q';
+y = T';
+
+%---------------------------------------------------
+% Correct Time Step
+%---------------------------------------------------
+X = [X(1,:); X(1:end-1,:)];
+
+%---------------------------------------------------
+% Define Output Boundaries
+%---------------------------------------------------
+% Ambient Temperature
+Ta = Ta * ones(length(T),1);
+
+% Convection
+hc = hc * zeros(length(T),1);
+
+% Heat Flux
+fl = zeros(length(T),1);
+
+%---------------------------------------------------
+% Save Variables 
+%---------------------------------------------------
+% Define Vars
+vars_to_save = {'Cp', 'dx', 'dy', 'geo', 'k', 'Lx', 'Ly', 'r', 'rho', 't', ...
+                'Ts', 'X', 'y', 'Ta', 'hc', 'fl'};
+
+% Save Vars
+if saving == 1
+    save('data.mat', vars_to_save{:});
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Plotting
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+if plotting == 1
+    %---------------------------------------------------
+    % Fluxes
+    %---------------------------------------------------
+    figure
+    [qx,qy] = evaluateHeatFlux(results);
+    for i = 1:floor(length(tlist) / 10)
+        subplot(2,1,1)
+        pdeplot(thermalmodel,"XYData",results.Temperature(:,floor(i*10)))
+        subplot(2,1,2)
+        pdeplot(thermalmodel,'FlowData',[qx qy])
+        pause(0.001)
+    end
+    
+    %---------------------------------------------------
+    % Temperatures
+    %---------------------------------------------------
+    figure
+    for i = 1:floor(length(tlist) / 10)
+        dT1 = gradient(squeeze(T1(floor(i*10),:,:)), dx, dy);
+        subplot(2,1,1)
+        contourf(squeeze(T1(floor(i*10),:,:)))
+        colorbar
+        subplot(2,1,2)
+        contourf(dT1)
+        colorbar
+        pause(0.05)
+    end
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Functions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%---------------------------------------------------
+% Define the time-varying heat source (step)
+%---------------------------------------------------
+function Q = heatSourceTime(location, state)
+    % Geometry
+    b_Di = 50e-6;
+    b_Al = 1.0e-3;
+    b_Ga = 0.5e-3;
+
+    % Parameters
+    Pv1 = 20;
+    l_Sw = 8e-3;
+    b_Sw = 100e-6;
+    h_Sw = 5.5e-3;
+    Vol_sw = l_Sw * b_Sw * h_Sw;
+    step = [50, 60];
+    Pv_scale = [1.5, 3];
+    Q = zeros(1,numel(location.x));
+
+    % Logical masks
+    isCopper = location.y >= (b_Ga + b_Al + b_Di);
+    isLeft   = location.x > 15e-3 & location.x <= 23e-3;
+    isRight  = location.x > 27e-3 & location.x <= 35e-3;
+
+    % Active region
+    active = isCopper & (isLeft | isRight);
+    
+    % Check for NaNs
+    if(isnan(state.time))
+      Q(1,:) = NaN;
+      return
+    end
+    
+    % Time-dependent power
+    if state.time < step(1)
+        Pv = Pv1 / 4;
+    elseif state.time < step(2)
+        Pv = Pv_scale(1) * Pv1 / 4;
+    else
+        Pv = Pv_scale(2) * Pv1 / 4;
+    end
+    
+    % Heat generation rate
+    q_val = Pv / Vol_sw;
+
+    % Compute heat generation
+    for i = 1:length(numel(location.x))
+        % Logical masks
+        isCopper = location.y(i) >= (b_Ga + b_Al + b_Di);
+        isLeft   = location.x(i) > 15e-3 & location.x(i) <= 23e-3;
+        isRight  = location.x(i) > 27e-3 & location.x(i) <= 35e-3;
+        active = isCopper & (isLeft | isRight);
+        if active
+            Q(1,i) = q_val;
+        end
+    end
+
+    % Debug
+    disp(['Time: ', num2str(state.time), ', Heat Source: ', num2str(Q(1))]);
+end

@@ -37,8 +37,8 @@ function [C_opt, G_opt, q_est] = optCthGth(u, q, dt, C_init, G_init, lam)
     % Parameters
     %===================================================
     [K, ~] = size(u);                                                       % number of POD modes
-    lambda_C = 1e-5;
-    lambda_G = 1e-5;
+    lambda_C = 1e-3;
+    lambda_G = 1e-3;
 
     %===================================================
     % Optimizer

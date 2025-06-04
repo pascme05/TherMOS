@@ -48,6 +48,14 @@ Figure 2: Example of ROM using a thermal network.
 
 # Publication
 
+"TherMOS: A Robust Low-Resolution 2D Spatial Thermal Model Order Reduction Approach"
+
+The results presented in the above article can be directly reproduced using the setup files located in "TherMOS\setup\journal". To do so, the corresponding setup file needs to be copied to the root directory, i.e., "\TherMOS", and
+executed from there. It must be noted that due to the size of the data, the data must first be generated for the results presented in Section IV-C/D, and is only pre-generated using 1 sec sampling resolution (instead of 100 ms)
+for Section IV-B (it must be noted that these results are not the same as those presented in the paper due to the different sampling resolution). 
+
+The data for exact reproduction of the results can be regenerated using the scripts stored in "TherMOS\gen\FEM\journal" and should then be placed under "TherMOS\data\journal".
+
 
 # Dependencies
 The requirements of the PyPowerSim toolkit are summarized below:
