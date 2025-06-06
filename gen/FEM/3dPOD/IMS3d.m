@@ -25,21 +25,14 @@ M = 51;
 N = 44;
 K = 10;
 l = 10e-3;
-b = 2150e-6;
-h = 10e-3;  % Now height is 50 mm in z-direction
+h = 2150e-6;
+b = 10e-3;
 
 % Material layer thicknesses
-b_Cu = 100e-6;
-b_Di = 50e-6;
-b_Al = 1.5e-3;
-b_Ga = 0.5e-3;
-
-% Switch
-l_Sw = 8e-3;
-b_Sw = b_Cu;
-h_Sw = 5.5e-3;
-A_sw = l_Sw * b_Cu;
-Vol_sw = h_Sw * A_sw;
+h_Cu = 100e-6;
+h_Di = 50e-6;
+h_Al = 1.5e-3;
+h_Ga = 0.5e-3;
 
 % Material Properties
 matK = [400, 2, 90, 4];
@@ -47,18 +40,19 @@ matRho = [8933, 2200, 2680, 3300];
 matCp = [380, 800, 1000, 1500];
 
 % Mesh
-dx = 500e-6;
+dx = 50e-6;
 
 % Losses
 Pv = 20;
-q = Pv / (l*b * b_Cu * 8);
+Vol_Cu = l*b*h_Cu;
+q = Pv / Vol_Cu;
 
 % Load case
 Ta = 55;
 hc = 1000;
 Tinit = 55;
 Tend = 50;
-dt = 5;
+dt = 0.1;
 tlist = 0:dt:Tend-dt;
 
 % Settings
@@ -71,13 +65,13 @@ saving = 1;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Define Z levels
 z0 = 0;
-z1 = z0 + b_Ga;
-z2 = z1 + b_Al;
-z3 = z2 + b_Di;
-z4 = z3 + b_Cu;
+z1 = z0 + h_Ga;
+z2 = z1 + h_Al;
+z3 = z2 + h_Di;
+z4 = z3 + h_Cu;
 
 % Create Model
-gm = multicuboid(l,h,[b_Ga b_Al b_Di b_Cu],ZOffset=[z0 z1 z2 z3]);
+gm = multicuboid(l,b,[h_Ga h_Al h_Di h_Cu],ZOffset=[z0 z1 z2 z3]);
 
 % Combine geometry
 thermalmodel = createpde('thermal', 'transient');
@@ -119,7 +113,7 @@ internalHeatSource(thermalmodel, q, 'Cell', 4);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Solve Model
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-generateMesh(thermalmodel,'Hmax',dx,'Hmin',dx,'Hgrad',1.0);
+generateMesh(thermalmodel,'Hmax',10*dx,'Hmin',dx);
 pdemesh(thermalmodel);
 results = solve(thermalmodel,tlist);
 
@@ -186,6 +180,7 @@ end
 geo = results.Mesh.Nodes';
 Lx = l;
 Ly = b;
+Lz = h;
 r = Tinit * ones(size(T))';
 t = tlist;
 Ts = dt;
@@ -208,8 +203,8 @@ fl = zeros(length(T),1);
 % Save Variables 
 %---------------------------------------------------
 % Define Vars
-vars_to_save = {'Cp', 'dx', 'dy', 'dz', 'geo', 'k', 'Lx', 'Ly', 'r', 'rho', 't', ...
-                'Ts', 'X', 'y', 'Ta', 'hc', 'fl'};
+vars_to_save = {'Cp', 'dx', 'dy', 'dz', 'geo', 'k', 'Lx', 'Ly', 'Lz', 'r', ...
+                'rho', 't', 'Ts', 'X', 'y', 'Ta', 'hc', 'fl'};
 
 % Save Vars
 if saving == 1

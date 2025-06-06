@@ -129,12 +129,21 @@ function mdl = training(data, setup, para, path)
     %===================================================
     % POD-SS Model
     %===================================================
-    if setup.selPS == 1
+    if setup.selPS >= 1
         %----------------------------------------
         % Fitting 
         %----------------------------------------
+        % Start Time
         timeStart = tic;
-        mdl = psFit(data.tr, data.vl, para);
+
+        % Train
+        if setup.selPS == 1
+            mdl = psFit(data.tr, data.vl, para);
+        else
+            mdl = ps3Fit(data.tr, data.vl, para);
+        end
+
+        % Stop Time
         mdl.timeTrain = toc(timeStart);
 
         %----------------------------------------

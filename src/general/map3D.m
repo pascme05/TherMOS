@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: map2D                                                             %
+% File: map3D                                                             %
 % Date: 07.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -14,7 +14,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function maps a snapshot quantity to a 2D field variable
+% This function maps a snapshot quantity to a 3D field variable
 % -------------------------------------------------------------------------
 % Inp:  1) Tin:         Input snapshot matrix NtxN
 %       2) xInp/yInp:   Spatial input variables
@@ -25,7 +25,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
+function Tout = map3D(Tin, xInp, yInp, zInp, xOut, yOut, zOut, inter)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -35,7 +35,8 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
     [Nt, ~] = size(Tin);                                                    % number of samples Nt and spatial points N
     Nx = length(xOut);                                                      % number of output samples x
     Ny = length(yOut);                                                      % number of output samples y
-    Tout = zeros(Ny, Nx, Nt);                                               % Output temperature matrix
+    Nz = length(zOut);                                                      % number of output samples z
+    Tout = zeros(Nx, Ny, Nz, Nt);                                           % Output temperature matrix 4D array: (z, y, x, t)
     
     %===================================================
     % Interpolation
@@ -56,7 +57,7 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
     %===================================================
     % Create the new target grid
     %===================================================
-    [Xq, Yq] = meshgrid(xOut, yOut);
+    [Xq, Yq, Zq] = ndgrid(xOut, yOut, zOut);
 
     %===================================================
     % Interpolation
@@ -64,20 +65,20 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
     %----------------------------------------
     % Create interpolant once
     %----------------------------------------
-    F = scatteredInterpolant(xInp, yInp, Tin(1,:)', method, 'nearest');
+    F = scatteredInterpolant(xInp, yInp, zInp, Tin(1,:)', method, 'nearest');
     
     %----------------------------------------
     % Process each time step
     %----------------------------------------
     for i = 1:Nt
         F.Values = Tin(i,:)';
-        Tout(:,:,i) = F(Xq, Yq);
+        Tout(:,:,:,i) = F(Xq, Yq, Zq);
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    Tout = permute(Tout, [3 1 2]);
+    Tout = permute(Tout, [4, 1, 2, 3]);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

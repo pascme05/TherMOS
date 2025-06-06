@@ -65,14 +65,14 @@ Ta = 55;                                                                    % am
 fl = 2000;                                                                  % heat flux boundary (W/m2)
 hc = 1000;                                                                  % heat transfer coefficient (W/m2K)
 Tinit = 55;                                                                 % Initial temperature (degC)
-Tend = 100;                                                                 % end value time (sec)
+Tend = 50;                                                                 % end value time (sec)
 dt = 0.1;                                                                   % sampling time (sec)
 tlist = 0:dt:Tend-dt;                                                       % time vector (sec)
 
 %---------------------------------------------------
 % Settings
 %---------------------------------------------------
-plotting = 1;
+plotting = 0;
 saving = 1;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -161,7 +161,8 @@ internalHeatSource(thermalmodel,q,'Face',[1, 3]);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Solve Model
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-generateMesh(thermalmodel,'Hmax',dx,'Hmin',dx,'Hgrad',1.0);
+% generateMesh(thermalmodel,'Hmax',dx,'Hmin',dx,'Hgrad',1.0);
+generateMesh(thermalmodel,'Hmax',10*dx,'Hmin',dx);
 pdemesh(thermalmodel);
 results = solve(thermalmodel,tlist);
 
