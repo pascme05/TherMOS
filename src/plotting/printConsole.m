@@ -50,7 +50,19 @@ function [] = printConsole(data, results, setup, mdl, para)
         selY = para.Dat.gen.inpY;                                           % y-position for 1D temporal plots
         xInp = data.tr.Data.geo(:,1);                                       % sampled input values x (m)
         yInp = data.tr.Data.geo(:,2);                                       % sampled input values y (m)
-        [~, minId] = min(abs(xInp-selX-min(xInp)) + abs(yInp-selY-min(yInp)));
+        [~, minId] = min(abs(xInp-selX-min(xInp)) + ... 
+                         abs(yInp-selY-min(yInp)));
+    elseif dim == 3
+        nY = 1;
+        selX = para.Dat.gen.inpX;                                           % x-position for 1D temporal plots                           
+        selY = para.Dat.gen.inpY;                                           % y-position for 1D temporal plots
+        selZ = para.Dat.gen.inpZ;                                           % z-position for 1D temporal plots
+        xInp = data.tr.Data.geo(:,1);                                       % sampled input values x (m)
+        yInp = data.tr.Data.geo(:,2);                                       % sampled input values y (m)
+        zInp = data.tr.Data.geo(:,3);                                       % sampled input values z (m)
+        [~, minId] = min(abs(xInp-selX-min(xInp)) + ...
+                         abs(yInp-selY-min(yInp)) + ...
+                         abs(zInp-selZ-min(zInp)));
     else
         nY = length(results.err.tot.MAE);
         minId = linspace(1, nY, nY);

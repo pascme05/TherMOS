@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: ps3Fit                                                            %
+% File: psSol                                                             %
 % Date: 08.05.2025                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -14,22 +14,27 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Description
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This function solves for the system matrices A, B, C as well as the 
-% spatial modes of phi of the POD using state-space method.
+% This function calculates the temperature response for a POD system
+%
+%                     T(x,t) ≈ Σ φ_i(x) * a_i(t)   
+%
+% where x is the spatial position, t is the time, φ are the spatial modes,
+% and a(t) are the temporal modes based on a PDE system with matrices A, B,
+% C as described by a state space system.  
 % -------------------------------------------------------------------------
-% Inp:  1) data:    Training input data struct
-%       2) val:     Validation input data struct
+% Inp:  1) mdl:     Fitted model parameters
+%       2) data:    Testing input data struct
 %       3) para:    All simulation parameters of the current simulation
-% Out:  1) mdl:     Trained model
+% Out:  1) out:     Predicted temperature response
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function mdl = ps3Fit(data, ~, para)
+function out = ps3Sol(mdl, data, ~)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Fitting 3D Proper Orthogonal Model using SS")
+    disp("START: Solving 3D Proper Orthogonal Model")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
@@ -42,10 +47,7 @@ function mdl = ps3Fit(data, ~, para)
     %----------------------------------------
     [Nt, N] = size(data.y);                                                 % number of time steps (Nt) and snapshots (N)
     Ts = data.Ts;                                                           % sampling time (sec)
-    Kmax = para.Mdl.gen.Kmax;                                               % maximum number of modes
-    Emax = para.Mdl.gen.Emax;                                               % maximum energy captured (%)
-    eps = para.Mdl.gen.eps;                                                 % numerical lower bound
-    
+
     %----------------------------------------
     % Data
     %----------------------------------------
@@ -60,9 +62,22 @@ function mdl = ps3Fit(data, ~, para)
     Cp = data.Data.Cp;                                                      % specific heat capacity (J/KgK)
     alpha = k ./ (rho.*Cp);                                                 % Thermal diffusivity (m²/s)
 
+    %----------------------------------------
+    % Model
+    %----------------------------------------
+    sPhi = mdl.sPhi;                                                        % spatial modes 2D
+    rPhi = mdl.rPhi;                                                        % spatial modes 1D
+    K = mdl.K;                                                              % number of modes
+    Jgrid = mdl.Jgrid;                                                      % Jacobian matrix
+    W = mdl.W;                                                              % Gauss matrix
+    sys = mdl.sys;
+
     %===================================================
     % Variables
     %===================================================
+    %----------------------------------------
+    % Data
+    %----------------------------------------
     xInp = data.Data.geo(:,1);                                              % sampled input values x (m)
     yInp = data.Data.geo(:,2);                                              % sampled input values y (m)
     zInp = data.Data.geo(:,3);                                              % sampled input values z (m)
@@ -71,40 +86,18 @@ function mdl = ps3Fit(data, ~, para)
     z = 0:dz:Lz;                                                            % y vector (m)
     T = data.y;                                                             % temperature snapshots NtxN (°C)
     Q = data.X;                                                             % volumetric heat generation (W/m³)
-
-    %===================================================
-    % State-Space
-    %===================================================
-    init = para.Mdl.ss.init;
-    sta = para.Mdl.ss.sta;
-    opt = ssestOptions;
-    Ks = para.Mdl.ss.K;
+    out = data;
+    
+    %----------------------------------------
+    % Init
+    %----------------------------------------
+    q = zeros(K, Nt);                                                       % init heat generation (W/m³)
+    x0 = zeros(size(sys.A, 1), 1);                                          % init value state space
 
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %===================================================
-    % State-Space Solver
-    %===================================================
-    %----------------------------------------
-    % Solver initial conditions
-    %----------------------------------------
-    if init == 1
-        opt.InitialState = 'zero';
-    else
-        opt.InitialState = 'estimate';
-    end
-
-    %----------------------------------------
-    % Stability constraint
-    %----------------------------------------
-    if sta == 2
-        opt.EnforceStability = true;
-    else
-        opt.EnforceStability = false;
-    end
-
     %===================================================
     % Shift Coordinate System
     %===================================================
@@ -115,153 +108,53 @@ function mdl = ps3Fit(data, ~, para)
     %===================================================
     % Mean Centering
     %===================================================
-    Tavg = mean(T, 1);                                                      % average temperature over time steps (°C)
-    T = T - Tavg.*ones(Nt,N);                                               % mean centered observation matrix (°C)
-
-    %===================================================
-    % Eigenvalues
-    %===================================================
-    try
-        [~,S,Phi] = svd(T/sqrt(Nt-1));
-    catch
-        [~,S,Phi] = svd(T/sqrt(Nt-1),"econ");
-    end
-    lam = diag(S);
-    
-    %===================================================
-    % Cumulative Correlation Energy
-    %===================================================
-    %----------------------------------------
-    % Init
-    %----------------------------------------
-    n = 1;                                                                  % initial number of modes
-    E = 0;                                                                  % captured energy by POD
-
-    %----------------------------------------
-    % Energy
-    %----------------------------------------
-    if para.Mdl.pod.sel == 2
-        while E < Emax && n < Kmax
-            E = sum(abs(lam(1:n))) / sum(abs(lam));
-            n = n + 1;
-        end
-        K = n;
-
-    %----------------------------------------
-    % Opti
-    %----------------------------------------
-    elseif para.Mdl.pod.sel == 3
-        E = sum(abs(lam(1:para.Mdl.pod.K))) / sum(abs(lam));
-        K = para.Mdl.pod.K;
-
-    %----------------------------------------
-    % Fixed
-    %----------------------------------------
-    else
-        E = sum(abs(lam(1:para.Mdl.pod.K))) / sum(abs(lam));
-        K = para.Mdl.pod.K;
-    end
-
-    %----------------------------------------
-    % Msg
-    %----------------------------------------
-    fprintf('INFO: Number of used eigenvalues (model order) K: %i \n', K);
-    fprintf('INFO: Number of used states (state space model) Ks: %i \n', Ks);
-    fprintf('INFO: Cumulative correlation energy Em: %f \n', E*100)
+    T0 = T(1,:);                                                            % initial temperature (°C)
     
     %===================================================
     % Numerics
     %===================================================
     %----------------------------------------
-    % Gauss Legendre Integration Matrix (W)
+    % Gauss Legendre Integration
     %----------------------------------------
     % Transformed coordinates
-    [x_n, w_x] = gauss_legendre(length(x));
-    [y_n, w_y] = gauss_legendre(length(y));
-    [z_n, w_z] = gauss_legendre(length(z));
+    [x_n, ~] = gauss_legendre(length(x));
+    [y_n, ~] = gauss_legendre(length(y));
+    [z_n, ~] = gauss_legendre(length(z));
 
     % map to [x_min,x_max] and [y_min,y_max]
     xq_1d = 0.5*(max(x)-min(x))*x_n + 0.5*(max(x)-min(x));
-    wq_x  = 0.5*(max(x)-min(x))*w_x;
     yq_1d = 0.5*(max(y)-min(y))*y_n + 0.5*(max(y)-min(y));
-    wq_y  = 0.5*(max(y)-min(y))*w_y;
     zq_1d = 0.5*(max(z)-min(z))*z_n + 0.5*(max(z)-min(z));
-    wq_z  = 0.5*(max(z)-min(z))*w_z;
     
-    % Form 3D arrays of points and weights using ndgrid
-    [Xq, Yq, Zq] = ndgrid(xq_1d, yq_1d, zq_1d);      % quadrature points
-    [Wq_x, Wq_y, Wq_z] = ndgrid(wq_x, wq_y, wq_z);   % corresponding weights
-    
-    % Compute 3D weight tensor
-    W = Wq_x .* Wq_y .* Wq_z;   % 3D integration weight matrix
-    
-    %----------------------------------------
-    % Jacobian Area Mapping (J)
-    %----------------------------------------
-    Jgrid = jacobian3D(xInp, yInp, zInp, xq_1d, yq_1d, zq_1d, 0.01);
-    % Jgrid = ones(size(Jgrid));
+    % form 2D arrays of points & weights
+    [Xq, Yq, Zq] = ndgrid(xq_1d, yq_1d, zq_1d); 
 
     %===================================================
-    % Boundary Conditions
+    % 2D Reshaping
     %===================================================
     %----------------------------------------
-    % Converting 2D
+    % Material Properties
     %----------------------------------------
-    alpha3D = squeeze(map3D(alpha', xInp, yInp, zInp, x, y, z, 2));
-    sQ = map3D(Q, xInp, yInp, zInp, x, y, z, 2);
-    k3D = squeeze(map3D(k', xInp, yInp, zInp, x, y, z, 2));
-    
+    sAlpha = squeeze(map3D(alpha', xInp, yInp, zInp, x, y, z, 2));
+    sK = squeeze(map3D(k', xInp, yInp, zInp, x, y, z, 2));
+
     %----------------------------------------
     % Integration 2D
     %----------------------------------------
-    alpha3D_i = interp3(x, y, z, alpha3D, Xq, Yq, Zq, 'linear', 0);
-    k3D_i     = interp3(x, y, z, k3D,     Xq, Yq, Zq, 'linear', 0);
-    
-
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Calculation
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %===================================================
-    % Extract Modes
-    %===================================================
-    %----------------------------------------
-    % Spatial Modes
-    %----------------------------------------
-    % Reduction
-    rPhi = Phi(:,1:K);
-    
-    % Compute Orthogonal Matrix
-    Id = rPhi'*rPhi;
-    
-    % Check Orthogonal Matrix
-    if abs(norm(eye(K) - Id)) > eps
-        disp('ERROR: POD modes are not orthonormal');
-    end
-
-    % Reshape
-    sPhi = map3D(rPhi', xInp, yInp, zInp, x, y, z, 2);
-    if K == 1
-        sPhi = squeeze(sPhi);
-    else
-        sPhi = permute(sPhi, [2, 3, 4, 1]);
-    end
+    alpha3D_i = interp3(x, y, z, sAlpha, Xq, Yq, Zq, 'linear', 0);
+    k3D_i     = interp3(x, y, z, sK,     Xq, Yq, Zq, 'linear', 0);
 
     %----------------------------------------
-    % Temporal Modes
+    % Heat Generation
     %----------------------------------------
-    theta = (rPhi' * T')';
+    sQ = map3D(Q, xInp, yInp, zInp, x, y, z, 2);
 
     %===================================================
-    % System Matrices
+    % Source Terms
     %===================================================
     %----------------------------------------
-    % Prepare State Space Data
+    % Heat Generation
     %----------------------------------------
-    % Init
-    q = zeros(K, Nt);
-    g0 = T(1,:) * rPhi;
-
-    % Project Heat
     for i = 1:Nt
         for ii = 1:K
             % Interpolation at time i and mode ii
@@ -273,58 +166,62 @@ function mdl = ps3Fit(data, ~, para)
         end
     end
     
-    % Padding 
-    theta2 = theta - g0;
-    theta2 = [zeros(2*Ks,K); theta2];
-    q2 = [zeros(2*Ks,K); q'];
-
-    % Generate ID data
-    dataTrain = iddata(theta2,q2,Ts);
-
-    %----------------------------------------
-    % Fitting State Space
-    %----------------------------------------
-    sys = ssest(dataTrain, Ks, opt, 'DisturbanceModel','none', 'Ts', Ts);
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Pre-Processing
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Normalisation Values
+    %===================================================
+    q_scale = 1;
+    tau = 1;
     
+    %===================================================
+    % Normalisation
+    %===================================================
+    q = q / q_scale * tau;
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Calculation
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Init
+    %===================================================
+    dataTest = iddata(q,q,Ts);
+
+    %===================================================
+    % Solve
+    %===================================================
+    [theta_hat, ~, ~] = lsim(sys, dataTest.InputData, [], x0);
+
+    %===================================================
+    % Scale Theta
+    %===================================================
+    theta_hat = theta_hat * q_scale;
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % % ----------------------------------------------------
-    % % Reconstruct
-    % % ----------------------------------------------------
-    % % Init
-    % temp = zeros(Nt, length(y), length(x));
-    % T_hat = zeros(Nt, length(y), length(x));
-    % T2D = map2D(T, xInp, yInp, x, y, 2);
-    % 
-    % % Reconstruct
-    % for i = 1:K
-    %     for ii = 1:Nt
-    %         temp(ii, :, :) = theta(ii, i) .* sPhi(:, :, i);
-    %     end
-    %     T_hat = T_hat + temp;
-    % end
-    % T_pred2 = squeeze(T_hat(:,2,21));
-    % T_true2 = squeeze(T2D(:,2,21));
+    %===================================================
+    % Predict
+    %===================================================
+    T_est = theta_hat * rPhi' + T0.*ones(Nt,N);
+
+    %===================================================
+    % Reduce 2D
+    %===================================================
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    mdl.rPhi = rPhi;
-    mdl.sPhi = sPhi;
-    mdl.theta = theta;
-    mdl.lam = lam;
-    mdl.E = E;
-    mdl.K = K;
-    mdl.Tavg = Tavg;
-    mdl.Jgrid = Jgrid;
-    mdl.W = W;
-    mdl.sys = sys;
+    out.y = T_est;
+    out.X = Q;
+    out.theta_hat = theta_hat;
+    out.theta = (rPhi' * T')';
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Fitting 3D Proper Orthogonal Model using SS")
+    disp("DONE: Solving 3D Proper Orthogonal Model")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

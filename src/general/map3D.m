@@ -36,7 +36,7 @@ function Tout = map3D(Tin, xInp, yInp, zInp, xOut, yOut, zOut, inter)
     Nx = length(xOut);                                                      % number of output samples x
     Ny = length(yOut);                                                      % number of output samples y
     Nz = length(zOut);                                                      % number of output samples z
-    Tout = zeros(Nx, Ny, Nz, Nt);                                           % Output temperature matrix 4D array: (z, y, x, t)
+    Tout = zeros(Nx, Ny, Nz, Nt);                                           % Output temperature matrix 4D array
     
     %===================================================
     % Interpolation
@@ -78,7 +78,7 @@ function Tout = map3D(Tin, xInp, yInp, zInp, xOut, yOut, zOut, inter)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    Tout = permute(Tout, [4, 1, 2, 3]);
+    Tout = permute(Tout, [4, 2, 1, 3]);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
