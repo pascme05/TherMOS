@@ -639,20 +639,20 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     
         % Grt
         subplot(1,3,1);
-        pdeplot3D(data.tr.Data.mesh, 'ColorMapData', data.tr.Data.y(selT, :));
+        pdeplot3D(data.te.Data.mesh, 'ColorMapData', data.te.Data.y(selT, :));
         title("Grt Temperatures (T)")
         colorbar;
     
         % Pred
         subplot(1,3,2);
-        pdeplot3D(data.tr.Data.mesh, 'ColorMapData', data.pr.y(selT,:));
+        pdeplot3D(data.te.Data.mesh, 'ColorMapData', data.pr.y(selT,:));
         title("Est Temperatures (T)")
         colorbar;
     
         % Error
         subplot(1,3,3);
         err = data.pr.y(selT,:) - data.te.y(selT,:);
-        pdeplot3D(data.tr.Data.mesh, 'ColorMapData', err);
+        pdeplot3D(data.te.Data.mesh, 'ColorMapData', err);
         title("Err Temperatures (T)")
         colorbar;
     catch

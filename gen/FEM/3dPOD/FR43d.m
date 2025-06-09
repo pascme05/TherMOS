@@ -46,7 +46,7 @@ matCp = [900, 1500, 750, 1];
 dx = 200e-6;
 
 % Losses
-Pv = 5;
+Pv = 10;
 Vol_Sw = swWidth*swLength*swHeight;
 q = Pv / Vol_Sw;
 
