@@ -219,7 +219,8 @@ The software framework is provided under the MIT License.
 
 
 # Version History
-1) v.0.0: (01.04.2023) Initial version of TherMOS
+1) v.0.0: (01.04.2025) Initial version of TherMOS
+2) v.0.1: (09.06.2025) Adding 3D sPOD approach
    
 
 # References
