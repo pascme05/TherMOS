@@ -39,7 +39,6 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     % Parameters
     %===================================================
     K = mdl.K;                                                              % number of modes
-    [Nt, Ny] = size(data.te.y);                                             % number of output samples
     selX = para.Dat.gen.inpX;                                               % x-position for 1D temporal plots                           
     selY = para.Dat.gen.inpY;                                               % y-position for 1D temporal plots
     selZ = para.Dat.gen.inpZ;                                               % y-position for 1D temporal plots
@@ -58,17 +57,13 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     %----------------------------------------
     % Split Data
     %----------------------------------------
-    train = data.tr;
     test = data.te;
-    val = data.vl;
     pred = data.pr;
 
     %----------------------------------------
     % Time
     %----------------------------------------
-    t_train = train.t;
     t_test = test.t;
-    t_val = val.t;
     
     %----------------------------------------
     % Derived
@@ -90,22 +85,17 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     rho = data.tr.Data.rho;
     Cp = data.tr.Data.Cp;
 
-    % %----------------------------------------
-    % % Boundary
-    % %----------------------------------------
-    % try
-    %     hc = data.tr.Data.hc;                                                  % heat transfer coefficient (W/m²K)
-    %     fl = data.tr.Data.fl;                                                  % heat flux (W/m²)
-    %     Ta = data.tr.Data.Ta;                                                  % ambient temperature (°C)
-    % catch
-    %     hc = zeros(size(k));
-    %     fl = zeros(size(k));
-    %     Ta = zeros(size(k));
-    % end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Shift Coordinate System
+    %===================================================
+    xInp = xInp - min(xInp);                                                % normalised coordinate system with x=0
+    yInp = yInp - min(yInp);                                                % normalised coordinate system with y=0
+    zInp = zInp - min(zInp);                                                % normalised coordinate system with z=0
+    
     %===================================================
     % Mapping Position
     %===================================================
@@ -158,17 +148,9 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     %----------------------------------------
     % Input/Output
     %----------------------------------------
-    % Train
-    train.X = squeeze(map3D(train.X, xInp, yInp, zInp, x, y, z, 1));
-    train.y = squeeze(map3D(train.y, xInp, yInp, zInp, x, y, z, 1));
-
     % Test
     test.X = squeeze(map3D(test.X, xInp, yInp, zInp, x, y, z, 1));
     test.y = squeeze(map3D(test.y, xInp, yInp, zInp, x, y, z, 1));
-
-    % Val
-    val.X = squeeze(map3D(val.X, xInp, yInp, zInp, x, y, z, 1));
-    val.y = squeeze(map3D(val.y, xInp, yInp, zInp, x, y, z, 1));
 
     % Pred
     pred.X = squeeze(map3D(pred.X, xInp, yInp, zInp, x, y, z, 1));
@@ -242,36 +224,11 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     %----------------------------------------
     % Init
     figure;
-    txt = 'Spatial Input Data for Training (1), Testing, and Validation for t=' + string(selT*Ts - Ts) + 'sec';
+    txt = 'Spatial Input Data for Testing for t=' + string(selT*Ts - Ts) + 'sec';
     sgtitle(txt);
-    
-    % Training
-    subplot(2,3,1);
-    slice(X,Y,Z,squeeze(train.X(end, :, :, :)),xslice,yslice,zslice);
-    title("Heat Generation (Train)")
-    xlabel("x (m)");
-    ylabel("y (m)");
-    zlabel("z (m)");
-    grid on
-    set(gca,'xtick',x)
-    set(gca,'ytick',y)
-    set(gca,'ytick',z)
-    colorbar
 
-    subplot(2,3,4);
-    slice(X,Y,Z,squeeze(train.y(end, :, :, :)),xslice,yslice,zslice);
-    title("Temperatures (Train)")
-    xlabel("x (m)");
-    ylabel("y (m)");
-    zlabel("z (m)");
-    grid on
-    set(gca,'xtick',x)
-    set(gca,'ytick',y)
-    set(gca,'ytick',z)
-    colorbar
-    
     % Testing 
-    subplot(2,3,2);
+    subplot(1,2,1);
     slice(X,Y,Z,squeeze(test.X(end, :, :, :)),xslice,yslice,zslice);
     title("Heat Generation (Test)")
     xlabel("x (m)");
@@ -283,34 +240,9 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     set(gca,'ytick',z)
     colorbar
 
-    subplot(2,3,5);
+    subplot(1,2,2);
     slice(X,Y,Z,squeeze(test.y(end, :, :, :)),xslice,yslice,zslice);
     title("Temperatures (Test)")
-    xlabel("x (m)");
-    ylabel("y (m)");
-    zlabel("z (m)");
-    grid on
-    set(gca,'xtick',x)
-    set(gca,'ytick',y)
-    set(gca,'ytick',z)
-    colorbar
-    
-    % Validaton 
-    subplot(2,3,3);
-    slice(X,Y,Z,squeeze(val.X(end, :, :, :)),xslice,yslice,zslice);
-    title("Heat Generation (Val)")
-    xlabel("x (m)");
-    ylabel("y (m)");
-    zlabel("z (m)");
-    grid on
-    set(gca,'xtick',x)
-    set(gca,'ytick',y)
-    set(gca,'ytick',z)
-    colorbar
-
-    subplot(2,3,6);
-    slice(X,Y,Z,squeeze(val.y(end, :, :, :)),xslice,yslice,zslice);
-    title("Temperatures (Val)")
     xlabel("x (m)");
     ylabel("y (m)");
     zlabel("z (m)");
@@ -325,51 +257,24 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     %----------------------------------------
     % Init
     figure;
-    txt = 'Temporal Input Data for Training (1), Testing, and Validation for x=' + ...
+    txt = 'Temporal Input Data for Testing for x=' + ...
            string(selX*dx-dx) + 'm and y=' + string(selY*dy-dy) + 'm and z=' + string(selZ*dz-dz);
     sgtitle(txt);
     
-    % Training
-    subplot(2,3,1);
-    plot(t_train, squeeze(train.X(:, selY, selX, selZ)));
-    title("Heat Generation (Train)")
-    xlabel("t (sec)");
-    ylabel("q (W/m³)");
-    grid on
-    subplot(2,3,4);
-    plot(t_train, squeeze(train.y(:, selY, selX, selZ)));
-    title("Temperatures (Train)")
-    xlabel("t (sec)");
-    ylabel("T (°C)");
-    grid on
-    
     % Testing 
-    subplot(2,3,2);
+    subplot(1,2,1);
     plot(t_test, squeeze(test.X(:, selY, selX, selZ)));
     title("Heat Generation (Test)")
     xlabel("t (sec)");
     ylabel("q (W/m³)");
     grid on
-    subplot(2,3,5);
+    subplot(1,2,2);
     plot(t_test, squeeze(test.y(:, selY, selX, selZ)));
     title("Temperatures (Test)")
     xlabel("t (sec)");
     zlabel("T (°C)");
     grid on
     
-    % Validaton 
-    subplot(2,3,3);
-    plot(t_val, squeeze(val.X(:, selY, selX, selZ)));
-    title("Heat Generation (Val)")
-    xlabel("t (sec)");
-    ylabel("q (W/m³)");
-    grid on
-    subplot(2,3,6);
-    plot(t_val, squeeze(val.y(:, selY, selX, selZ)));
-    title("Temperatures (Val)")
-    xlabel("t (sec)");
-    zlabel("T (°C)");
-    grid on
 
     %===================================================
     % Predictions
@@ -437,16 +342,16 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     
     % Model Prediction X Gradients
     subplot(2,3,2);
-    plot(x, squeeze(test.q(selT,selY,:,selY)));
+    plot(x, squeeze(test.q(selY,:,selY)));
     hold on;
-    plot(x, squeeze(pred.q(selT,selY,:,selY)));
+    plot(x, squeeze(pred.q(selY,:,selY)));
     title("Gradient (X)")
     xlabel("x (m)");
     ylabel("dT (K/m)");
     grid on;
     legend('True','Pred');
     subplot(2,3,5);
-    err = squeeze(test.q(selT,selY,:,selY)) - squeeze(pred.q(selT,selY,:,selY));
+    err = squeeze(test.q(selY,:,selY)) - squeeze(pred.q(selY,:,selY));
     plot(x, err);
     title("Gradient Error (X)")
     xlabel("x (m)");
@@ -455,16 +360,16 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     
     % Model Prediction X Fluxes
     subplot(2,3,3);
-    plot(x, squeeze(test.qk(selT,selY,:,selY)));
+    plot(x, squeeze(test.qk(selY,:,selY)));
     hold on;
-    plot(x, squeeze(pred.qk(selT,selY,:,selY)));
+    plot(x, squeeze(pred.qk(selY,:,selY)));
     title("Flux (X)")
     xlabel("x (m)");
     ylabel("q (W/m²)");
     grid on;
     legend('True','Pred');
     subplot(2,3,6);
-    err = squeeze(test.qk(selT,selY,:,selY)) - squeeze(pred.qk(selT,selY,:,selY));
+    err = squeeze(test.qk(selY,:,selY)) - squeeze(pred.qk(selY,:,selY));
     plot(x, err);
     title("Flux Error (W/m²)")
     xlabel("x (m)");
@@ -500,16 +405,16 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     
     % Model Prediction Y Gradients
     subplot(2,3,2);
-    plot(y, squeeze(test.q(selT,:,selX,selZ)));
+    plot(y, squeeze(test.q(:,selX,selZ)));
     hold on;
-    plot(y, squeeze(pred.q(selT,:,selX,selZ)));
+    plot(y, squeeze(pred.q(:,selX,selZ)));
     title("Gradient (Y)")
     xlabel("y (m)");
     ylabel("dT (K/m)");
     grid on;
     legend('True','Pred');
     subplot(2,3,5);
-    err = squeeze(test.q(selT,:,selX,selZ)) - squeeze(pred.q(selT,:,selX,selZ));
+    err = squeeze(test.q(:,selX,selZ)) - squeeze(pred.q(:,selX,selZ));
     plot(y, err);
     title("Gradient Error (Y)")
     xlabel("y (m)");
@@ -518,16 +423,16 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     
     % Model Prediction Y Fluxes
     subplot(2,3,3);
-    plot(y, squeeze(test.qk(selT,:,selX,selZ)));
+    plot(y, squeeze(test.qk(:,selX,selZ)));
     hold on;
-    plot(y, squeeze(pred.qk(selT,:,selX,selZ)));
+    plot(y, squeeze(pred.qk(:,selX,selZ)));
     title("Flux (Y)")
     xlabel("y (m)");
     ylabel("q (W/m²)");
     grid on;
     legend('True','Pred');
     subplot(2,3,6);
-    err = squeeze(test.qk(selT,:,selX,selZ)) - squeeze(pred.qk(selT,:,selX,selZ));
+    err = squeeze(test.qk(:,selX,selZ)) - squeeze(pred.qk(:,selX,selZ));
     plot(y, err);
     title("Flux Error (Y)")
     xlabel("y (m)");
@@ -535,7 +440,7 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     grid on;
     
     %----------------------------------------
-    % Plot Spatial Prediction Y
+    % Plot Spatial Prediction Z
     %----------------------------------------
     % Init
     figure;
@@ -543,13 +448,13 @@ function [] = plotResults3D(data, results, mdl, setup, para)
           'm and z=' + string(selZ*dz-dz) + 'm and t=' + string(selT*Ts-Ts) + 'sec';
     sgtitle(txt);
     
-    % Model Prediction Y
+    % Model Prediction Z
     subplot(2,3,1);
     plot(z, squeeze(test.y(selT,selY,selX,:)));
     hold on;
     plot(z, squeeze(pred.y(selT,selY,selX,:)));
-    title("Temperatures (Y)")
-    xlabel("y (m)");
+    title("Temperatures (Z)")
+    xlabel("z (m)");
     ylabel("T (°C)");
     grid on;
     legend('True','Pred');
@@ -557,46 +462,46 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     subplot(2,3,4);
     err = squeeze(test.y(selT,selY,selX,:)) - squeeze(pred.y(selT,selY,selX,:));
     plot(z, err);
-    title("Temperatures Error (Y)")
-    xlabel("y (m)");
+    title("Temperatures Error (Z)")
+    xlabel("z (m)");
     ylabel("T (°C)");
     grid on;
     
-    % Model Prediction Y Gradients
+    % Model Prediction Z Gradients
     subplot(2,3,2);
-    plot(z, squeeze(test.q(selT,selY,selX,:)));
+    plot(z, squeeze(test.q(selY,selX,:)));
     hold on;
-    plot(z, squeeze(pred.q(selT,selY,selX,:)));
-    title("Gradient (Y)")
-    xlabel("y (m)");
+    plot(z, squeeze(pred.q(selY,selX,:)));
+    title("Gradient (Z)")
+    xlabel("z (m)");
     ylabel("dT (K/m)");
     grid on;
     legend('True','Pred');
 
     subplot(2,3,5);
-    err = squeeze(test.q(selT,selY,selX,:)) - squeeze(pred.q(selT,selY,selX,:));
+    err = squeeze(test.q(selY,selX,:)) - squeeze(pred.q(selY,selX,:));
     plot(z, err);
-    title("Gradient Error (Y)")
-    xlabel("y (m)");
+    title("Gradient Error (Z)")
+    xlabel("z (m)");
     ylabel("dT (K/m)");
     grid on;
     
-    % Model Prediction Y Fluxes
+    % Model Prediction Z Fluxes
     subplot(2,3,3);
-    plot(z, squeeze(test.qk(selT,selY,selX,:)));
+    plot(z, squeeze(test.qk(selY,selX,:)));
     hold on;
-    plot(z, squeeze(pred.qk(selT,selY,selX,:)));
-    title("Flux (Y)")
-    xlabel("y (m)");
+    plot(z, squeeze(pred.qk(selY,selX,:)));
+    title("Flux (Z)")
+    xlabel("z (m)");
     ylabel("q (W/m²)");
     grid on;
     legend('True','Pred');
 
     subplot(2,3,6);
-    err = squeeze(test.qk(selT,selY,selX,:)) - squeeze(pred.qk(selT,selY,selX,:));
+    err = squeeze(test.qk(selY,selX,:)) - squeeze(pred.qk(selY,selX,:));
     plot(z, err);
-    title("Flux Error (Y)")
-    xlabel("y (m)");
+    title("Flux Error (Z)")
+    xlabel("z (m)");
     ylabel("q (W/m²)");
     grid on;
 
@@ -630,7 +535,7 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     
     % Gradients
     subplot(2,3,2);
-    slice(X,Y,Z,squeeze(pred.q(selT,:,:,:)),xslice,yslice,zslice);
+    slice(X,Y,Z,pred.q,xslice,yslice,zslice);
     title("Gradient")
     xlabel("x (m)");
     ylabel("y (m)");
@@ -639,7 +544,7 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     grid on;
 
     subplot(2,3,5);
-    err = squeeze(test.q(selT,:,:,:)) - squeeze(pred.q(selT,:,:,:));
+    err = test.q - pred.q;
     slice(X,Y,Z,err,xslice,yslice,zslice);
     title("Gradient Error")
     xlabel("x (m)");
@@ -650,7 +555,7 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     
     % Fluxes
     subplot(2,3,3);
-    slice(X,Y,Z,squeeze(pred.qk(selT,:,:,:)),xslice,yslice,zslice);
+    slice(X,Y,Z,pred.qk,xslice,yslice,zslice);
     title("Flux")
     xlabel("x (m)");
     ylabel("y (m)");
@@ -659,7 +564,7 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     grid on;
 
     subplot(2,3,6);
-    err = squeeze(test.qk(selT,:,:,:)) - squeeze(pred.qk(selT,:,:,:));
+    err = test.qk - pred.qk;
     slice(X,Y,Z,err,xslice,yslice,zslice);
     title("Flux Error")
     xlabel("x (m)");
@@ -722,6 +627,36 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     xlabel("t (sec)");
     ylabel("T (°C)");
     grid on;
+
+    %----------------------------------------
+    % Plot 3D
+    %----------------------------------------
+    try
+        % Init
+        figure;
+        txt = 'Spatial 3D Prediction and Prediction error for t=' + string(selT*Ts-Ts) + 'sec';
+        sgtitle(txt);
+    
+        % Grt
+        subplot(1,3,1);
+        pdeplot3D(data.tr.Data.mesh, 'ColorMapData', data.tr.Data.y(selT, :));
+        title("Grt Temperatures (T)")
+        colorbar;
+    
+        % Pred
+        subplot(1,3,2);
+        pdeplot3D(data.tr.Data.mesh, 'ColorMapData', data.pr.y(selT,:));
+        title("Est Temperatures (T)")
+        colorbar;
+    
+        % Error
+        subplot(1,3,3);
+        err = data.pr.y(selT,:) - data.te.y(selT,:);
+        pdeplot3D(data.tr.Data.mesh, 'ColorMapData', err);
+        title("Err Temperatures (T)")
+        colorbar;
+    catch
+    end
 
 end
 

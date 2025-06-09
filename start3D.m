@@ -106,7 +106,7 @@ setup = struct();
 % General
 %===================================================
 setup.user = "Pascal Schirmer";                                             % name of the user (string)
-setup.name = "default3D";                                                   % name of the simulation (string)
+setup.name = "FR4";                                                         % name of the simulation (string)
 
 %===================================================
 % Experiment
@@ -114,7 +114,7 @@ setup.name = "default3D";                                                   % na
 %----------------------------------------
 % Configuration
 %----------------------------------------
-setup.config = "\default\default3D";                                        % name of the config file (string)
+setup.config = "\other\FR4";                                                % name of the config file (string)
 
 %----------------------------------------
 % Plotting and Saving
@@ -145,9 +145,9 @@ setup.datSep = 1;                                                           % in
 % Training and Testing Selection
 %----------------------------------------
 % File based
-setup.trFile = ["test3Dv2"];                                                  % list of training files (strings) at least one
-setup.teFile = "test3Dv2";                                                    % testing file (string) exactly one
-setup.vlFile = ["test3Dv2"];                                                  % list of validation files (strings) at least one
+setup.trFile = ["FR4_5W"];                                                  % list of training files (strings) at least one
+setup.teFile = "FR4_10W";                                                   % testing file (string) exactly one
+setup.vlFile = ["FR4_5W"];                                                  % list of validation files (strings) at least one
 
 % Sheet based
 setup.trSheet = ["train-1", "train-2", "train-3"];                          % list of training sheets (strings) at least one

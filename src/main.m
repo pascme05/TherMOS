@@ -343,8 +343,8 @@ function [] = main(setup, path)
         [~, ~, data.te] = calcGrad(data.te);
         [~, ~, data.pr] = calcGrad(data.pr);
     elseif para.Dat.gen.dOut == 3
-        [~, ~, data.te] = calcGrad3D(data.te);
-        [~, ~, data.pr] = calcGrad3D(data.pr);
+        [~, ~, data.te] = calcGrad3D(data.te, -1);
+        [~, ~, data.pr] = calcGrad3D(data.pr, -1);
     else
         disp("INFO: 1D data no field calculation")
     end

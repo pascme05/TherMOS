@@ -122,9 +122,9 @@ function mdl = ps3Fit(data, ~, para)
     % Eigenvalues
     %===================================================
     try
-        [~,S,Phi] = svd(T/sqrt(Nt-1));
-    catch
         [~,S,Phi] = svd(T/sqrt(Nt-1),"econ");
+    catch
+        disp('ERROR: Eigenvalues could not be calculated.')
     end
     lam = diag(S);
     
