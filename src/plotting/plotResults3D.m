@@ -182,7 +182,7 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     grid on
     set(gca,'xtick',x)
     set(gca,'ytick',y)
-    set(gca,'ytick',z)
+    set(gca,'ztick',z)
     colorbar
     
     %----------------------------------------
@@ -197,7 +197,7 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     grid on
     set(gca,'xtick',x)
     set(gca,'ytick',y)
-    set(gca,'ytick',z)
+    set(gca,'ztick',z)
     colorbar
     
     %----------------------------------------
@@ -212,7 +212,7 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     grid on
     set(gca,'xtick',x)
     set(gca,'ytick',y)
-    set(gca,'ytick',z)
+    set(gca,'ztick',z)
     colorbar
 
 
@@ -237,7 +237,7 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     grid on
     set(gca,'xtick',x)
     set(gca,'ytick',y)
-    set(gca,'ytick',z)
+    set(gca,'ztick',z)
     colorbar
 
     subplot(1,2,2);
@@ -249,7 +249,7 @@ function [] = plotResults3D(data, results, mdl, setup, para)
     grid on
     set(gca,'xtick',x)
     set(gca,'ytick',y)
-    set(gca,'ytick',z)
+    set(gca,'ztick',z)
     colorbar
     
     %----------------------------------------
