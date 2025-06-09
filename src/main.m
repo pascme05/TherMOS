@@ -342,6 +342,9 @@ function [] = main(setup, path)
     if para.Dat.gen.dOut == 2
         [~, ~, data.te] = calcGrad(data.te);
         [~, ~, data.pr] = calcGrad(data.pr);
+    elseif para.Dat.gen.dOut == 3
+        [~, ~, data.te] = calcGrad3D(data.te, -1);
+        [~, ~, data.pr] = calcGrad3D(data.pr, -1);
     else
         disp("INFO: 1D data no field calculation")
     end
@@ -437,8 +440,12 @@ function [] = main(setup, path)
             plotResults1D(data, results, setup);
 
         % 2D Output
-        else
+        elseif para.Dat.gen.dOut == 2
             plotResults2D(data, results, mdl, setup, para);
+        
+        % 3D Output
+        else
+            plotResults3D(data, results, mdl, setup, para);
         end
     end
     fprintf('\n');

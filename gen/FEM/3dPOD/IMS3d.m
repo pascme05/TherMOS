@@ -22,43 +22,42 @@ clc
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Dimensions
 M = 51;
-N = 44;
-K = 10;
-l = 10e-3;
-b = 2150e-6;
-h = 10e-3;  % Now height is 50 mm in z-direction
+N = 21;
+K = 64;
+l = 50e-3;
+h = 3150e-6;
+b = 20e-3;
+
+% Define semiconductor dimensions
+swWidth = 8e-3; % 8 mm
+swLength = 6e-3; % 6 mm
+swHeight = 0.5e-3; % 0.5 mm
 
 % Material layer thicknesses
-b_Cu = 100e-6;
-b_Di = 50e-6;
-b_Al = 1.5e-3;
-b_Ga = 0.5e-3;
-
-% Switch
-l_Sw = 8e-3;
-b_Sw = b_Cu;
-h_Sw = 5.5e-3;
-A_sw = l_Sw * b_Cu;
-Vol_sw = h_Sw * A_sw;
+h_Cu = 100e-6;
+h_Di = 50e-6;
+h_Al = 1.5e-3;
+h_Ga = 0.5e-3;
 
 % Material Properties
-matK = [400, 2, 90, 4];
-matRho = [8933, 2200, 2680, 3300];
-matCp = [380, 800, 1000, 1500];
+matK = [400, 2, 90, 4, 50, 0.014];
+matRho = [8933, 2200, 2680, 3300, 2500, 1.3];
+matCp = [380, 800, 1000, 1500, 750, 1];
 
 % Mesh
-dx = 500e-6;
+dx = 100e-6;
 
 % Losses
 Pv = 20;
-q = Pv / (l*b * b_Cu * 8);
+Vol_Sw = swWidth*swLength*swHeight;
+q = Pv / Vol_Sw;
 
 % Load case
-Ta = 55;
-hc = 1000;
-Tinit = 55;
-Tend = 50;
-dt = 5;
+Ta = 35;
+hc = 1500;
+Tinit = 35;
+Tend = 60;
+dt = 0.5;
 tlist = 0:dt:Tend-dt;
 
 % Settings
@@ -71,55 +70,93 @@ saving = 1;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Define Z levels
 z0 = 0;
-z1 = z0 + b_Ga;
-z2 = z1 + b_Al;
-z3 = z2 + b_Di;
-z4 = z3 + b_Cu;
+z1 = z0 + h_Ga;
+z2 = z1 + h_Al;
+z3 = z2 + h_Di;
+z4 = z3 + h_Cu;
 
 % Create Model
-gm = multicuboid(l,h,[b_Ga b_Al b_Di b_Cu],ZOffset=[z0 z1 z2 z3]);
+gm = fegeometry(multicuboid(l,b,[h_Ga h_Al h_Di h_Cu],ZOffset=[z0 z1 z2 z3]));
 
-% Combine geometry
-thermalmodel = createpde('thermal', 'transient');
+% Add semiconductors next to each other on top of the copper surface
+sw1 = fegeometry(multicuboid(swWidth, swLength, swHeight, 'ZOffset', z4));
+sw1 = translate(sw1, [-15e-3, -4e-3, 0]);
+gm = union(gm, sw1, "KeepBoundaries",true);
+
+sw2 = fegeometry(multicuboid(swWidth, swLength, swHeight, 'ZOffset', z4));
+sw2 = translate(sw2, [-6e-3, 4e-3, 0]);
+gm = union(gm, sw2, "KeepBoundaries",true);
+
+sw3 = fegeometry(multicuboid(swWidth, swLength, swHeight, 'ZOffset', z4));
+sw3 = translate(sw3, [6e-3, 4e-3, 0]);
+gm = union(gm, sw3, "KeepBoundaries",true);
+
+sw4 = fegeometry(multicuboid(swWidth, swLength, swHeight, 'ZOffset', z4));
+sw4 = translate(sw4, [15e-3, -4e-3, 0]);
+gm = union(gm, sw4, "KeepBoundaries",true);
+
+% Generate Air
+air = fegeometry(multicuboid(l,b,2*swHeight, 'ZOffset', z4));
+air = subtract(air, sw1);
+air = subtract(air, sw2);
+air = subtract(air, sw3);
+air = subtract(air, sw4);
+gm = union(gm, air, "KeepBoundaries",true);
+
+% Generate Model
+thermalmodel = femodel(AnalysisType="thermalTransient");
 thermalmodel.Geometry = gm;
 pdegplot(thermalmodel, "CellLabels", "on", "FaceLabels", "on", "FaceAlpha", 0.5);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Define Model
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Materials by face
-thermalProperties(thermalmodel, "ThermalConductivity", matK(1), ...
-                                 "MassDensity", matRho(1), ...
-                                 "SpecificHeat", matCp(1), ...
-                                 "Cell", 4);
-thermalProperties(thermalmodel, "ThermalConductivity", matK(2), ...
-                                 "MassDensity", matRho(2), ...
-                                 "SpecificHeat", matCp(2), ...
-                                 "Cell", 3);
-thermalProperties(thermalmodel, "ThermalConductivity", matK(3), ...
-                                 "MassDensity", matRho(3), ...
-                                 "SpecificHeat", matCp(3), ...
-                                 "Cell", 2);
-thermalProperties(thermalmodel, "ThermalConductivity", matK(4), ...
-                                 "MassDensity", matRho(4), ...
-                                 "SpecificHeat", matCp(4), ...
-                                 "Cell", 1);
+% Define materials by face using the materialProperties property
+thermalmodel.MaterialProperties(9) = materialProperties( ...
+    "ThermalConductivity", matK(1), ...
+    "MassDensity", matRho(1), ...
+    "SpecificHeat", matCp(1));
+
+thermalmodel.MaterialProperties(8) = materialProperties( ...
+    "ThermalConductivity", matK(2), ...
+    "MassDensity", matRho(2), ...
+    "SpecificHeat", matCp(2));
+
+thermalmodel.MaterialProperties(7) = materialProperties( ...
+    "ThermalConductivity", matK(3), ...
+    "MassDensity", matRho(3), ...
+    "SpecificHeat", matCp(3));
+
+thermalmodel.MaterialProperties(6) = materialProperties( ...
+    "ThermalConductivity", matK(4), ...
+    "MassDensity", matRho(4), ...
+    "SpecificHeat", matCp(4));
+
+thermalmodel.MaterialProperties([2,3,4,5]) = materialProperties( ...
+    "ThermalConductivity", matK(5), ...
+    "MassDensity", matRho(5), ...
+    "SpecificHeat", matCp(5));
+
+thermalmodel.MaterialProperties(1) = materialProperties( ...
+    "ThermalConductivity", matK(6), ...
+    "MassDensity", matRho(6), ...
+    "SpecificHeat", matCp(6));
+
 
 % Initial Condition
-thermalIC(thermalmodel, Tinit);
+thermalmodel.CellIC = cellIC(Temperature=Tinit);
 
 % Boundary Conditions
-thermalBC(thermalmodel, "Face", 1, ...
-                        "ConvectionCoefficient", hc, ...
-                        "AmbientTemperature", Ta);
+thermalmodel.FaceLoad(31) = faceLoad(ConvectionCoefficient=hc, AmbientTemperature=Ta);
 
 % Heat Source (only on Cu face 5 and 7 as example)
-internalHeatSource(thermalmodel, q, 'Cell', 4);
+thermalmodel.CellLoad([2,3,4,5]) = cellLoad(Heat=q); 
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Solve Model
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-generateMesh(thermalmodel,'Hmax',dx,'Hmin',dx,'Hgrad',1.0);
+thermalmodel = generateMesh(thermalmodel,'Hmax',10*dx,'Hmin',dx);
 pdemesh(thermalmodel);
 results = solve(thermalmodel,tlist);
 
@@ -140,8 +177,11 @@ dz = (h)/(K-1);
 %---------------------------------------------------
 Q = zeros(size(T));
 for i = 1:size(T,1)
-    if results.Mesh.Nodes(3,i) >= z3 
-        Q(i,:) = q;
+    if results.Mesh.Nodes(3,i) >= z4 && results.Mesh.Nodes(3,i) <= (z4 + swHeight)
+        isAtSwitch = checkSwitchPosition(results.Mesh.Nodes(1,i), results.Mesh.Nodes(2,i));
+        if any(isAtSwitch)
+            Q(i,:) = q;
+        end
     else
         % Q(i,:) = q/2;
     end
@@ -154,22 +194,41 @@ Cp = matCp(2) * ones(length(T),1);
 k = matK(2) * ones(length(T),1);
 rho = matRho(2) * ones(length(T),1);
 for i = 1:size(T,1)
+    % Position
+    isAtSwitch = checkSwitchPosition(results.Mesh.Nodes(1,i), results.Mesh.Nodes(2,i));
+
+    % Silicon
+    if results.Mesh.Nodes(3,i) >= z4 && results.Mesh.Nodes(3,i) <= (z4 + swHeight) &&  any(isAtSwitch)
+        Cp(i,:) = matCp(5);
+        k(i,:) = matK(5);
+        rho(i,:) = matRho(5);
+
+    % Air
+    elseif results.Mesh.Nodes(3,i) >= z4
+        Cp(i,:) = matCp(6);
+        k(i,:) = matK(6);
+        rho(i,:) = matRho(6);
+
     % Copper
-    if results.Mesh.Nodes(2,i) >= z3
+    elseif results.Mesh.Nodes(3,i) >= z3
         Cp(i,:) = matCp(1);
         k(i,:) = matK(1);
         rho(i,:) = matRho(1);
+
     % Dielectrica
-    elseif results.Mesh.Nodes(2,i) >= z2
+    elseif results.Mesh.Nodes(3,i) >= z2
         Cp(i,:) = matCp(2);
         k(i,:) = matK(2);
         rho(i,:) = matRho(2);
+
     % Aluminium
-    elseif results.Mesh.Nodes(2,i) >= z1
+    elseif results.Mesh.Nodes(3,i) >= z1
         Cp(i,:) = matCp(3);
         k(i,:) = matK(3);
         rho(i,:) = matRho(3);
-    elseif results.Mesh.Nodes(2,i) < z1
+
+    % TIM    
+    elseif results.Mesh.Nodes(3,i) < z1
         Cp(i,:) = matCp(4);
         k(i,:) = matK(4);
         rho(i,:) = matRho(4);
@@ -184,8 +243,10 @@ end
 % Define Variables 
 %---------------------------------------------------
 geo = results.Mesh.Nodes';
+mesh = results.Mesh;
 Lx = l;
 Ly = b;
+Lz = h;
 r = Tinit * ones(size(T))';
 t = tlist;
 Ts = dt;
@@ -208,8 +269,8 @@ fl = zeros(length(T),1);
 % Save Variables 
 %---------------------------------------------------
 % Define Vars
-vars_to_save = {'Cp', 'dx', 'dy', 'dz', 'geo', 'k', 'Lx', 'Ly', 'r', 'rho', 't', ...
-                'Ts', 'X', 'y', 'Ta', 'hc', 'fl'};
+vars_to_save = {'Cp', 'dx', 'dy', 'dz', 'geo', 'k', 'Lx', 'Ly', 'Lz', 'r', ...
+                'rho', 't', 'Ts', 'X', 'y', 'Ta', 'hc', 'fl', 'mesh'};
 
 % Save Vars
 if saving == 1
@@ -222,9 +283,45 @@ end
 if plotting == 1
     figure;
     for i = 1:floor(length(tlist)/10)
-        pdeplot3D(thermalmodel, 'ColorMapData', results.Temperature(:, i*10));
+        pdeplot3D(results.Mesh, 'ColorMapData', results.Temperature(:, i*10));
         title(['Temperature at t = ', num2str(tlist(i*10)), ' s']);
         colorbar;
         drawnow;
+    end
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Functions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function isAtSwitch = checkSwitchPosition(x, y)
+    % Define semiconductor dimensions
+    swWidth = 8e-3;  % 8 mm
+    swLength = 5e-3; % 5 mm
+
+    % Define switch positions (centered at the origin for simplicity)
+    switchPositions = [
+        -15e-3, -4e-3;  % Position of switch 1
+        -6e-3, 4e-3;    % Position of switch 2
+        6e-3, 4e-3;     % Position of switch 3
+        15e-3, -4e-3     % Position of switch 4
+    ];
+
+    % Initialize the output variable
+    isAtSwitch = false(size(switchPositions, 1), 1);
+
+    % Check if the point (x, y) is within the bounds of any switch
+    for i = 1:size(switchPositions, 1)
+        % Calculate the bounds for the current switch
+        xMin = switchPositions(i, 1) - swWidth / 2;
+        xMax = switchPositions(i, 1) + swWidth / 2;
+        yMin = switchPositions(i, 2) - swLength / 2;
+        yMax = switchPositions(i, 2) + swLength / 2;
+
+        % Check if the point is within the bounds of the switch
+        if (x >= xMin && x <= xMax) && ...
+           (y >= yMin && y <= yMax)
+            isAtSwitch(i) = true; % Mark the switch as present
+        end
     end
 end

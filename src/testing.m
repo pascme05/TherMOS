@@ -187,7 +187,7 @@ function [pred, grt, mdl] = testing(mdl, data, setup, para, path)
     %===================================================
     % POD-ss Model
     %===================================================
-    if setup.selPS == 1
+    if setup.selPS >= 1
         %----------------------------------------
         % Loading
         %----------------------------------------
@@ -207,7 +207,11 @@ function [pred, grt, mdl] = testing(mdl, data, setup, para, path)
         % Fitting 
         %----------------------------------------
         timeStart = tic;
-        pred = psSol(mdl, data.te, para);
+        if setup.selPS == 1
+            pred = psSol(mdl, data.te, para);
+        else
+            pred = ps3Sol(mdl, data.te, para);
+        end
         pred.testTime = toc(timeStart);
 
         %----------------------------------------

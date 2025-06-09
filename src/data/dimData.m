@@ -31,8 +31,8 @@ function [out, setup] = dimData(data, setup, para)
     Ts = data.Ts;                                                           % sampling time (sec)
     [~, N] = size(data.y2);                                                 % number of profiles in data
     dim = data.Dim;                                                         % dimension of raw data input
-    % pos = para.Dat.gen.cutVal;                                              % position for reducing from 3D -> 2D
-    % ax = para.Dat.gen.cut;                                                  % axis which is being removed
+    pos = para.Dat.gen.cutVal;                                              % position for reducing from 3D -> 2D
+    ax = para.Dat.gen.cut;                                                  % axis which is being removed
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
@@ -52,8 +52,17 @@ function [out, setup] = dimData(data, setup, para)
     %===================================================
     if setup.datDim == 3 && para.Dat.gen.dOut == 2
         %----------------------------------------
+        % Init
+        %----------------------------------------
+        out = data;
+
+        %----------------------------------------
         % Get positions
         %----------------------------------------
+        if ax == 1
+        elseif ax == 2
+        else
+        end
 
         %----------------------------------------
         % Reduce data

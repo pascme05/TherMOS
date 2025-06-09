@@ -33,19 +33,9 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
     % Parameters
     %===================================================
     [Nt, ~] = size(Tin);                                                    % number of samples Nt and spatial points N
-    x_min = min(xInp);                                                      % minimum input value x spacing (m)
-    x_max = max(xInp);                                                      % maximum input value x spacing (m)
-    y_min = min(yInp);                                                      % minimum input value y spacing (m)
-    y_max = max(yInp);                                                      % maximum input value y spacing (m)
     Nx = length(xOut);                                                      % number of output samples x
     Ny = length(yOut);                                                      % number of output samples y
     Tout = zeros(Ny, Nx, Nt);                                               % Output temperature matrix
-
-    %===================================================
-    % Variables
-    %===================================================
-    x_grid = linspace(x_min, x_max, Nx);
-    y_grid = linspace(y_min, y_max, Ny);
     
     %===================================================
     % Interpolation
@@ -59,7 +49,6 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
     else
         method = 'nearest';
     end
-    method = 'linear';
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -67,7 +56,7 @@ function Tout = map2D(Tin, xInp, yInp, xOut, yOut, inter)
     %===================================================
     % Create the new target grid
     %===================================================
-    [Xq, Yq] = meshgrid(x_grid, y_grid);
+    [Xq, Yq] = meshgrid(xOut, yOut);
 
     %===================================================
     % Interpolation

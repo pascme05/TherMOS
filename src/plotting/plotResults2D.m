@@ -102,6 +102,12 @@ function [] = plotResults2D(data, results, mdl, setup, para)
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
+    % Shift Coordinate System
+    %===================================================
+    xInp = xInp - min(xInp);                                                % normalised coordinate system with x=0
+    yInp = yInp - min(yInp);                                                % normalised coordinate system with y=0
+
+    %===================================================
     % Mapping Position
     %===================================================
     %----------------------------------------
