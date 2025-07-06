@@ -192,7 +192,7 @@ function mdl = training(data, setup, para, path)
         % Fitting
         %----------------------------------------
         timeStart = tic;
-        mdl.sys = dlFit(data.tr, data.vl, para, setup);
+        [mdl.sys, mdl.info] = dlFit(data.tr, data.vl, para, setup);
         mdl.timeTrain = toc(timeStart);
         
         %----------------------------------------
@@ -207,6 +207,31 @@ function mdl = training(data, setup, para, path)
         filename = fullfile(path.mdl, mdlName);
         save(filename, 'mdl');
     end
+
+    %===================================================
+    % Physics Informed Deep Learning
+    %===================================================
+    if setup.selPI ~= 0
+        %----------------------------------------
+        % Fitting
+        %----------------------------------------
+        timeStart = tic;
+        [mdl.sys, mdl.info] = pinnFit(data.tr, data.vl, para, setup);
+        mdl.timeTrain = toc(timeStart);
+        
+        %----------------------------------------
+        % Model Size
+        %----------------------------------------
+        mdl.size = 1;
+        
+        %----------------------------------------
+        % Saving
+        %----------------------------------------
+        mdlName = 'mdl_pi_' + setup.name + '.mat';
+        filename = fullfile(path.mdl, mdlName);
+        save(filename, 'mdl');
+    end
+
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

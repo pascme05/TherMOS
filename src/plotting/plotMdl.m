@@ -326,10 +326,28 @@ function [] = plotMdl(~, mdl, setup)
     %===================================================
     % DL-Model
     %===================================================
-    if setup.selDL == 1
+    if setup.selDL >= 1
+        %----------------------------------------
+        % Convergence
+        %----------------------------------------
+        % Loss
         figure;
-        plot(mdl.sys);
-        title('Deep Learning Network Structure');
+        subplot(2,1,1);
+        semilogy(mdl.info.TrainingHistory.Iteration, mdl.info.TrainingHistory.Loss);
+        hold on;
+        semilogy(mdl.info.ValidationHistory.Iteration, mdl.info.ValidationHistory.Loss)
+        title('Deep Learning Network Convergence');
+        ylabel("Loss");
+        xlabel("Iterations");
+        legend(['Train', 'Val'])
+        grid on;
+        
+        % Learn Rate
+        subplot(2,1,2);
+        semilogy(mdl.info.TrainingHistory.Iteration, mdl.info.TrainingHistory.LearnRate);
+        title('Deep Learning Network Learn Rate');
+        ylabel("Learn Rate");
+        xlabel("Iterations");
         grid on;
     end
 end

@@ -200,6 +200,7 @@ setup.selPS = 0;                                                            % PO
 %----------------------------------------
 setup.selML = 2;                                                            % ML-Model (Machine Learning) 0) de-activated, 1) LR, 2) RF, 3) SVR, 4) GRP, 5) EN, 6) NN
 setup.selDL = 0;                                                            % DL-Model (Machine Learning) 0) de-activated, 1) activated
+setup.selPI = 0;                                                            % Physics Informed DL-Model (tbd) 0) de-activated, 1) CNN, 2) LSTM, 3) CNN+LSTM
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

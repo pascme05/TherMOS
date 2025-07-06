@@ -27,11 +27,12 @@
 %       3) para:    All simulation parameters of the current simulation
 %       4) setup:   All setup files for the simulation
 % Out:  1) mdl:     Trained model
+%       2) info:    Training info
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function mdl = dlFit(data, val, para, setup)
+function [mdl, info] = dlFit(data, val, para, setup)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -60,6 +61,8 @@ function mdl = dlFit(data, val, para, setup)
     valFreq = para.Mdl.dl.valFreq;
     batch = para.Mdl.dl.batch;
     shuOpt  = para.Mdl.dl.shu;
+    lossFnc = para.Mdl.dl.loss;
+    seq = para.Mdl.dl.seq;
 
     %===================================================
     % Variables
@@ -90,13 +93,21 @@ function mdl = dlFit(data, val, para, setup)
     
     % Preallocate arrays
     Xtrain = zeros(W, F, numWin);   % [time, features, batch]
-    Ytrain = zeros(M, numWin);      % [response, batch]
+    Ytrain = zeros(W, M, numWin);     
     
     % Efficient windowing loop
     for idx = 1:numWin
         i = (idx - 1) * stride + 1;
         Xtrain(:, :, idx) = X(i:i+W-1, :);        % W x F
-        Ytrain(:, idx) = Y(i+W-1, :)';            % M x 1
+        Ytrain(:, :, idx) = Y(i:i+W-1, :);       % W x M
+    end
+
+    % Seq2Point vs Seq2Seq
+    if seq > 0
+        if seq > W
+            seq = W;
+        end
+        Ytrain = squeeze(Ytrain(seq, :, :))';
     end
 
     %----------------------------------------
@@ -107,13 +118,21 @@ function mdl = dlFit(data, val, para, setup)
     
     % Preallocate arrays
     Xval = zeros(W, F, numWin_val);     % [time, features, batch]
-    Yval = zeros(M, numWin_val);        % [response, batch]
+    Yval = zeros(W, M, numWin_val);        
     
     % Efficient windowing loop
     for idx = 1:numWin_val
         i = (idx - 1) * stride + 1;
         Xval(:, :, idx) = X_val(i:i+W-1, :);     % W x F
-        Yval(:, idx) = Y_val(i+W-1, :)';         % M x 1
+        Yval(:, :, idx) = Y_val(i:i+W-1, :);    % W x M
+    end
+    
+    % Seq2Point vs Seq2Seq
+    if seq > 0
+        if seq > W
+            seq = W;
+        end
+        Yval = squeeze(Yval(seq, :, :))';
     end
 
     %===================================================
@@ -139,7 +158,7 @@ function mdl = dlFit(data, val, para, setup)
                               'LearnRateDropPeriod', lrDropPr, ...
                               'LearnRateDropFactor', lrDropFa, ...            
                               'Verbose', 1, ...
-                              'ValidationData', {Xval, Yval'}, ...
+                              'ValidationData', {Xval, Yval}, ...
                               'ValidationFrequency', valFreq, ...
                               'ValidationPatience', 10, ...   
                               'OutputNetwork', 'best-validation-loss',...
@@ -157,39 +176,66 @@ function mdl = dlFit(data, val, para, setup)
     % Model
     %===================================================
     if setup.selDL == 1
-        layers = [
-            sequenceInputLayer(F, 'Normalization', 'zscore')
-            convolution1dLayer(5, 64, 'Padding', 'same')
-            batchNormalizationLayer
-            reluLayer
-            convolution1dLayer(3, 32, 'Padding', 'same')
-            reluLayer
-            globalAveragePooling1dLayer
-            fullyConnectedLayer(32)
-            reluLayer
-            fullyConnectedLayer(M)
-        ];
+        if seq == 0
+            disp('Error: No valid choice of Seq2Seq model.')
+        else
+            layers = [
+                sequenceInputLayer(F, 'Normalization', 'zscore')
+                convolution1dLayer(5, 64, 'Padding', 'same')
+                batchNormalizationLayer
+                reluLayer
+                convolution1dLayer(3, 32, 'Padding', 'same')
+                reluLayer
+                globalAveragePooling1dLayer
+                fullyConnectedLayer(32)
+                reluLayer
+                fullyConnectedLayer(M)
+            ];
+        end
     
     elseif setup.selDL == 2
-        layers = [ ...
-            sequenceInputLayer(F, Normalization="zscore")
-            lstmLayer(64, OutputMode="last")
-            reluLayer
-            fullyConnectedLayer(64)
-            reluLayer
-            fullyConnectedLayer(M)
-        ];
+        if seq == 0
+            layers = [ ...
+                sequenceInputLayer(F, Normalization="zscore")
+                lstmLayer(64, OutputMode="sequence")
+                reluLayer
+                fullyConnectedLayer(64)
+                reluLayer
+                fullyConnectedLayer(M)
+            ];
+        else
+            layers = [ ...
+                sequenceInputLayer(F, Normalization="zscore")
+                lstmLayer(64, OutputMode="last")
+                reluLayer
+                fullyConnectedLayer(64)
+                reluLayer
+                fullyConnectedLayer(M)
+            ];
+        end
 
     elseif setup.selDL == 3
-        layers = [
-            sequenceInputLayer(F, 'Normalization', 'zscore')
-            convolution1dLayer(3, 32, 'Padding', 'same') 
-            reluLayer
-            lstmLayer(64, 'OutputMode', 'last')
-            fullyConnectedLayer(32)
-            reluLayer
-            fullyConnectedLayer(M)
-        ];
+        if seq == 0
+            layers = [
+                sequenceInputLayer(F, 'Normalization', 'zscore')
+                convolution1dLayer(3, 32, 'Padding', 'same') 
+                reluLayer
+                lstmLayer(64, 'OutputMode', 'sequence')
+                fullyConnectedLayer(32)
+                reluLayer
+                fullyConnectedLayer(M)
+            ];
+        else
+            layers = [
+                sequenceInputLayer(F, 'Normalization', 'zscore')
+                convolution1dLayer(3, 32, 'Padding', 'same') 
+                reluLayer
+                lstmLayer(64, 'OutputMode', 'last')
+                fullyConnectedLayer(32)
+                reluLayer
+                fullyConnectedLayer(M)
+            ];
+        end
 
     else
         disp('Error: No valid choice of DL model.')
@@ -198,12 +244,37 @@ function mdl = dlFit(data, val, para, setup)
     %===================================================
     % Fitting
     %===================================================
-    mdl = trainnet(Xtrain, Ytrain',layers,"mse",options);
-    
+    if lossFnc == 1
+        [mdl, info] = trainnet(Xtrain, Ytrain,layers,"mse",options);
+    elseif lossFnc == 2
+        [mdl, info] = trainnet(Xtrain, Ytrain,layers,"mae",options);
+    elseif lossFnc == 3
+        [mdl, info] = trainnet(Xtrain, Ytrain,layers,"huber",options);
+    elseif lossFnc == 4
+        [mdl, info] = trainnet(Xtrain, Ytrain,layers,@customLoss,options);
+    else
+        [mdl, info] = trainnet(Xtrain, Ytrain,layers,"mse",options);
+    end
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     disp("DONE: Training a Deep Learning Model")
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Function
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function [loss, gradients, state] = customLoss(net, X, Y)
+    % Forward pass
+    [YPred, state] = forward(net, X);
+
+    % Compute your custom loss
+    loss = mean(abs(YPred - Y), 'all');
+
+    % Backward pass
+    gradients = dlgradient(loss, net.Learnables);
 end
 
 

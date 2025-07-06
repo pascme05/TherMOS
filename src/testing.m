@@ -266,15 +266,22 @@ function [pred, grt, mdl] = testing(mdl, data, setup, para, path)
     end
 
     %===================================================
-    % DL Model
+    % DL/PI Model
     %===================================================
-    if setup.selDL ~= 0
+    if setup.selDL ~= 0 || setup.selPI ~= 0
         %----------------------------------------
         % Loading
         %----------------------------------------
         if isempty(mdl)
             try
-                mdlName = 'mdl_dl_' + setup.name + '.mat';
+                % Name
+                if setup.selDL ~= 0
+                    mdlName = 'mdl_dl_' + setup.name + '.mat';
+                else
+                    mdlName = 'mdl_pi_' + setup.name + '.mat';
+                end
+
+                % Load
                 filename = fullfile(path.mdl, mdlName);
                 load(filename, 'mdl');
                 disp('INFO: Model loaded successfully.');
@@ -288,7 +295,11 @@ function [pred, grt, mdl] = testing(mdl, data, setup, para, path)
         % Fitting 
         %----------------------------------------
         timeStart = tic;
-        pred = dlSol(mdl, data.te, para);
+        if setup.selDL ~= 0
+            pred = dlSol(mdl, data.te, para);
+        else
+            pred = pinnSol(mdl, data.te, para);
+        end
         pred.testTime = toc(timeStart);
 
         %----------------------------------------

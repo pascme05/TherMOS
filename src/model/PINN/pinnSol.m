@@ -2,7 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Title: Thermal Model Order Reduction and Simulation (TherMOS)           %
 % Topic: Power Electronics, Model Order Reduction                         %
-% File: dnnSol                                                            %
+% File: pinnSol                                                           %
 % Date: 13.08.2024                                                        %
 % Author: Dr. Pascal A. Schirmer                                          %
 % Version: V.0.1                                                          %
@@ -30,7 +30,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function out = dlSol(mdl, data, para)
+function out = pinnSol(mdl, data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -47,13 +47,13 @@ function out = dlSol(mdl, data, para)
     Rslope = para.Par.loss.Rslope;                                          % slope specific resistance change (1/K)
     Tref = para.Par.loss.Tref;                                              % reference temperature losses (°C)
     eps = para.Par.gen.eps;                                                 % lower numerical bound
-    [Nt, N] = size(data.y);                                                 % number of samples Nt and temperature nodes N
+    [Nt, ~] = size(data.y);                                                 % number of samples Nt and temperature nodes N
     [~, F] = size(data.X);                                                  % number of features F
     errMax = para.Mdl.gen.err;                                              % error bound
     err = Inf;                                                              % initial error
     maxSteps = para.Mdl.gen.nSub;                                           % maximum amount of optimisation steps
     W = para.Mdl.dl.W;                                                      % Length of each sequence (window size)
-    seq = para.Mdl.dl.seq;                                                  % Selector for seq2seq and seq2point        
+    stride = W;                                                             % Step size to slide the window
 
     %===================================================
     % Variables
@@ -67,39 +67,21 @@ function out = dlSol(mdl, data, para)
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Calc Stride
-    %===================================================
-    if seq == 0
-        stride = W;                                                         % Step size to slide the window (Seq2Seq)
-    else
-        stride = 1;                                                         % Step size to slide the window (Seq2Point)
-    end
-
-    %===================================================
     % Padding Data
     %===================================================
-    if seq == 0
-        remainder = mod(Nt, W);                                             % Leftover if not divisible
-        if remainder ~= 0
-            padLen = W - remainder;
-            padPv = [Pv; repmat(Pv(end, :), padLen, 1)];  
-            Toff = [Toff; repmat(Toff(end, :), padLen, 1)];
-        end
-        Nt_padded = size(padPv, 1);
-    else
-        padLen = W - 1;
-        padPv = padarray(Pv', [0 padLen], 'replicate', 'pre')';             % T+W-1 × F
+    remainder = mod(Nt, W);                                                 % Leftover if not divisible
+    if remainder ~= 0
+        padLen = W - remainder;
+        Pv = [Pv; repmat(Pv(end, :), padLen, 1)];  
+        Toff = [Toff; repmat(Toff(end, :), padLen, 1)];
     end
+    Nt_padded = size(Pv, 1);             
 
     %===================================================
     % Window Data
     %===================================================
     % Init
-    if seq == 0
-        numWin = Nt_padded / W; 
-    else
-        numWin = Nt;   
-    end
+    numWin = Nt_padded / W;   
 
     % Preallocate 3D array
     testX_mat = zeros(F, W, numWin);
@@ -108,7 +90,7 @@ function out = dlSol(mdl, data, para)
     for idx = 1:numWin
         startIdx = (idx - 1) * stride + 1;
         stopIdx = startIdx + W - 1;
-        testX_mat(:, :, idx) = padPv(startIdx:stopIdx, :)';  % F × W
+        testX_mat(:, :, idx) = Pv(startIdx:stopIdx, :)';  % F × W
     end
 
     %===================================================
@@ -133,10 +115,9 @@ function out = dlSol(mdl, data, para)
     %===================================================
     if Rohm == 0
         T_est = predict(mdl.sys, testX);
-        if seq == 0
-            T_est = reshape(permute(T_est, [1 3 2]), [], N);
-            T_est = T_est(1:Nt, :);
-        end
+        T_est = reshape(permute(T_est, [1 3 2]), [], 1);
+        T_est = T_est(1:Nt);
+        T_est = gather(T_est);
 
     %===================================================
     % Scaling Function
@@ -152,21 +133,34 @@ function out = dlSol(mdl, data, para)
         %----------------------------------------
         while err > errMax
             % Predict
-            temp = predict(mdl.sys, testX);
-            
-            % Losses
-            Pv = Pv .* theta(Tj_est + Toff);
-            testX = num2cell(Pv', 1);
+            T_est_win = predict(mdl.sys, testX);  
+            T_temp = reshape(permute(T_est_win, [1 3 2]), [], 1); 
 
-            % Error 
-            err = mean(mean(temp - T_est));
-            T_est = temp;
+            % Recompute losses using updated temperature
+            Pv_scaled = Pv .* theta(T_temp + Toff);
+            testX_mat_scaled = zeros(F, W, numWin);
+            for idx = 1:numWin
+                startIdx = (idx - 1) * W + 1;
+                endIdx = startIdx + W - 1;
+                testX_mat_scaled(:, :, idx) = Pv_scaled(startIdx:endIdx, :)'; 
+            end
+            testX = permute(testX_mat_scaled, [2 1 3]);  
 
-            % End While Loop
+            % Check convergence
+            err = mean(abs(T_temp - T_est));
+            T_est = T_temp;
+
+            iter = iter + 1;
             if iter > maxSteps
-                continue;
+                warning("Max correction steps reached in PINN solver.");
+                break;
             end
         end
+        
+        %----------------------------------------
+        % Trim padding
+        %----------------------------------------
+        T_est = T_est(1:Nt);
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
