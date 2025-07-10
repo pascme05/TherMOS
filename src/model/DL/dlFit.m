@@ -107,7 +107,11 @@ function [mdl, info] = dlFit(data, val, para, setup)
         if seq > W
             seq = W;
         end
-        Ytrain = squeeze(Ytrain(seq, :, :))';
+        if M == 1
+            Ytrain = squeeze(Ytrain(seq, :, :));
+        else
+            Ytrain = squeeze(Ytrain(seq, :, :))';
+        end
     end
 
     %----------------------------------------
@@ -132,7 +136,11 @@ function [mdl, info] = dlFit(data, val, para, setup)
         if seq > W
             seq = W;
         end
-        Yval = squeeze(Yval(seq, :, :))';
+        if M == 1
+            Yval = squeeze(Yval(seq, :, :));
+        else
+            Yval = squeeze(Yval(seq, :, :))';
+        end
     end
 
     %===================================================
@@ -266,15 +274,21 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [loss, gradients, state] = customLoss(net, X, Y)
-    % Forward pass
-    [YPred, state] = forward(net, X);
+function [loss, gradients] = customLoss(Y, T)
+    % Weights
+    alpha = 1.0;
+    beta = 1.0;
 
-    % Compute your custom loss
-    loss = mean(abs(YPred - Y), 'all');
+    % % Forward pass
+    % [YPred, state] = forward(net, X);
 
-    % Backward pass
-    gradients = dlgradient(loss, net.Learnables);
+    % Compute your custom data loss
+    dataLoss = mean(abs(T - Y), 'all');
+    physLoss = mean(abs(T - Y), 'all');
+    loss = alpha*dataLoss + beta*physLoss;
+
+    % % Backward pass
+    % gradients = dlgradient(loss, net.Learnables);
 end
 
 
