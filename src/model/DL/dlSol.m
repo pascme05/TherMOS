@@ -25,12 +25,13 @@
 % Inp:  1) mdl:     Fitted model parameters
 %       2) data:    Testing input data struct
 %       3) para:    All simulation parameters of the current simulation
+%       4) setup:   All setup files for the simulation
 % Out:  1) out:     Predicted temperature response
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function out = dlSol(mdl, data, para)
+function out = dlSol(mdl, data, para, setup)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -66,6 +67,16 @@ function out = dlSol(mdl, data, para)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Rolling Features
+    %===================================================
+    if setup.feature_roll ~= 0
+        Pv = calcFeat(Pv, setup.EWMA, setup.EWMS);
+        [~, F] = size(Pv);                                                  % number of features F
+    else
+        disp("INFO: Features deactivated")
+    end
+
     %===================================================
     % Calc Stride
     %===================================================

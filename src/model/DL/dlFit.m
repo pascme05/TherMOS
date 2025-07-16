@@ -83,6 +83,17 @@ function [mdl, info] = dlFit(data, val, para, setup)
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
+    % Rolling Features
+    %===================================================
+    if setup.feature_roll ~= 0
+        X = calcFeat(X, setup.EWMA, setup.EWMS);
+        X_val = calcFeat(X_val, setup.EWMA, setup.EWMS);
+        [~, F] = size(X);                                                   % number of features F
+    else
+        disp("INFO: Features deactivated")
+    end
+
+    %===================================================
     % Window Data
     %===================================================
     %----------------------------------------
@@ -173,9 +184,7 @@ function [mdl, info] = dlFit(data, val, para, setup)
                               'VerboseFrequency', 20, ...                 
                               'ExecutionEnvironment', 'auto', ...
                               'Plots', 'none');   
-
-
-                              
+                       
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
@@ -274,21 +283,15 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [loss, gradients] = customLoss(Y, T)
+function loss = customLoss(Y, T)
     % Weights
     alpha = 1.0;
     beta = 1.0;
-
-    % % Forward pass
-    % [YPred, state] = forward(net, X);
 
     % Compute your custom data loss
     dataLoss = mean(abs(T - Y), 'all');
     physLoss = mean(abs(T - Y), 'all');
     loss = alpha*dataLoss + beta*physLoss;
-
-    % % Backward pass
-    % gradients = dlgradient(loss, net.Learnables);
 end
 
 

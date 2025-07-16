@@ -296,7 +296,7 @@ function [pred, grt, mdl] = testing(mdl, data, setup, para, path)
         %----------------------------------------
         timeStart = tic;
         if setup.selDL ~= 0
-            pred = dlSol(mdl, data.te, para);
+            pred = dlSol(mdl, data.te, para, setup);
         else
             pred = pinnSol(mdl, data.te, para);
         end
