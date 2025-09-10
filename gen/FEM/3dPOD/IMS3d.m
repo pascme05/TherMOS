@@ -24,9 +24,9 @@ clc
 M = 51;
 N = 21;
 K = 64;
-l = 50e-3;
+l = 70e-3;
 h = 3150e-6;
-b = 20e-3;
+b = 30e-3;
 
 % Define semiconductor dimensions
 swWidth = 8e-3; % 8 mm
@@ -48,7 +48,7 @@ matCp = [380, 800, 1000, 1500, 750, 1];
 dx = 100e-6;
 
 % Losses
-Pv = 20;
+Pv = 17.5;
 Vol_Sw = swWidth*swLength*swHeight;
 q = Pv / Vol_Sw;
 
