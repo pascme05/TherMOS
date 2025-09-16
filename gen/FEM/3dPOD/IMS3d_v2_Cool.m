@@ -73,6 +73,8 @@ Tinit = 35;
 
 % Load case
 Tend = 900;
+Tss = 900;
+dt_ss = 100;
 dt = 10;
 dt0 = 0.001;
 dt1 = 0.01;
@@ -80,11 +82,18 @@ dt2 = 0.1;
 dt3 = 1;
 dt4 = 10;
 tlist = 0:dt:Tend-dt;
-% tlist = [0:dt0:0.02-dt0, 0.02:dt1:0.2-dt1, 0.2:dt2:2-dt2, 2:dt3:60-dt3, 60:dt4:Tend];
+tlist = [0:dt_ss:Tss-dt_ss, Tss:dt0:Tss+0.02-dt0, Tss+0.02:dt1:Tss+0.2-dt1, Tss+0.2:dt2:Tss+2-dt2, Tss+2:dt3:Tss+60-dt3, Tss+60:dt4:Tss+Tend];
+
+% % Time losses
+% q_sw_fun = @(location,state) (state.time < 900)*q_sw + (state.time >= 900)*q_sw/1000 ...
+%                              .* ones(1,numel(location.x));
+% 
+% q_Cu_fun = @(location,state) (state.time < 900)*q_Cu + (state.time >= 900)*q_Cu/1000 ...
+%                              .* ones(1,numel(location.x));
 
 % Settings
 plotting = 1;
-saving = 1;
+saving = 0;
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -209,15 +218,15 @@ air = subtract(air, sw7);
 air = subtract(air, sw8);
 gm = union(gm, air, "KeepBoundaries",true);
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Define Model
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Generate Model
 thermalmodel = femodel(AnalysisType="thermalTransient");
 thermalmodel.Geometry = gm;
 pdegplot(thermalmodel, "CellLabels", "off", "FaceLabels", "on", "FaceAlpha", 0.5);
 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% Define Model
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Define materials by face using the materialProperties property
 thermalmodel.MaterialProperties([19, 20, 21]) = materialProperties( ...
     "ThermalConductivity", matK(1), ...
@@ -254,18 +263,17 @@ thermalmodel.MaterialProperties(1) = materialProperties( ...
 thermalmodel.CellIC = cellIC(Temperature=Tinit);
 
 % Boundary Conditions
-% thermalmodel.FaceLoad(42) = faceLoad(ConvectionCoefficient=7.5, AmbientTemperature=22);
 thermalmodel.FaceLoad([97, 107, 109]) = faceLoad(ConvectionCoefficient=hc, AmbientTemperature=Ta);
 thermalmodel.FaceLoad([95, 99, 101, 103, 105]) = faceLoad(ConvectionCoefficient=hfix, AmbientTemperature=Ta);
 
 % Heat Source
-thermalmodel.CellLoad([20, 21]) = cellLoad(Heat=q_Cu); 
-thermalmodel.CellLoad([2,3,4,5,6,7,8,9]) = cellLoad(Heat=q_sw); 
+thermalmodel.CellLoad([20, 21]) = cellLoad(Heat=@q_fnc_cu); 
+thermalmodel.CellLoad([2,3,4,5,6,7,8,9]) = cellLoad(Heat=@q_fnc_sw); 
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% Solve Model
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %% Solve Model
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %---------------------------------------------------
 % Meshing 
 %---------------------------------------------------
@@ -453,7 +461,7 @@ if plotting == 1
         temp = Tintrp(:,i);
         temp = reshape(temp,size(XX));
         Tsw(i) = mean(mean(temp(31:40,37:46)));
-        Tsw(i) = max(results.Temperature(:,i));
+        % Tsw(i) = max(results.Temperature(:,i));
     end
     figure;
     Zth = (Tsw - Tinit) / (Pv + Pv_Cu/8);
@@ -461,6 +469,13 @@ if plotting == 1
     semilogx(tlist, Zth);
     hold on
     semilogx(tlist, Zth2);
+    grid on
+
+    % 1D Cool down
+    figure;
+    semilogx(tlist(10:end)-900,Zth(10:end));
+    hold on
+    semilogx(tlist(10:end)-900,Zth2(10:end));
     grid on
 end
 
@@ -554,5 +569,45 @@ function isAtCuPad = checkCuPadPosition(x, y)
         if (x >= xMin && x <= xMax) && (y >= yMin && y <= yMax)
             isAtCuPad(i) = true;
         end
+    end
+end
+
+function Q = q_fnc_sw(location,state)
+    % Init
+    q_dot_max = 1e8; % Maximum heat source value
+    Tss = 900;
+    Q = zeros(1,numel(location.x));
+    
+    % Check for NaNs
+    if(isnan(state.time))
+      Q(1,:) = NaN;
+      return
+    end
+
+    % Step Function
+    if state.time < Tss
+        Q(1,:) = q_dot_max;
+    else
+        Q(1,:) = 0;
+    end
+end
+
+function Q = q_fnc_cu(location,state)
+    % Init
+    q_dot_max = 1.6071e8; % Maximum heat source value
+    Tss = 900;
+    Q = zeros(1,numel(location.x));
+    
+    % Check for NaNs
+    if(isnan(state.time))
+      Q(1,:) = NaN;
+      return
+    end
+
+    % Step Function
+    if state.time < Tss
+        Q(1,:) = q_dot_max;
+    else
+        Q(1,:) = 0;
     end
 end
