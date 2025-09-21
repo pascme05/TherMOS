@@ -209,6 +209,9 @@ function out = poSol(mdl, data, ~)
     % Choose solver dynamically
     % is_stiff = max(eig(Gth/Cth)) > tau; % Example stiffness criterion
     
+    % Inference time
+    timeStart = tic;
+
     %===================================================
     % Solve
     %===================================================
@@ -230,7 +233,7 @@ function out = poSol(mdl, data, ~)
         %                 );
         odeoptions = odeset('Mass', Cth, 'JConstant', 'on', ...
                             'RelTol', 1e-5, 'AbsTol', 1e-7, ...
-                            'Jacobian', -Gth);
+                            'Jacobian', -Gth, 'Stats', 'on');
 
         %----------------------------------------
         % Solution
@@ -265,6 +268,7 @@ function out = poSol(mdl, data, ~)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    out.odeTime = toc(timeStart);
     out.y = T_est;
     out.X = Q;
     out.theta_hat = theta_hat;

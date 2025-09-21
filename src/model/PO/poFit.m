@@ -35,6 +35,11 @@ function mdl = poFit(data, ~, para)
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
+    % Settings
+    %===================================================
+    protocol = 5;                                                           % protocol A=1, B=2, ...
+
+    %===================================================
     % Parameters
     %===================================================
     %----------------------------------------
@@ -153,20 +158,26 @@ function mdl = poFit(data, ~, para)
     % form 2D arrays of points & weights
     [Xq, Yq] = meshgrid(xq_1d, yq_1d); 
     [Xinit, Yinit] = meshgrid(x, y); 
-    W = wq_y(:) * wq_x(:)';
-    % W = ones(size(W));
+    
+    % Select Method
+    if protocol == 1
+        W = ones(size(wq_y(:) * wq_x(:)'));
+    else
+        W = wq_y(:) * wq_x(:)';
+    end
     
 
     %----------------------------------------
     % Jacobian Area Mapping (J)
     %----------------------------------------
+    % Calculate
     Jgrid = jacobian2D(xInp, yInp, xq_1d, yq_1d, 0.001);
-    % Jgrid = ones(size(Jgrid));
-    
-    %----------------------------------------
-    % Spacing
-    %----------------------------------------
 
+    % Setting
+    if protocol <= 2
+        Jgrid = ones(size(Jgrid));
+    end
+    
     %===================================================
     % Boundary Conditions
     %===================================================
@@ -346,16 +357,29 @@ function mdl = poFit(data, ~, para)
     % [Cth, Gth, ~] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
     
     % Opti Cth and Gth
-    [Cth, Gth, ~] = optCthGthUB((theta-g0)', q, Ts, Cth, Gth, scale);
+    if protocol == 5
+        [Cth, Gth, ~] = optCthGthUB((theta-g0)', q, Ts, Cth, Gth, scale);
+    % Opti Cth/Gth wrt G0/C0
+    elseif protocol == 6
+        [Cth, Gth, ~] = optCthGth((theta-g0)', q, Ts, Cth, Gth, scale);
+    end
 
     % Opti Steady State Heat Balance
-    % [alpha_opt, ~, ~] = optAlphaSS((theta-g0)', q, Gth, scale);
-    
+    if protocol == 4
+        [alpha_opt, ~, ~] = optAlphaSS((theta-g0)', q, Gth, scale);
     % Opti Transient Heat Balance
-    [alpha_opt, ~, ~] = optAlpha((theta-g0)', q, Ts, Cth, Gth, scale);
+    elseif protocol >= 5
+        [alpha_opt, ~, ~] = optAlpha((theta-g0)', q, Ts, Cth, Gth, scale);
+    else
+        alpha_opt= ones(K,1);
+    end
+    
+    % % Opti Transient Heat Balance
+    % [alpha_opt, ~, ~] = optAlpha((theta-g0)', q, Ts, Cth, Gth, scale);
 
     % Matrix Conidtioning
     matCond = cond(Cth) + cond(Gth);
+    matCond
 
     % %===================================================
     % % Reconstruct
