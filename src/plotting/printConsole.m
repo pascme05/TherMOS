@@ -168,10 +168,21 @@ function [] = printConsole(data, results, setup, mdl, para)
     %===================================================
     % Training and Testing Times
     %===================================================
+    %----------------------------------------
+    % General
+    %----------------------------------------
     fprintf('INFO: Training time (sec): %5.2f \n', mdl.timeTrain);
     fprintf('INFO: Inference time (µs/sample): %5.2f \n', data.pr.testTime*1e6/Nt/nXY);
     fprintf('INFO: Inference time (ms/time-step): %5.2f \n', data.pr.testTime*1e3/Nt);
-    fprintf('INFO: Inference time ode (ms/time-step): %5.2f \n', data.pr.odeTime*1e3/Nt);
+    
+    %----------------------------------------
+    % ODE
+    %----------------------------------------
+    try
+        fprintf('INFO: Inference time ode (ms/time-step): %5.2f \n', data.pr.odeTime*1e3/Nt);
+    catch
+    end
+
 
     %===================================================
     % Memory Requirements
