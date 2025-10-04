@@ -112,7 +112,7 @@ setup = struct();
 % General
 %===================================================
 setup.user = "Pascal Schirmer";                                             % name of the user (string)
-setup.name = "lecture_Therm_Base";                                          % name of the simulation (string)
+setup.name = "lecture_Therm_Opt_2";                                         % name of the simulation (string)
 
 %===================================================
 % Experiment
@@ -120,15 +120,15 @@ setup.name = "lecture_Therm_Base";                                          % na
 %----------------------------------------
 % Configuration
 %----------------------------------------
-setup.config = "\lecture\lecture_Therm";                                    % name of the config file (string)
+setup.config = "\lecture\lecture_Therm_Opt_2";                              % name of the config file (string)
 
 %----------------------------------------
 % Plotting and Saving
 %----------------------------------------
-setup.plotOut = 1;                                                          % 0) model output is not plotted, 1) model output is plotted, 2) plotting one figure per output
+setup.plotOut = 2;                                                          % 0) model output is not plotted, 1) model output is plotted, 2) plotting one figure per output
 setup.plotMdl = 0;                                                          % 0) model structure is not plotted, 1) model structure is plotted
 setup.featRank = 0;                                                         % 0) No feature ranking, 1) feature ranking
-setup.save = 0;                                                             % 0) output data not saved, 1) output data saved
+setup.save = 1;                                                             % 0) output data not saved, 1) output data saved
 
 %----------------------------------------
 % Training and Testing
@@ -198,7 +198,7 @@ setup.selPS = 0;                                                            % PO
 % Machine/Deep Learning (tbi)
 %----------------------------------------
 setup.selML = 0;                                                            % ML-Model (Machine Learning) 0) de-activated, 1) LR, 2) RF, 3) SVR, 4) GRP, 5) EN, 6) NN
-setup.selDL = 1;                                                            % DL-Model (Machine Learning) 0) de-activated, 1) CNN, 2) LSTM, 3) CNN+LSTM
+setup.selDL = 3;                                                            % DL-Model (Machine Learning) 0) de-activated, 1) CNN, 2) LSTM, 3) CNN+LSTM
 setup.selPI = 0;                                                            % Physics Informed DL-Model (tbd) 0) de-activated, 1) CNN, 2) LSTM, 3) CNN+LSTM
 
 

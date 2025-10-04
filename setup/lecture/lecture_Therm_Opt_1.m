@@ -133,7 +133,7 @@ setup.save = 0;                                                             % 0)
 %----------------------------------------
 % Training and Testing
 %----------------------------------------
-setup.train = 0;                                                            % 0) no model training, 1) model training
+setup.train = 1;                                                            % 0) no model training, 1) model training
 setup.test = 1;                                                             % 0) no model testing, 1) model testing
 
 
@@ -162,7 +162,7 @@ setup.vlSheet = ["OP3"];                                                    % li
 
 % ID based
 setup.trID = [];                                                            % list of training IDs (if empty all remaining ones are used)
-setup.teID = [74];                                                  % list of testing IDs 60, 62, 74
+setup.teID = [60, 62, 74];                                                  % list of testing IDs 60, 62, 74
 setup.vlID = [10, 48, 63];                                                  % list of validation IDS
 
 % Ratio based
