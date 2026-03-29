@@ -1,0 +1,124 @@
+%% ----------------- Full Coupled RC Thermal Model Extraction -----------------
+clc; clear;
+
+%% ------------------ USER INPUT ------------------
+% N: number of nodes/components
+% t: time vector (M x 1)
+% P_all: power matrix (M x N), each column = power of a node over time
+% T_all: temperature matrix (M x N), measured or simulated transient temps
+% T_c: heat sink temperature
+
+% ----------------- EXAMPLE PLACEHOLDER DATA -----------------
+N = 3;                 
+t = (0:0.1:100)';       
+T_c = 25;              
+
+% Example powers: multiple nodes powered simultaneously
+P_all = [2 1 0; 2 0 1; 2 1 1; repmat([2 1 1], length(t)-3, 1)]; % MxN
+P_all = P_all * 10;
+
+% Example transient temperatures (replace with real data)
+T_all = zeros(length(t), N);
+for j = 1:N
+    R_fake = 2.5 + 1.5*rand;
+    tau_fake = 5 + 5*rand;
+    T_all(:,j) = T_c + R_fake*sum(P_all,2).*(1 - exp(-t/tau_fake));
+end
+
+%% ------------------ Step 1: Initial Rth and Cth ------------------
+% Initial guess using simple approximations
+Rth_init = eye(N);        % start with identity (1 K/W self, 0 cross)
+Cth_init = ones(N,1)*10;  % 10 J/K as initial guess
+
+%% ------------------ Step 2: Optimization ------------------
+x0 = [reshape(Rth_init,[],1); Cth_init];
+
+options = optimoptions('lsqnonlin','Display','iter','MaxIterations',1000);
+
+x_opt = lsqnonlin(@(x) thermal_err_multi(x, P_all, T_all, t, N, T_c), x0, [], [], options);
+
+% Extract optimized Rth and Cth
+Rth_opt = reshape(x_opt(1:N^2), N, N);
+Cth_opt = x_opt(N^2+1:end);
+
+disp('Optimized Rth (K/W):'); disp(Rth_opt);
+disp('Optimized Cth (J/K):'); disp(Cth_opt);
+
+%% ------------------ Step 3: Simulate with optimized model ------------------
+G = Rth_opt \ eye(N);
+C = diag(Cth_opt);
+
+odefun = @(tt,T) thermal_ode(tt, T, t, P_all, C, G, T_c);
+
+[~, T_sim] = ode45(odefun, t, T_c*ones(N,1));
+
+%% ------------------ Step 4: Plot comparison ------------------
+figure;
+
+for i = 1:N
+    subplot(N,1,i);
+    plot(t, T_all(:,i), 'b', 'LineWidth', 2); hold on;
+    plot(t, T_sim(:,i), '--r', 'LineWidth', 2);
+    
+    grid on;
+    xlabel('Time (s)');
+    ylabel(['T_', num2str(i), ' (°C)']);
+    
+    legend('True','Model');
+    title(['Node ', num2str(i)]);
+end
+
+figure;
+
+for i = 1:N
+    subplot(N,1,i);
+    plot(t, T_sim(:,i) - T_all(:,i), 'k', 'LineWidth', 1.5);
+    
+    grid on;
+    xlabel('Time (s)');
+    ylabel(['Error T_', num2str(i)]);
+    title(['Error Node ', num2str(i)]);
+end
+
+err = T_sim - T_all;
+rmse = sqrt(mean(err.^2));
+
+disp('RMSE per node (°C):');
+disp(rmse);
+
+%% ------------------ Supporting Function ------------------
+function err = thermal_err_multi(x, P_all, T_all, t, N, T_c)
+    Rth = reshape(x(1:N^2),N,N);
+    Cth = x(N^2+1:end);
+    M = length(t);
+    
+    % Construct conductance matrix G = inv(Rth)
+    G = Rth\eye(N);  
+    C = diag(Cth);
+    
+    % ODE function for coupled network
+    odefun = @(tt,T) C \ (-G*(T - T_c) + interp1(t, P_all, tt, 'linear', 'extrap')' );
+    
+    % Solve ODE
+    [~,T_sim] = ode45(odefun, t, T_c*ones(N,1));
+    
+    % Error vector
+    err = T_sim - T_all;  
+    err = err(:); % flatten for lsqnonlin
+end
+
+function dTdt = thermal_ode(tt, T, t, P_all, C, G, T_c)
+
+    % Interpolate power (force column vector)
+    P_vec = interp1(t, P_all, tt, 'linear', 'extrap');
+    P_vec = P_vec(:);   % <-- GUARANTEED Nx1
+
+    % Ensure T is column (safety)
+    T = T(:);
+
+    % Compute derivative
+    dTdt = C \ (-G*(T - T_c) + P_vec);
+
+    % Force output to column (extra safety)
+    dTdt = dTdt(:);
+end
