@@ -65,20 +65,9 @@ function mdl = sfFit(data, ~, para)
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Define Function
+    % Nodal Foster Networks
     %===================================================
-    fun = @(x) objective_dgl(x, t, Pv, T, M, N);
 
-    %===================================================
-    % Optimisation options
-    %===================================================
-    opt = optimoptions('lsqnonlin', 'Display', 'iter', 'TolFun', tol, ...
-                       'MaxIter', maxIter);
-    
-
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Calculation
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
     % Init Parameter
     %===================================================
@@ -89,43 +78,54 @@ function mdl = sfFit(data, ~, para)
     Cth_init = ones(M,1);  
 
     %----------------------------------------
-    % Opti Rth
-    %----------------------------------------
-    for i=1:K
-        Rth_init(i,i) = (Tm{i}(end,i) - Tc{i}(end,i)) / Pv{i}(end,i);
-    end
-
-    %----------------------------------------
     % Opti Cth
     %----------------------------------------
-    for i=1:K
+    for i=1:min(M,K)
         [~,idx] = min(abs(Tm{i}(:,i)-((Tm{i}(end,i) - Tc{i}(end,i))*0.63+Tc{i}(end,i))));
         tau = t{i}(idx);
         Cth_init(i) = tau / Rth_init(i,i);
     end
     
-    %----------------------------------------
-    % Init Condition
-    %----------------------------------------
-    x0 = [reshape(Rth_init,[],1); Cth_init];
 
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Calculation
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Analytic Rth
+    %===================================================
+    Rth = zeros(M);
+    for k = 1:min(M,K)   
+        Pk = Pv{k}(end,k);
+        dT = Tm{k}(end,:) - Tc{k}(end,:);
+        Rth(:,k) = dT(:) / Pk;   
+    end
+    Rth = (Rth + Rth.') / 2;
+    Gth = inv(Rth);
+    Gth = (Gth + Gth.') / 2;
+
+    %===================================================
+    % Optimisation options
+    %===================================================
+    opt = optimoptions('lsqnonlin', 'Display', 'iter', 'TolFun', tol, ...
+                       'MaxIter', maxIter);
+    x0 = Cth_init(:);
+    lb = 1e-12 * ones(numel(x0),1);
+    ub = [];
 
     %===================================================
     % Solve
     %===================================================
-    x_opt = lsqnonlin(@(x) thermal_err_multi(x, t, Pv, Tm, Tc, M, K), x0, [], [], opt);
-
+    C_opt = lsqnonlin(@(c) thermal_err_C(c, t, Pv, Tm, Tc, Gth, K), ...
+                  Cth_init, lb, ub, opt);
     
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
     % Extract Values
     %===================================================
-    Cth = x_opt(N^2+1:end);
-    Cth = diag(Cth);
-    Rth = reshape(x_opt(1:N^2), N, N);
-    Gth = 1./Rth;
+    Cth = diag(C_opt);
 
     %===================================================
     % Fitting
@@ -155,96 +155,32 @@ end
 %===================================================
 % Cost Function
 %===================================================
-function error = objective_dgl(x, t, P, T_true, M, N)
-    %----------------------------------------
-    % Extract parameters from x
-    %----------------------------------------
-    Cth = reshape(x(1:M*N), [M, N]);
-    Gth = reshape(x(M*N+1:end), [M, N]);
-    
-    %----------------------------------------
-    % Predict temperatures
-    %----------------------------------------
-    T_pred = calcT(t, P, Cth, Gth);
-    
-    %----------------------------------------
-    % Compute the error
-    %----------------------------------------
-    error = (T_true - T_pred).^2;
-end
+function err = thermal_err_C(Cvec, t2, P2, T2, Tc2, Gth, K)
 
-%===================================================
-% Calc Temperature
-%===================================================
-function T_pred = calcT(t, P, Cth, Gth)
-    %----------------------------------------
-    % Init
-    %----------------------------------------
-    Nt = length(t);
-    dt = t(2) - t(1);
-    M = size(Cth, 1);
-    N = size(Cth, 2);
-    T_pred = zeros(Nt, M);
-
-    %----------------------------------------
-    % Calc Prediction
-    %----------------------------------------
-    for i = 1:M
-        for k = 2:Nt
-            for j = 1:N
-                T_pred(k, i) = T_pred(k-1, i) + (dt / Cth(i, j)) * (P(k-1, j) - Gth(i, j) * T_pred(k-1, i));
-            end
-        end
-    end
-end
-
-%===================================================
-% Cost Function
-%===================================================
-function err = thermal_err_multi(x, t2, P2, T2, Tc2, M, K)
-    Rth = reshape(x(1:M^2),M,M);
-    Cth = x(M^2+1:end);
-    
-    % Construct conductance matrix G = inv(Rth)
-    G = Rth\eye(M);  
-    C = diag(Cth);
-
-    % ----- Simulate all experiments and accumulate error ---------------
+    C = diag(Cvec);
     all_err = [];
 
     for k = 1:K
-        % Extract Var
         t = t2{k}(:);
         P = P2{k};
-        Tm = T2{k};
-        Tc = Tc2{k};
+        Tm = T2{k} - Tc2{k}(1,:);
+        Tc = Tc2{k} - Tc2{k}(1,:);
 
-        if any(diff(t) <= 0)
-            error('Time vector t must be strictly increasing.');
-        end
-
-        % Make sure Tc has size [Nk x M]
-        if size(Tc,2) == 1 && M > 1
-            Tc = repmat(Tc, 1, M);
-        end
-
-        % ODE: C * dT/dt = P(t) - G*(T - Tc(t))
         odefun = @(tt,T) C \ ( ...
-                         interp1(t, P, tt, 'linear', 'extrap')' ...
-                       - G*(T - interp1(t, Tc, tt, 'linear', 'extrap')') );
+            interp1(t, P, tt, 'linear', 'extrap')' ...
+          - Gth*(T - interp1(t, Tc, tt, 'linear', 'extrap')') );
 
-        % Initial condition: measured or ambient at first time
-        T0 = Tm(1,:).';     % or Tc(1,:).'
+        T0 = Tm(1,:)';
 
-        [~, T_sim] = ode45(odefun, t, T0);
+        [~, T_sim] = ode15s(odefun, t, T0);
 
-        % Compute residual
-        res_k = T_sim - Tm;     % [Nk x M]
-        all_err = [all_err; res_k(:)];
+        res = T_sim - Tm;
+        all_err = [all_err; res(:)];
     end
 
-    err = all_err;   % for lsqnonlin
+    err = all_err;
 end
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% References

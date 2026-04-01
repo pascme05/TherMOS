@@ -31,87 +31,70 @@
 %% Function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function out = sfSol(mdl, data, para)
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Input
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("START: Solving thermal structure function")
+    disp("START: Solving thermal structure function (ODE)")
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Init
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %===================================================
-    % Parameter
+    % Parameters
     %===================================================
-    Rcon = para.Par.loss.Rcon;                                              % contact resistance (Ohm)
-    Rohm = para.Par.loss.Rohm;                                              % conduction resistance (Ohm)
-    Rslope = para.Par.loss.Rslope;                                          % slope specific resistance change (1/K)
-    Tref = para.Par.loss.Tref;                                              % reference temperature losses (°C)
-    eps = para.Par.gen.eps;                                                 % lower numerical bound
+    Rcon   = para.Par.loss.Rcon;
+    Rohm   = para.Par.loss.Rohm;
+    Rslope = para.Par.loss.Rslope;
+    Tref   = para.Par.loss.Tref;
+    eps_   = para.Par.gen.eps;
 
     %===================================================
     % Variables
     %===================================================
-    t = data.t;
-    Pv = data.X;                                                            % power losses input (W)
-    Toff = data.r;                                                          % temperature offset/reference (°C)
-    T_est = zeros(size(data.y));                                            % init nodes temperatures
-    out = data;     
+    t     = data.t;
+    Pv    = data.X;       % power losses (W)
+    Toff  = data.r;       % temperature offset
+    out   = data;
+
+    % Initial condition
+    T0 = zeros(size(data.y(1,:).'));
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Pre-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %===================================================
-    % Extract Model Parameters
-    %===================================================
     Cth = mdl.Cth;
     Gth = mdl.Gth;
-    Cth_inv = inv(Cth);
 
     %===================================================
-    % Scaling Function
+    % Scaling Function (vector-safe)
     %===================================================
     if Rohm == 0
-        theta = @(T) 1;
+        theta = @(T) ones(size(T));
     else
-        theta = @(T) (Rcon + Rohm*Rslope*(T-Tref)) / (Rcon + Rohm + eps);
+        theta = @(T) (Rcon + Rohm*Rslope.*(T - Tref)) ./ (Rcon + Rohm + eps_);
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Calculation
+    %% ODE Definition
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %===================================================
-    % Feedthrough
-    %===================================================
-    for i = 2:length(t)
-        %----------------------------------------
-        % Update power
-        %----------------------------------------
-        Pv(i,:) = Pv(i,:) .* theta(T_est(i-1,:) + Toff(i-1,:));
+    odefun = @(tt, T) thermal_ode(tt, T, t, Pv, Toff, Cth, Gth, theta);
 
-        
-        %----------------------------------------
-        % Solve Nodes
-        %----------------------------------------
-        dt = t(i) - t(i-1);
-        T_est(i, :) = calcT(dt, Pv(i,:), Cth_inv, Gth, T_est(i-1, :));
-    end
-
-    %===================================================
-    % Correcting Offset
-    %===================================================
-    % T_est = T_est + Toff;
-
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Solve ODE
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    [~, T_sim] = ode15s(odefun, t, T0);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    out.y = T_est;
+    out.y = T_sim + Toff;
     out.X = Pv;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    disp("DONE: Solving thermal structure function")
+    disp("DONE: Solving thermal structure function (ODE)")
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -120,19 +103,27 @@ end
 %===================================================
 % Calc Temperature
 %===================================================
-function Tnew = calcT(dt, P, Cth, Gth, Told)
+function dTdt = thermal_ode(tt, T, t, Pv, Toff, Cth, Gth, theta)
+
     %----------------------------------------
-    % Init
+    % Interpolate inputs at current time
     %----------------------------------------
-    Told = Told(:);
+    P = interp1(t, Pv, tt, 'linear', 'extrap');
+    Toffset = interp1(t, Toff, tt, 'linear', 'extrap');
+
+    %----------------------------------------
+    % Apply temperature-dependent scaling
+    %----------------------------------------
+    scale = theta(T.' + Toffset);
+    P = P .* scale;
+
+    % Ensure column vector
     P = P(:);
 
     %----------------------------------------
-    % Calculation
+    % Core equation: C dT/dt = P - G*T
     %----------------------------------------
-    dTdt = Cth * (P - Gth*Told);
-    Tnew2 = Told + dt*dTdt;
-    Tnew = (Cth/dt +Gth) / (P + Cth/dt*Told)';
+    dTdt = inv(Cth) * (P - Gth*T);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
