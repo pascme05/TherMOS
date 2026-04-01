@@ -65,6 +65,7 @@ function out = sfSol(mdl, data, para)
     %===================================================
     Cth = mdl.Cth;
     Gth = mdl.Gth;
+    Cth_inv = inv(Cth);
 
     %===================================================
     % Scaling Function
@@ -91,7 +92,8 @@ function out = sfSol(mdl, data, para)
         %----------------------------------------
         % Solve Nodes
         %----------------------------------------
-        T_est(i, :) = calcT(t, Pv(i,:), Cth, Gth, T_est(i-1, :));
+        dt = t(i) - t(i-1);
+        T_est(i, :) = calcT(dt, Pv(i,:), Cth_inv, Gth, T_est(i-1, :));
     end
 
     %===================================================
@@ -118,23 +120,19 @@ end
 %===================================================
 % Calc Temperature
 %===================================================
-function Tnew = calcT(t, P, Cth, Gth, Told)
+function Tnew = calcT(dt, P, Cth, Gth, Told)
     %----------------------------------------
     % Init
     %----------------------------------------
-    dt = t(2) - t(1);
-    M = size(Cth, 1);
-    N = size(Cth, 2);
-    Tnew = zeros(1, M);
+    Told = Told(:);
+    P = P(:);
 
     %----------------------------------------
     % Calculation
     %----------------------------------------
-    for i = 1:M
-        for j = 1:N
-            Tnew(1, i) = Told(i) + (dt / Cth(i, j)) * (P(j) - Gth(i, j) * Told(i));
-        end
-    end
+    dTdt = Cth * (P - Gth*Told);
+    Tnew2 = Told + dt*dTdt;
+    Tnew = (Cth/dt +Gth) / (P + Cth/dt*Told)';
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
