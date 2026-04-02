@@ -114,7 +114,7 @@ setup.name = "default";                                                     % na
 %----------------------------------------
 % Configuration
 %----------------------------------------
-setup.config = "\default\default";                                          % name of the config file (string)
+setup.config = "\default\defaultRth";                                       % name of the config file (string)
 
 %----------------------------------------
 % Plotting and Saving
@@ -151,7 +151,7 @@ setup.vlFile = ["dataRth_Matrix"];                                          % li
 
 % Sheet based
 setup.trSheet = ["Load-3", "Load-4", "Load-5", "Load-6"];                                                 % list of training sheets (strings) at least one
-setup.teSheet = "Load-3";                                                   % testing sheet (string) exactly one
+setup.teSheet = "Load-2";                                                   % testing sheet (string) exactly one
 setup.vlSheet = ["Load-2"];                                                 % list of validation sheets (strings) at least one
 
 % ID based

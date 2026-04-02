@@ -188,6 +188,7 @@ setup.selRC = 1;                                                            % RC
 
 % Multiple-Input Multiple-Output (MIMO)
 setup.selSS = 0;                                                            % SS-Model (State-Space) 0) de-activated, 1) activated
+setup.selSF = 0;                                                            % SF-Model (Thermal Strukture Function) 0) de-activated, 1) activated
 
 %----------------------------------------
 % Analytical 2D Models

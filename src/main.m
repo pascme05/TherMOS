@@ -29,7 +29,6 @@ function [] = main(setup, path)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Input Variables
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % setup.selSF = 0;                                                        % Init SF must be fixed (PS: 17/05/2025)
     setup.feature_roll = 0;
     setup.EWMA = [5, 50];
     setup.EWMS = [5, 50];

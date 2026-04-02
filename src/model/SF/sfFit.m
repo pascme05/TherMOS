@@ -45,7 +45,7 @@ function mdl = sfFit(data, ~, para)
     [~, M] = size(data.y);                                                  % number of time samples Nt and temperature nodes M
     [~, N] = size(data.X);                                                  % number of features N
     K = size(data.t2,1);                                                    % number of experiments
-    Nr = 5;
+    Nr = para.Mdl.rc.K;
 
     %===================================================
     % Variables
