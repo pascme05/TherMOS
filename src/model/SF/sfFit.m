@@ -45,6 +45,7 @@ function mdl = sfFit(data, ~, para)
     [~, M] = size(data.y);                                                  % number of time samples Nt and temperature nodes M
     [~, N] = size(data.X);                                                  % number of features N
     K = size(data.t2,1);                                                    % number of experiments
+    Nr = 5;
 
     %===================================================
     % Variables
@@ -67,29 +68,80 @@ function mdl = sfFit(data, ~, para)
     %===================================================
     % Nodal Foster Networks
     %===================================================
+    %----------------------------------------
+    % Options
+    %----------------------------------------
+    options = optimoptions('lsqcurvefit', ...
+                           'Display','off', ...
+                           'Algorithm','levenberg-marquardt', ...
+                           'MaxIterations', maxIter, ...
+                           'MaxFunctionEvaluations', 1e5, ...
+                           'TolFun', tol, ...
+                           'TolX', tol);
 
-    %===================================================
-    % Init Parameter
-    %===================================================
     %----------------------------------------
-    % Init
+    % Initial Conditions
     %----------------------------------------
-    Rth_init = eye(M);      
-    Cth_init = ones(M,1);  
-
-    %----------------------------------------
-    % Opti Cth
-    %----------------------------------------
-    for i=1:min(M,K)
-        [~,idx] = min(abs(Tm{i}(:,i)-((Tm{i}(end,i) - Tc{i}(end,i))*0.63+Tc{i}(end,i))));
-        tau = t{i}(idx);
-        Cth_init(i) = tau / Rth_init(i,i);
-    end
+    Rfoster = zeros(M, Nr);
+    taufoster = zeros(M, Nr);
+    Cfoster = zeros(M, Nr);
     
+    %----------------------------------------
+    % Fitting Model 
+    %----------------------------------------
+    for k = 1:M
+        % Extract data (single-source experiment assumed)
+        Pk = Pv{k}(:,k);
+        dT = Tm{k}(:,k) - Tc{k}(:,k);
+        tk = t{k}(:);
 
+        % Safe Zth computation
+        Pk_safe = max(Pk, 1e-9);
+        Zth = dT ./ Pk_safe;
+        Zth = Zth - Zth(1);
+
+        % Weighting
+        w = 1 ./ (tk + 1e-6);
+        Zth_w = Zth .* w;
+
+        % Initial guess
+        tmin = tk(2);
+        tmax = tk(end);
+        tau_init = logspace(log10(tmin), log10(tmax), Nr);
+        R_total = Zth(end);
+        R_init = (R_total / Nr) * ones(1, Nr);
+        p0 = log([R_init, tau_init]);
+
+        % Weighted fitting
+        modelFun = @(p, t) fncZth_exp(p, t, Nr) .* w;
+        p_opt = lsqcurvefit(modelFun, p0, tk, Zth_w, [], [], options);
+
+        % Extract + sort
+        R = exp(p_opt(1:Nr));
+        tau = exp(p_opt(Nr+1:end));
+        [tau, idx] = sort(tau);
+        R = R(idx);
+        C = tau ./ R;
+
+        % Store
+        Rfoster(k,:) = R;
+        taufoster(k,:) = tau;
+        Cfoster(k,:) = C;
+    end
+    mdl.weights = Rfoster ./ sum(Rfoster,2); 
+    mdl.Rth_rc = Rfoster;
+    mdl.tau_rc = taufoster;
+    mdl.Cth_rc = Cfoster;
+    mdl.Nr = Nr;
+    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Calculation
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %===================================================
+    % Analytic Cth
+    %===================================================
+    Cth = diag(reshape(mdl.Cth_rc', [], 1));
+
     %===================================================
     % Analytic Rth
     %===================================================
@@ -102,38 +154,13 @@ function mdl = sfFit(data, ~, para)
     Rth = (Rth + Rth.') / 2;
     Gth = inv(Rth);
     Gth = (Gth + Gth.') / 2;
-
-    %===================================================
-    % Optimisation options
-    %===================================================
-    opt = optimoptions('lsqnonlin', 'Display', 'iter', 'TolFun', tol, ...
-                       'MaxIter', maxIter);
-    x0 = Cth_init(:);
-    lb = 1e-12 * ones(numel(x0),1);
-    ub = [];
-
-    %===================================================
-    % Solve
-    %===================================================
-    C_opt = lsqnonlin(@(c) thermal_err_C(c, t, Pv, Tm, Tc, Gth, K), ...
-                  Cth_init, lb, ub, opt);
     
-
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Post-Processing
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %===================================================
-    % Extract Values
-    %===================================================
-    Cth = diag(C_opt);
-
-    %===================================================
-    % Fitting
-    %===================================================
-    disp("INFO: Thermal resistance Rth and capacitance Cth");
+    disp("INFO: Thermal conductance Rth and capacitance Cth");
     disp(Rth);
     disp(Cth);
-
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Output
@@ -141,7 +168,7 @@ function mdl = sfFit(data, ~, para)
     mdl.Rth = Rth;
     mdl.Gth = Gth;
     mdl.Cth = Cth;
-
+    mdl.Nr = Nr;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Message Output
@@ -153,34 +180,19 @@ end
 %% Additional Functions
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %===================================================
-% Cost Function
+% Zth Function
 %===================================================
-function err = thermal_err_C(Cvec, t2, P2, T2, Tc2, Gth, K)
+function Zth_fit = fncZth_exp(p, t, K)
 
-    C = diag(Cvec);
-    all_err = [];
+    R = exp(p(1:K));
+    tau = exp(p(K+1:end));
 
-    for k = 1:K
-        t = t2{k}(:);
-        P = P2{k};
-        Tm = T2{k} - Tc2{k}(1,:);
-        Tc = Tc2{k} - Tc2{k}(1,:);
+    Zth_fit = zeros(size(t));
 
-        odefun = @(tt,T) C \ ( ...
-            interp1(t, P, tt, 'linear', 'extrap')' ...
-          - Gth*(T - interp1(t, Tc, tt, 'linear', 'extrap')') );
-
-        T0 = Tm(1,:)';
-
-        [~, T_sim] = ode15s(odefun, t, T0);
-
-        res = T_sim - Tm;
-        all_err = [all_err; res(:)];
+    for i = 1:K
+        Zth_fit = Zth_fit + R(i) * (1 - exp(-t / tau(i)));
     end
-
-    err = all_err;
 end
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% References

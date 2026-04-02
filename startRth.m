@@ -151,8 +151,8 @@ setup.vlFile = ["dataRth_Matrix"];                                          % li
 
 % Sheet based
 setup.trSheet = ["Load-3", "Load-4", "Load-5", "Load-6"];                                                 % list of training sheets (strings) at least one
-setup.teSheet = "Load-2";                                                   % testing sheet (string) exactly one
-setup.vlSheet = ["Load-4"];                                                 % list of validation sheets (strings) at least one
+setup.teSheet = "Load-3";                                                   % testing sheet (string) exactly one
+setup.vlSheet = ["Load-2"];                                                 % list of validation sheets (strings) at least one
 
 % ID based
 setup.trID = [];                                                            % list of training IDs (if empty all remaining ones are used)
