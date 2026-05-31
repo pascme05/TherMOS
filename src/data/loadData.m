@@ -85,6 +85,7 @@ function data = loadData(para, setup)
             data.tr.y{i} = yOut;
             data.tr.r{i} = rOut;
             data.tr.t{i} = tOut;
+            data.tr.Ts = tOut(2) - tOut(1);
         end
     
     %----------------------------------------
@@ -104,6 +105,7 @@ function data = loadData(para, setup)
             data.tr.y{i} = yOut;
             data.tr.r{i} = rOut;
             data.tr.t{i} = tOut;
+            data.tr.Ts = tOut(2) - tOut(1);
         end
     
     %----------------------------------------
@@ -122,6 +124,7 @@ function data = loadData(para, setup)
         data.tr.y{1,1} = yOut;
         data.tr.r{1,1} = rOut;
         data.tr.t{1,1} = tOut;
+        data.tr.Ts = tOut(2) - tOut(1);
     end
 
     %===================================================
@@ -167,6 +170,7 @@ function data = loadData(para, setup)
             data.te.y{i} = yOut;
             data.te.r{i} = rOut;
             data.te.t{i} = tOut;
+            data.te.Ts = tOut(2) - tOut(1);
         end
 
     %----------------------------------------
@@ -186,6 +190,7 @@ function data = loadData(para, setup)
             data.te.y{i} = yOut;
             data.te.r{i} = rOut;
             data.te.t{i} = tOut;
+            data.te.Ts = tOut(2) - tOut(1);
         end
 
     %----------------------------------------
@@ -204,6 +209,7 @@ function data = loadData(para, setup)
         data.te.y{1,1} = yOut;
         data.te.r{1,1} = rOut;
         data.te.t{1,1} = tOut;
+        data.te.Ts = tOut(2) - tOut(1);
     end
 
     %===================================================
@@ -249,6 +255,7 @@ function data = loadData(para, setup)
             data.vl.y{i} = yOut;
             data.vl.r{i} = rOut;
             data.vl.t{i} = tOut;
+            data.vl.Ts = tOut(2) - tOut(1);
         end
     
     %----------------------------------------
@@ -268,6 +275,7 @@ function data = loadData(para, setup)
             data.vl.y{i} = yOut;
             data.vl.r{i} = rOut;
             data.vl.t{i} = tOut;
+            data.vl.Ts = tOut(2) - tOut(1);
         end
     
     %----------------------------------------
@@ -286,6 +294,7 @@ function data = loadData(para, setup)
         data.vl.y{1,1} = yOut;
         data.vl.r{1,1} = rOut;
         data.vl.t{1,1} = tOut;
+        data.vl.Ts = tOut(2) - tOut(1);
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
