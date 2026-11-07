@@ -171,6 +171,28 @@ The board designer builds a finite-volume model of a board with chips. The model
   - steady-state and transient fields;
   - line profiles through any point and probes over time (hot spot, mean, any x/y);
   - a POD reduced model with energy, modes and error.
+- **Expected duration:** before a run the page shows the expected time (implicit steps × nodes × the speed of the
+  last run); while it runs a progress bar shows the elapsed and remaining time.
+- **Electro-thermal coupling** (switch): the losses of every chip rise linearly with its junction temperature,
+  P = P₀·(1 + α·(T_j − 25 °C)), with α per chip (column *α [%/K]*, empty = value of the technology). The transient
+  uses the T_j of the previous sub-step, the steady state is solved exactly; a thermal runaway is reported. The
+  tab *Losses* shows the nominal and the effective losses.
+
+**Thermal characterisation**
+- **R_th matrix** (exact steady state of the 3D model): R_th,ij = rise of T_j of chip i per W in chip j, so
+  T_j = T_a + Σ_j R_th,ij·P_j. Diagonal = self-heating R_th,ja, off-diagonal = coupling between the chips. The table
+  adds the coupling factor R_th,ij/R_th,ii and the heat split to the coolant below and to the top.
+- **Step responses Z_th,ij(t)** (*Run step responses*): one 1 W step per chip on log-spaced times up to 5× the
+  slowest time constant.
+- **R/C network of the chips:** the coupled Cauer network of the SF mode (1–4 RC stages per chip from the junction
+  to the cooling, couplings between the chips at every stage) fitted to all step responses: R and C per stage
+  (C_th), coupling resistances per stage, fit error. Usable as a compact model in a circuit simulator.
+
+**POD reduced model**
+- *Training snapshots*: **step responses** (train on the 1 W steps, test on the loads of this run, e.g. the mission
+  profile — a real test of the reduced model) or **this run** (train and test on the same data). The electro-thermal
+  coupling is applied in the reduced model as well. Example (gap filler + Al heat sink, drive cycle, K = 20): max.
+  error 0.1 K.
 
 **Export to TherMOS**
 1. *Export* writes:

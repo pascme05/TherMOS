@@ -161,17 +161,17 @@ BOARDS = {
 #######################################################################################################################
 CHIPS = {
     'Si IGBT': dict(mat='Si', t=0.12, w=10.0, l=10.0, attach='SAC305 solder', t_att=0.10, P=60.0, Tjmax=175.0,
-                    note="1200 V trench-field-stop IGBT die, soldered"),
+                    alpha=0.003, note="1200 V trench-field-stop IGBT die, soldered"),
     'Si diode': dict(mat='Si', t=0.15, w=6.0, l=8.0, attach='SAC305 solder', t_att=0.10, P=20.0, Tjmax=175.0,
-                     note="free-wheeling diode die, soldered"),
+                     alpha=0.002, note="free-wheeling diode die, soldered"),
     'Si MOSFET': dict(mat='Si', t=0.20, w=5.0, l=6.0, attach='SAC305 solder', t_att=0.08, P=5.0, Tjmax=175.0,
-                      note="low-voltage trench MOSFET (SuperSO8-like footprint)"),
+                      alpha=0.007, note="low-voltage trench MOSFET (SuperSO8-like footprint)"),
     'SiC MOSFET': dict(mat='SiC (4H)', t=0.18, w=4.0, l=5.0, attach='Sintered Ag', t_att=0.05, P=25.0, Tjmax=175.0,
-                       note="1200 V SiC MOSFET die, silver sintered"),
+                       alpha=0.003, note="1200 V SiC MOSFET die, silver sintered"),
     'GaN HEMT': dict(mat='Si', t=0.20, w=3.0, l=5.0, attach='SAC305 solder', t_att=0.05, P=6.0, Tjmax=150.0,
-                     note="GaN-on-Si HEMT, the heat flows through the Si substrate"),
+                     alpha=0.008, note="GaN-on-Si HEMT, the heat flows through the Si substrate"),
     'Controller IC': dict(mat='Si', t=0.30, w=5.0, l=5.0, attach='SAC305 solder', t_att=0.05, P=0.5, Tjmax=125.0,
-                          note="gate driver / controller in a QFN package (estimate)"),
+                          alpha=0.001, note="gate driver / controller in a QFN package (estimate)"),
 }
 
 #######################################################################################################################

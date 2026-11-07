@@ -50,10 +50,11 @@ import numpy as np
 #######################################################################################################################
 # Additional Functions
 #######################################################################################################################
-def simRom(rom, P, Ts, Ta, nSub=4):
+def simRom(rom, P, Ts, Ta, nSub=4, cpl=None, prog=None):
     """
     Simulates the reduced model for the chip losses P (Nt x nChips) and returns the temperature at all nodes
-    (Nt x N) (°C), starting at the ambient temperature.
+    (Nt x N) (°C), starting at the ambient temperature. cpl: electro-thermal coupling as in simBoard (the junction
+    temperature is W_rᵀ·a with W_r = Φᵀ·W); prog: progress callback.
     """
     P = np.atleast_2d(np.asarray(P, dtype=float))
     h = Ts / max(int(nSub), 1)
@@ -61,11 +62,20 @@ def simRom(rom, P, Ts, Ta, nSub=4):
     Ainv = np.linalg.inv(A)
     a = np.zeros(rom['K'])
     out = np.zeros((P.shape[0], rom['K']))
+    if cpl is not None:
+        Wr = rom['Phi'].T @ np.asarray(cpl['W'], dtype=float)
+        al = np.asarray(cpl['alpha'], dtype=float)
+        Tref = float(cpl.get('Tref', 25.0))
+    nP = max(P.shape[0] // 100, 1)
     for k in range(1, P.shape[0]):
         u = rom['Br'] @ P[k]
         for _ in range(0, max(int(nSub), 1)):
+            if cpl is not None:
+                u = rom['Br'] @ (P[k] * np.maximum(1.0 + al * (Wr.T @ a + Ta - Tref), 0.0))
             a = Ainv @ (rom['Cr'] / h @ a + u)
         out[k] = a
+        if prog is not None and k % nP == 0:
+            prog(k / P.shape[0])
     return out @ rom['Phi'].T + Ta
 
 

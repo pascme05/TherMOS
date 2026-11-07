@@ -230,7 +230,9 @@ def _model3D(layout, layers, below, chips, vias, isFR4, W, L, dx, h, hTop):
         if hTop > 0:
             gOut[idx[r][top]] += (A / (dz / (2 * kz) + 1.0 / hTop))[top]
         if r == 0:
-            gOut[idx[r][m]] += (A / (dz / (2 * kz) + 1.0 / max(h, 1e-9)))[m]
+            gBot = np.zeros(N)
+            gBot[idx[r][m]] = (A / (dz / (2 * kz) + 1.0 / max(h, 1e-9)))[m]
+            gOut += gBot
     I, J, G = np.concatenate(I), np.concatenate(J), np.concatenate(G)
     Goff = sp.coo_matrix((np.concatenate([-G, -G]), (np.concatenate([I, J]), np.concatenate([J, I]))), shape=(N, N))
     Gm = (Goff + sp.diags(-np.asarray(Goff.sum(axis=1)).ravel() + gOut)).tocsc()
@@ -255,7 +257,7 @@ def _model3D(layout, layers, below, chips, vias, isFR4, W, L, dx, h, hTop):
              'rowName': [row['name'] for row in R], 'nBoard': nBoard, 'nBelow': nBelow, 'tb': tb, 'yCut': y[jc],
              'geo': np.column_stack([Xs.ravel(), Zs.ravel()]), 'dx': dx, 'dy': float(np.min(dzr[dzr > 0])),
              'Lx': x[-1], 'Ly': zc[-1], 'x': x, 'y': zc, 'shape': (nr, nx), 'xg': x, 'yg': y, 'N3': N,
-             'via': via.ravel(), 'A': A}, x, zc, A]
+             'via': via.ravel(), 'A': A, 'gBot': gBot}, x, zc, A]
 
 
 #######################################################################################################################

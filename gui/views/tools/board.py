@@ -49,10 +49,10 @@ from src.py.board.saveBoard import saveBoard
 #######################################################################################################################
 K = f"{cm.KEY}|board"
 PROFILES = ['step', 'pulse', 'sine', 'random']
-CHIP_COLS = ['name', 'tech', 'x [mm]', 'y [mm]', 'w [mm]', 'l [mm]', 'P [W]', 'profile', 'period [s]']
-DEFAULT_CHIPS = [['T1', 'Si IGBT', 15.0, 15.0, 10.0, 10.0, 60.0, 'pulse', 40.0],
-                 ['D1', 'Si diode', 30.0, 15.0, 6.0, 8.0, 20.0, 'pulse', 40.0],
-                 ['M1', 'SiC MOSFET', 45.0, 28.0, 4.0, 5.0, 25.0, 'sine', 60.0]]
+CHIP_COLS = ['name', 'tech', 'x [mm]', 'y [mm]', 'w [mm]', 'l [mm]', 'P [W]', 'profile', 'period [s]', 'α [%/K]']
+DEFAULT_CHIPS = [['T1', 'Si IGBT', 15.0, 15.0, 10.0, 10.0, 60.0, 'pulse', 40.0, None],
+                 ['D1', 'Si diode', 30.0, 15.0, 6.0, 8.0, 20.0, 'pulse', 40.0, None],
+                 ['M1', 'SiC MOSFET', 45.0, 28.0, 4.0, 5.0, 25.0, 'sine', 60.0, None]]
 STACK_COLS = ['layer', 'material', 't [µm]', 'Cu coverage [%]', 'k_xy [W/mK]', 'k_z [W/mK]']
 BELOW_COLS = ['layer', 'material', 't [mm]', 'k [W/mK]']
 CHIPLIB_COLS = ['technology', 'die', 't die [mm]', 'w [mm]', 'l [mm]', 'die attach', 't attach [mm]', 'P typ. [W]',
@@ -121,7 +121,8 @@ def _layout(view):
                       'l': float(t['l'] if pd.isna(r['l [mm]']) else r['l [mm]']),
                       'P': float(t['P'] if pd.isna(r['P [W]']) else r['P [W]']),
                       'profile': r['profile'] if r['profile'] in PROFILES else 'step',
-                      'period': float(40.0 if pd.isna(r['period [s]']) else r['period [s]'])})
+                      'period': float(40.0 if pd.isna(r['period [s]']) else r['period [s]']),
+                      'alpha': float(t.get('alpha', 0.0)) if _nan(r.get('α [%/K]')) else float(r['α [%/K]']) / 100})
     board = s.get(f"{K}|tech", 'DBC Al₂O₃ (0.38 mm)')
     custom = {n: v for n, v in s.get(f"{K}|chipLib", lib_load()['chips']).items()
               if n in {c['tech'] for c in chips}}
@@ -162,6 +163,30 @@ def _profiles(lay, D, t, kind=None, seed=0, mission=None):
         P.append(genProfile(k, c['P'], t, {'period': c.get('period', 40.0), 'duty': 0.5, 'amp': 0.5,
                                          'hold': max(c.get('period', 40.0) / 4, t[1] - t[0])}, seed=seed + i))
     return np.column_stack(P) if P else np.zeros((len(t), 0))
+
+
+def _eta(bar, t0, what):
+    """Progress callback with the expected remaining time."""
+    def f(x):
+        el = time.perf_counter() - t0
+        bar.progress(min(float(x), 1.0), text=f"{what}: {100 * x:.0f} % · {fmt(el)} s elapsed · about "
+                                              f"{fmt(el * (1 - x) / max(x, 1e-9))} s left")
+    return f
+
+
+def _cpl(D, Bp):
+    """Electro-thermal coupling of the chips (die-average junction temperature, α of the chip table)."""
+    return {'W': Bp, 'alpha': np.array([float(c.get('alpha', 0.0)) for c in D['chips']]), 'Tref': 25.0}
+
+
+def _peff(res, T=None):
+    """Effective losses with the electro-thermal coupling (nominal losses without)."""
+    P, cpl = res['P'], res.get('cpl')
+    if cpl is None:
+        return P
+    T = res['T'] if T is None else T
+    Tj = (T - res['lay']['Ta']) @ cpl['W'] + res['lay']['Ta']
+    return P * np.maximum(1 + cpl['alpha'] * (Tj - cpl['Tref']), 0)
 
 
 def _tj(D, T, P):
@@ -474,7 +499,7 @@ def chip_inputs():
             cur = s.get(f"{K}|chips_df", df0)
             pre = ''.join(w[0] for w in nt.split()[-1:]).upper() or 'C'
             n = 1 + sum(str(x).startswith(pre) for x in cur['name'])
-            row = pd.DataFrame([[f"{pre}{n}", nt, ax, ay, lib[nt]['w'], lib[nt]['l'], ap, 'step', 40.0]],
+            row = pd.DataFrame([[f"{pre}{n}", nt, ax, ay, lib[nt]['w'], lib[nt]['l'], ap, 'step', 40.0, None]],
                                columns=CHIP_COLS)
             s[f"{K}|chips_base"] = pd.concat([cur, row], ignore_index=True)
             s[f"{K}|chipver"] = ver + 1
@@ -487,7 +512,11 @@ def chip_inputs():
                                                     "pulse (50 % duty), sine (between P/3 and P), random levels."),
         'x [mm]': st.column_config.NumberColumn(format='%.1f'), 'y [mm]': st.column_config.NumberColumn(format='%.1f'),
         'P [W]': st.column_config.NumberColumn(format='%.1f', help="Loss of the chip (peak of the profile)."),
-        'period [s]': st.column_config.NumberColumn(format='%.0f', help="Period of pulse/sine, 4× hold of random.")})
+        'period [s]': st.column_config.NumberColumn(format='%.0f', help="Period of pulse/sine, 4× hold of random."),
+        'α [%/K]': st.column_config.NumberColumn(format='%g', help="Temperature coefficient of the losses for the "
+                                                 "electro-thermal coupling, P = P₀·(1 + α·(T_j − 25 °C)). Empty = "
+                                                 "value of the technology (Si MOSFET 0.7, IGBT 0.3, SiC 0.3, diode "
+                                                 "0.2, GaN 0.8 %/K; estimates).")})
     st.session_state[f"{K}|chips_df"] = df
     mission_inputs(df)
     with st.expander("Chip technologies", icon=':material/memory:'):
@@ -627,6 +656,9 @@ def simulation():
     cm.num(c[2], "Sub-steps per T_s", 2, 'board|nSub', format='%d', min_value=1, max_value=50,
            help="Implicit Euler steps per sampling period (accuracy of fast transients).")
     c[3].toggle("Re-run on changes", key=f"{K}|auto", help="Simulate again whenever an input changes.")
+    cpl_on = st.toggle("Electro-thermal coupling", key=f"{K}|cpl", help="The losses of every chip rise linearly "
+                       "with its junction temperature, P = P₀·(1 + α·(T_j − 25 °C)) with α of the chip table (column "
+                       "α). Off: the losses are independent of the temperature (linear thermal model).")
     lay = _layout('xz')
     tEnd, Ts, nSub = s[f"{cm.KEY}|board|tEnd"], s[f"{cm.KEY}|board|Ts"], s[f"{cm.KEY}|board|nSub"]
     if mis is not None:
@@ -646,18 +678,29 @@ def simulation():
     if D['N3'] > 150000:
         st.warning("More than 150 000 nodes: increase dx.", icon=':material/warning:')
         return None
-    sig = json.dumps([lay, tEnd, Ts, nSub, None if mis is None else mis['sig']], sort_keys=True, default=str)
+    sig = json.dumps([lay, tEnd, Ts, nSub, None if mis is None else mis['sig'], bool(cpl_on)], sort_keys=True,
+                     default=str)
     res = s.get(f"{K}|res")
+    nStep = int(tEnd / Ts + 1) * int(nSub)
+    rate = s.get(f"{K}|rate")                                           # seconds per node and implicit step
+    st.caption(f":material/schedule: Expected duration ≈ {fmt(rate * D['N3'] * nStep)} s ({nStep:,} implicit steps × "
+               f"{D['N3']:,} nodes, from the speed of the last run)" if rate else
+               f":material/schedule: {nStep:,} implicit steps × {D['N3']:,} nodes — the expected duration is shown "
+               f"after the first run (and as a progress bar while it runs).")
     if st.button("Simulate", icon=':material/play_arrow:', type='primary', key=f"{K}|run") or \
             (res is not None and res['sig'] != sig and s.get(f"{K}|auto", False)):
-        with st.spinner("Simulating the finite-volume model …"):
-            t0 = time.perf_counter()
-            C, G, Bp = calcBoardMat(D)
-            t = np.arange(0.0, tEnd + Ts * 1e-9, Ts)
-            P = _profiles(lay, D, t, mission=mis)
-            Tf, Tssf = simBoard(C, G, Bp, P, Ts, lay['Ta'], nSub)
-            s[f"{K}|res"] = res = {'sig': sig, 'lay': lay, 'D': D, 'D2': D2, 't': t, 'P': P, 'T': Tf, 'Tss': Tssf,
-                                   'C': C, 'G': G, 'Bp': Bp, 'nSub': nSub, 'time': time.perf_counter() - t0}
+        t0 = time.perf_counter()
+        C, G, Bp = calcBoardMat(D)
+        t = np.arange(0.0, tEnd + Ts * 1e-9, Ts)
+        P = _profiles(lay, D, t, mission=mis)
+        cpl = _cpl(D, Bp) if cpl_on else None
+        bar = st.progress(0.0, text="Simulating the finite-volume model …")
+        Tf, Tssf = simBoard(C, G, Bp, P, Ts, lay['Ta'], nSub, cpl=cpl, prog=_eta(bar, t0, "Finite-volume model"))
+        bar.empty()
+        dt = time.perf_counter() - t0
+        s[f"{K}|rate"] = dt / max(D['N3'] * nStep, 1)
+        s[f"{K}|res"] = res = {'sig': sig, 'lay': lay, 'D': D, 'D2': D2, 't': t, 'P': P, 'T': Tf, 'Tss': Tssf,
+                               'C': C, 'G': G, 'Bp': Bp, 'nSub': nSub, 'time': dt, 'cpl': cpl}
     if res is None:
         st.info("Press *Simulate* to run the board model.", icon=':material/info:')
         return None
@@ -705,7 +748,9 @@ def results(res):
                      'T_j steady (°C)': Tjs[i], 'T_j max run (°C)': Tj[:, i].max(), 'T_j,max (°C)': c['Tjmax'],
                      'margin (K)': m, 'status': {'good': 'OK', 'warning': 'tight', 'critical': 'too hot'}[lvl]})
     table(pd.DataFrame(rows), hide_index=True)
-    st.caption("T_j: hottest cell of the resolved die. Margin = T_j,max − T_j max of the run; OK > 25 K, tight 0–25 K.")
+    st.caption("T_j: hottest cell of the resolved die. Margin = T_j,max − T_j max of the run; OK > 25 K, tight 0–25 K."
+               + (" Electro-thermal coupling on: the losses rise with T_j (tab *Losses*)." if res.get('cpl') is not None
+                  else ""))
     [view, row] = _view_inputs(D, 'res')
     xy = view == 'xy'
     [Fs, x, y, geo] = _disp(D, Tss, view, row)
@@ -732,25 +777,235 @@ def results(res):
         fig.update_layout(xaxis_title='t (s)', yaxis_title='T_j (°C)')
         show(fig, key=f"{K}|tj")
     with tabs[4]:
-        fig = go.Figure([line(t, P[:, k], n, k) for k, n in enumerate(names)])
+        Pe = _peff(res)
+        fig = go.Figure([line(t, P[:, k], n, k) for k, n in enumerate(names)] +
+                        ([line(t, Pe[:, k], f"{n} with coupling", k, dash='dash') for k, n in enumerate(names)]
+                         if res.get('cpl') is not None else []))
         fig.update_layout(xaxis_title='t (s)', yaxis_title='P (W)')
-        show(fig, key=f"{K}|p")
+        show(fig, key=f"{K}|p", info="**Losses of the chips.** Solid: the nominal profile; dashed (electro-thermal "
+             "coupling on): the losses at the simulated junction temperature.")
     return Tj
 
 
-def pod(res):
-    cm.section(4, "POD reduced model", "Proper orthogonal decomposition of the simulated field and Galerkin "
-                                       "projection of the finite-volume model onto the first K modes.")
+def _geo_sig(lay):
+    """Signature of everything but the loads (the step responses do not depend on them)."""
+    return json.dumps([{k: v for k, v in lay.items() if k != 'chips'},
+                       [{k: c.get(k) for k in ('name', 'tech', 'x', 'y', 'w', 'l')} for c in lay['chips']]],
+                      sort_keys=True, default=str)
+
+
+def _stepNet(p, M, Nr, t):
+    """Step responses Z(t) (nt x M x M) of the coupled Cauer network (sfNet matrices, modal solution)."""
+    from src.py.model.SF.sfNet import sfNet
+    [Gm, Cm, E] = sfNet(p, M, Nr)
+    Si = 1 / np.sqrt(np.asarray(Cm, dtype=float).ravel()) if np.ndim(Cm) == 1 else 1 / np.sqrt(np.diag(Cm))
+    Gm = np.asarray(Gm.toarray() if hasattr(Gm, 'toarray') else Gm, dtype=float)
+    E = np.asarray(E.toarray() if hasattr(E, 'toarray') else E, dtype=float)
+    lam, V = np.linalg.eigh(Si[:, None] * Gm * Si[None, :])
+    B = V.T @ (Si[:, None] * E)                                         # modes x M
+    O = E.T @ (Si[:, None] * V)                                         # M x modes (junction nodes)
+    F = (1 - np.exp(-np.outer(t, lam))) / lam[None, :]                  # nt x modes
+    return np.einsum('im,tm,mj->tij', O, F, B)
+
+
+def _nodal(Zt, t, Rth, Nr):
+    """
+    Coupled Cauer network of the chips (SF mode, sfNet: Nr RC stages per chip from the junction to the cooling,
+    couplings between the chips at every stage) fitted to the step responses of the board model (log-spaced times).
+    """
+    from scipy.optimize import least_squares
+    M = Rth.shape[0]
+    tau = np.geomspace(max(t[0], 1e-6) * 2, t[-1] / 3, Nr)
+    Rl = np.outer(np.diag(Rth), np.ones(Nr)) / Nr
+    nG = Nr * M * (M - 1) // 2
+    p0 = np.concatenate([np.log(Rl).ravel(), np.log(tau[None, :] / Rl).ravel(),
+                         np.full(nG, np.log(0.1 / np.mean(np.diag(Rth))))])
+    sc = max(float(Zt.max()), 1e-12)
+    sol = least_squares(lambda p: ((_stepNet(p, M, Nr, t) - Zt) / sc).ravel(), p0, method='trf',
+                        bounds=(p0 - np.log(1e4), p0 + np.log(1e4)), max_nfev=300)
+    p = sol.x
+    return {'p': p, 'Zn': _stepNet(p, M, Nr, t), 'R': np.exp(p[0:M * Nr]).reshape(M, Nr),
+            'C': np.exp(p[M * Nr:2 * M * Nr]).reshape(M, Nr), 'g': np.exp(p[2 * M * Nr:]).reshape(Nr, -1),
+            'tau': np.array([t[int(np.argmax(Zt[:, i, i] >= 0.632 * Zt[-1, i, i]))] for i in range(M)])}
+
+
+def _logSteps(C, G, Bp, j, tEnd, prog):
+    """Response to a 1 W step in chip j on log-spaced times (segments with doubling time step, same model)."""
+    tMin, n = tEnd * 1e-5, 30
+    nSeg = int(np.ceil(np.log2(tEnd / (n * tMin) + 1)))
+    M = Bp.shape[1]
+    t, out, th, t0 = [0.0], [np.zeros(len(C))], None, 0.0
+    for k in range(nSeg):
+        Ts = tMin * 2 ** k
+        P = np.zeros((n + 1, M))
+        P[1:, j] = 1.0
+        T, _ = simBoard(C, G, Bp, P, Ts, 0.0, 1, T0=th, steady=False)
+        t += list(t0 + Ts * np.arange(1, n + 1))
+        out.append(T[1:])
+        th, t0 = T[-1], t0 + Ts * n
+        prog((k + 1) / nSeg)
+    return [np.array(t), np.vstack(out)]
+
+
+@st.cache_data(show_spinner="Fitting the R/C network …", max_entries=8)
+def _nodal_cached(Zt, t, Rth, Nr, sig):
+    return _nodal(Zt, t, Rth, Nr)
+
+
+def characterisation(res):
+    cm.section(4, "Thermal characterisation", "Thermal resistance matrix between the chips and to the cooling (exact "
+                                              "steady state of the layer-resolved model), step responses Z_th(t) of "
+                                              "every chip and a nodal R/C network of the chips fitted to them.")
+    D, lay, G, Bp, C = res['D'], res['lay'], res['G'], res['Bp'], res['C']
+    names = [c['name'] for c in D['chips']]
+    M = len(names)
+    import scipy.sparse.linalg as spl
+    B = np.asarray(D['B']) > 0
+
+    # Rth matrix (exact steady state, 1 W per chip)
+    luG = spl.splu(G.tocsc())
+    TH = np.column_stack([luG.solve(Bp[:, j]) for j in range(M)])          # N x M, θ per W
+    Rth = np.array([[TH[B[:, i], j].max() for j in range(M)] for i in range(M)])
+    bot = np.array([float(D['gBot'] @ TH[:, j]) for j in range(M)])        # share of 1 W leaving through the bottom
+    c = st.columns([3, 2])
+    with c[0]:
+        fig = go.Figure(go.Heatmap(z=Rth, x=names, y=names, colorscale='Reds', text=np.vectorize(fmt)(Rth),
+                                   texttemplate='%{text}', colorbar=dict(title='K/W'),
+                                   hovertemplate='ΔT_j of %{y} per W in %{x}: %{z:.3g} K/W<extra></extra>'))
+        fig.update_layout(xaxis_title='heated chip j (1 W)', yaxis_title='junction of chip i',
+                          yaxis=dict(autorange='reversed'))
+        show(fig, height=330, key=f"{K}|rth", info="**Thermal resistance matrix R_th,ij** = rise of the junction "
+             "temperature of chip i per W in chip j (steady state, to the coolant/ambient). Diagonal: self-heating "
+             "R_th,ja; off-diagonal: thermal coupling between the chips. T_j = T_a + Σ_j R_th,ij·P_j.")
+    with c[1]:
+        table(pd.DataFrame({'chip': names, 'R_th,ja (K/W)': np.diag(Rth),
+                            'coupling to others (K/W)': Rth.sum(axis=1) - np.diag(Rth),
+                            'max coupling factor': [max([Rth[i, j] / Rth[i, i] for j in range(M) if j != i] or [0])
+                                                    for i in range(M)],
+                            'heat to the coolant below (%)': 100 * bot,
+                            'heat to the top (%)': 100 * (1 - bot)}), hide_index=True)
+        st.caption("Coupling factor R_th,ij/R_th,ii: how much a W in a neighbour heats chip i compared to a W in "
+                   "chip i itself. The heat split shows the two paths to the cooling (coolant h below, natural "
+                   "convection h_top on top).")
+
+    # Step responses
+    from scipy.sparse.linalg import eigsh
+    import scipy.sparse as sp
+    gsig = _geo_sig(lay)
+    stp = st.session_state.get(f"{K}|step")
+    try:
+        lam = float(eigsh(G.tocsc(), k=1, M=sp.diags(C).tocsc(), sigma=0, which='LM', return_eigenvectors=False)[0])
+        tauMax = 1 / max(lam, 1e-12)
+    except Exception:
+        tauMax = float(res['t'][-1])
+    tStep = 5 * tauMax
+    nT = 30 * int(np.ceil(np.log2(tStep / (30 * tStep * 1e-5) + 1)))
+    rate = st.session_state.get(f"{K}|rate")
+    cc = st.columns([2, 1, 3], vertical_alignment='center')
+    run = cc[0].button("Run step responses", icon=':material/stairs:', key=f"{K}|steprun",
+                       help="One simulation per chip with a 1 W step (the others off) from 10⁻⁵·t_end to 5× the "
+                            "slowest time constant on log-spaced times. The snapshots also train the POD model below.")
+    Nr = int(cc[1].selectbox("Stages per chip", [1, 2, 3, 4], index=2, key=f"{K}|Nr", help="RC stages of the "
+                             "network per chip (1: one node per chip = R_th/C_th matrix form)."))
+    cc[2].caption(f"Slowest time constant τ_max = {fmt(tauMax)} s → {M} runs up to {fmt(tStep)} s"
+                  + (f", expected ≈ {fmt(rate * D['N3'] * nT * M * 1.3)} s." if rate else "."))
+    if run:
+        t0 = time.perf_counter()
+        bar = st.progress(0.0, text="Step responses …")
+        Z, snap = None, []
+        for j in range(M):
+            prog = _eta(bar, t0, f"Step response {j + 1}/{M} ({names[j]})")
+            ts, Tj_ = _logSteps(C, G, Bp, j, tStep, lambda x, j=j, p=prog: p((j + x) / M))
+            Z = np.zeros((len(ts), M, M)) if Z is None else Z
+            Z[:, :, j] = np.column_stack([Tj_[:, B[:, i]].max(axis=1) for i in range(M)])
+            snap.append(Tj_[::6])
+        bar.empty()
+        st.session_state[f"{K}|step"] = stp = {'sig': gsig, 't': ts, 'Z': Z, 'snap': np.vstack(snap),
+                                               'time': time.perf_counter() - t0}
+        st.session_state[f"{K}|podsrc"] = 'Step responses'
+    if stp is None or stp['sig'] != gsig:
+        st.info("Press *Run step responses* for Z_th(t), the nodal R/C network of the chips and the POD training on "
+                "step responses.", icon=':material/info:')
+        return None
+    ts, Z = stp['t'], stp['Z']
+    try:
+        net = _nodal_cached(Z[1:], ts[1:], Rth, Nr, gsig)
+        Zn = net['Zn']
+    except Exception as e:
+        st.warning(f"Network could not be fitted: {e}", icon=':material/warning:')
+        net, Zn = None, None
+    tabs = st.tabs(["Step responses Z_th(t)", "R/C network of the chips"])
+    with tabs[0]:
+        fig = go.Figure()
+        for j in range(M):
+            for i in range(M):
+                fig.add_trace(go.Scatter(x=ts[1:], y=Z[1:, i, j], mode='lines', name=f"{names[i]} ← {names[j]}",
+                                         line=dict(color=SERIES[j % len(SERIES)], dash=None if i == j else 'dot',
+                                                   width=2.5 if i == j else 1.5)))
+                if Zn is not None:
+                    fig.add_trace(go.Scatter(x=ts[1:], y=Zn[:, i, j], mode='lines', showlegend=i == 0 and j == 0,
+                                             name='R/C network', line=dict(color=INK2, dash='dash', width=1)))
+        fig.update_layout(xaxis=dict(type='log', title='t (s)'), yaxis_title='Z_th (K/W)')
+        show(fig, height=380, key=f"{K}|zth", info="**Thermal impedance** Z_th,ij(t): junction temperature rise of "
+             "chip i after a 1 W step in chip j. Solid: self-heating (colour = heated chip), dotted: coupling; the "
+             "coupling starts later because the heat has to spread to the neighbour first. Grey dashed: the fitted "
+             "nodal network.")
+    with tabs[1]:
+        if net is not None:
+            err = float(np.max(np.abs(Zn - Z[1:]))) / max(float(Z.max()), 1e-12)
+            from gui.views.tools.sketch import coupled
+            c = st.columns([3, 2])
+            with c[0]:
+                rows = []
+                for i in range(M):
+                    for k in range(Nr):
+                        rows.append({'chip': names[i], 'stage': k + 1, 'R (K/W)': net['R'][i, k],
+                                     'C (Ws/K)': net['C'][i, k], 'τ = RC (s)': net['R'][i, k] * net['C'][i, k]})
+                table(pd.DataFrame(rows), hide_index=True)
+                pairs = [(i, j) for i in range(M) for j in range(i + 1, M)]
+                table(pd.DataFrame([{'coupling': f"{names[i]} ↔ {names[j]}",
+                                     **{f"R stage {k + 1} (K/W)": 1 / net['g'][k, n] for k in range(Nr)}}
+                                    for n, (i, j) in enumerate(pairs)]), hide_index=True)
+            with c[1]:
+                if M <= 4:
+                    from gui.views.tools import sketch
+                    sketch.show(coupled(M, min(Nr, 3), names), "Ladder per chip from the junction (top) to the "
+                                "cooling; dashed: couplings between the chips at every stage.")
+            st.caption(f"Coupled Cauer network of the SF mode: {Nr} RC stage(s) per chip from the junction to the "
+                       f"cooling, the chips coupled at every stage. It reproduces all step responses of the board "
+                       f"model within {100 * err:.1f} % of the largest Z_th (grey dashed in the first tab). τ63 "
+                       f"(self-heating): {', '.join(f'{n}: {fmt(v)} s' for n, v in zip(names, net['tau']))}. Use it "
+                       f"as a compact R/C model of the board in a circuit simulator.")
+    return stp
+
+
+def pod(res, stp=None):
+    cm.section(5, "POD reduced model", "Proper orthogonal decomposition of training snapshots and Galerkin "
+                                       "projection of the finite-volume model onto the first K modes; the reduced "
+                                       "model is then run with the loads of the simulation (e.g. the mission "
+                                       "profile) and compared to the full model.")
     D, t, T, lay = res['D'], res['t'], res['T'], res['lay']
-    Kmax = int(min(30, len(t)))
+    src = st.segmented_control("Training snapshots", ['Step responses', 'This run'],
+                               default=None if f"{K}|podsrc" in st.session_state else
+                               ('Step responses' if stp is not None else 'This run'), key=f"{K}|podsrc",
+                               help="Step responses: train on the 1 W steps of every chip (section 4) and test on "
+                                    "the loads of this run — a real test of the reduced model. This run: train and "
+                                    "test on the same data.") or 'This run'
+    if src == 'Step responses' and stp is None:
+        st.info("Run the step responses in section 4 first; the run itself is used meanwhile.", icon=':material/info:')
+        src = 'This run'
+    snap = stp['snap'] + lay['Ta'] if src == 'Step responses' else T
+    Kmax = int(min(30, len(snap)))
     c = st.columns([1, 3])
     Kr = c[0].slider("Modes K", 1, Kmax, min(5, Kmax), key=f"{K}|K")
-    rom = romBoard(res['C'], res['G'], res['Bp'], T, lay['Ta'], Kr)
+    rom = romBoard(res['C'], res['G'], res['Bp'], snap, lay['Ta'], Kr)
     t0 = time.perf_counter()
-    Tr = simRom(rom, res['P'], t[1] - t[0] if len(t) > 1 else 1.0, lay['Ta'], res['nSub'])
+    Tr = simRom(rom, res['P'], t[1] - t[0] if len(t) > 1 else 1.0, lay['Ta'], res['nSub'], cpl=res.get('cpl'))
     tr = time.perf_counter() - t0
     err = np.abs(Tr - T)
     rise = max(T.max() - lay['Ta'], 1e-9)
+    c[0].caption(f"Trained on: **{src.lower()}** · tested on: the loads of this run"
+                 + (" (mission profile)" if st.session_state.get(f"{K}|loadMode") == 'Mission profile' else ""))
     c[0].metric("Captured energy E_K", f"{100 * rom['E'][Kr - 1]:.4f} %")
     c[0].metric("Max. error", f"{fmt(err.max())} K", f"{100 * err.max() / rise:.2f} % of the rise", delta_color='off')
     c[0].metric("Unknowns", f"{Kr} instead of {D['N3']:,}", f"{fmt(res['time'] / max(tr, 1e-9))}× faster",
@@ -793,7 +1048,7 @@ def pod(res):
 
 
 def export(res):
-    cm.section(5, "Export to TherMOS", "Training data (random loss levels of all chips, independent excitation) and "
+    cm.section(6, "Export to TherMOS", "Training data (random loss levels of all chips, independent excitation) and "
                                        "test data (the designed profiles) in the 2D format of TherMOS, plus a ready-"
                                        "made config for the PO mode (pure Galerkin projection, protocol 2).")
     c = st.columns([2, 1, 1, 1], vertical_alignment='bottom')
@@ -899,7 +1154,8 @@ def page():
     if res is None:
         return
     Tj = results(res)
-    rom, err = pod(res)
+    stp = characterisation(res)
+    rom, err = pod(res, stp)
     export(res)
     cm.equations([
         ("Layer-resolved model (simulation, both views)",

@@ -169,3 +169,19 @@ def test_layers_below():
     # cross-section: the layers below are resolved
     D = genBoard(dict(LAY, view='xz', below=BELOW['Gap filler 2 mm + Al heat sink 5 mm']))
     assert D['nBelow'] > 0 and D['Ly'] > 7e-3 and D['rowName'][D['nBelow'] - 1].startswith('Gap')
+
+
+def test_electrothermal_coupling():
+    # steady state with linear temperature coefficients is the exact fixed point; the transient converges to it
+    import scipy.sparse.linalg as spl
+    D = genBoard(dict(LAY, view='xz', board='DBC AlN (0.63 mm)'))
+    C, G, Bp = calcBoardMat(D)
+    P = np.array([[30.0, 15.0]] * 2000)
+    cpl = {'W': Bp, 'alpha': np.array([0.003, 0.005]), 'Tref': 25.0}
+    T, Tss = simBoard(C, G, Bp, P, 2.0, 25, 1, cpl=cpl)
+    Tj = Bp.T @ (Tss - 25) + 25
+    Pe = P[-1] * (1 + cpl['alpha'] * (Tj - 25))
+    assert np.allclose(spl.spsolve(G.tocsc(), Bp @ Pe) + 25, Tss, atol=1e-9)
+    assert np.allclose(T[-1], Tss, atol=1e-3)
+    _, Tss0 = simBoard(C, G, Bp, P, 2.0, 25, 1)
+    assert np.all(Tss >= Tss0)
