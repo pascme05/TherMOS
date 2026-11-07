@@ -166,6 +166,19 @@ MODES = {
 }
 
 #######################################################################################################################
+# Theory & Tools (gui/views/tools/<module>.py with page()): url -> (module, title, icon)
+#######################################################################################################################
+TOOLS = {
+    'tools-losses': ('losses', 'Power losses', ':material/bolt:'),
+    'tools-thermal': ('thermal', 'Thermal stack', ':material/thermostat:'),
+    'tools-networks': ('networks', 'Thermal networks', ':material/account_tree:'),
+    'tools-mor': ('mor', 'MOR & POD', ':material/compress:'),
+    'tools-numerics': ('numerics', 'Numerics', ':material/functions:'),
+    'tools-board': ('board', 'Board designer', ':material/developer_board:'),
+}
+TEST_PAGES = {u: f"from gui.views.tools import {m}; {m}.page()" for u, (m, _, _) in TOOLS.items()}
+
+#######################################################################################################################
 # Files
 #######################################################################################################################
 FOLDERS = {'data': 'data'}                                            # input data (searched recursively)
