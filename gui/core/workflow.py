@@ -93,16 +93,163 @@ def _legend():
 #######################################################################################################################
 # Workflows: mode -> function(cfg, sub) returning (Flow, [(step title, explanation), ...])
 #######################################################################################################################
-def _example(cfg, sub):
+def _g(cfg):
+    return cfg[A.RUN_SECTION]
+
+
+def _pre(f, cfg):
+    """Common pre-processing chain of main(): data → load/resample → offset → loss correction → normalise → dim."""
+    G = _g(cfg)
+    dim = int(G.get('datDim', 1))
+    files = f"train {len(G.get('trFile') or [])} · test {G.get('teFile')}"
+    f.node('dat', 'Data', [f"{dim}D · .{G.get('format')}", files], kind='inp')
+    f.node('cfg', 'Config', ["Exp · Dat · Mdl · Par"], kind='inp')
+    f.same('dat', 'cfg')
+    f.node('load', 'Load & resample', [f"Ts = {val('Exp', 'gen', 'Ts', 's')}", opt('Exp', 'gen', 'samp')])
+    f.node('off', 'Offset', [opt('Exp', 'gen', 'init')], active=forms.value('Exp', 'gen', 'init') != 1)
+    fw = forms.value('Par', 'loss', 'fw') == 1
+    f.node('loss', 'Loss correction θ(T)', [f"Rslope = {val('Par', 'loss', 'Rslope')}"], kind='opt', active=fw)
+    nx, ny = forms.value('Par', 'gen', 'normX'), forms.value('Par', 'gen', 'normY')
+    f.node('norm', 'Normalise', [f"X: {opt('Par', 'gen', 'normX')}", f"y: {opt('Par', 'gen', 'normY')}"],
+           active=nx != 1 or ny != 1)
+    dOut = int(forms.value('Dat', 'gen', 'dOut'))
+    probe = [f"probe ({val('Dat', 'gen', 'outX', 'm')}, {val('Dat', 'gen', 'outY', 'm')})"] if dOut == 1 < dim else []
+    f.node('dim', 'Dimension', [f"{dim}D → {dOut}D"] + probe, active=dim != dOut)
+    f.edge('dat', 'load').edge('cfg', 'load').edge('load', 'off').edge('off', 'loss', active=fw)
+    f.edge('loss' if fw else 'off', 'norm').edge('norm', 'dim')
+    return 'dim'
+
+
+def _post(f, cfg, last, tag):
+    G = _g(cfg)
+    bw = forms.value('Par', 'loss', 'bw') == 1
+    f.node('pred', 'Predict test data', ["loss iteration θ(T)" if bw else "",
+                                         "trained model" if G.get('train') else f"mdl_{tag}_{G.get('name')}"],
+           kind='opt' if bw else 'step')
+    f.node('met', 'Metrics', ["MAE · RMSE · MAX · FIT", f"transient: |dT| > {val('Par', 'gen', 'th')}·max"])
+    f.node('res', 'Results', [f"results/{G.get('name')}/", "figures · gui run"], kind='out')
+    f.edge(last, 'pred').edge('pred', 'met').edge('met', 'res')
+
+
+PRE_STEPS = [('Data / Config', "the data sets of the Setup page and the parameters (sheets Exp, Dat, Mdl, Par)."),
+             ('Load & resample', "every profile is interpolated to Ts (loadData, resmpData)."),
+             ('Offset', "start values or reference temperatures are removed (offRemove) and added back at the end."),
+             ('Loss correction', "optional: the losses are scaled with θ(T) of the measured temperature (updLoss)."),
+             ('Normalise', "optional scaling of inputs and outputs (normData)."),
+             ('Dimension', "a 2D/3D field is kept (PO/PS) or reduced to one probe node (1D models, dimData).")]
+POST_STEPS = [('Predict', "the model simulates the testing data from its initial state; with Par › loss bw = 1 the "
+                          "losses are iterated with the predicted temperature."),
+              ('Metrics', "errors per output on all / transient / steady-state samples (performance)."),
+              ('Results', "figures (results/<name>/fig_*.png), model file mdl/mdl_<tag>_<name> and this GUI run.")]
+
+
+def _rc(cfg, sub):
     f = Flow()
-    f.node('cfg', 'Configuration', [A.NAME], kind='inp')
-    f.node('sim', 'Simulation', ['main(setup, path)'])
-    f.node('res', 'Results', ['figures, data'], kind='out')
-    f.edge('cfg', 'sim').edge('sim', 'res')
-    return f, [('Configuration', "parameters of the GUI"), ('Simulation', "toolkit"), ('Results', "outputs")]
+    last = _pre(f, cfg)
+    leg = int(_g(cfg).get('legacy', 0)) == 1
+    o = forms.value('Mdl', 'gen', 'opt') == 1
+    k = f"K = {val('Mdl', 'rc', 'K')}" + (f" (search 1…{val('Mdl', 'gen', 'Kmax')})" if o else '')
+    f.node('fit', 'Fit Foster network', [k, "Zth curve fit (legacy)" if leg else "output-error fit of ΔT"])
+    f.edge(last, 'fit')
+    _post(f, cfg, 'fit', 'rc')
+    return f, PRE_STEPS + [('Fit Foster network', "Rᵢ and τᵢ of K RC pairs, so that the network driven by the "
+                                                  "measured losses reproduces the temperature rise.")] + POST_STEPS
 
 
-WORKFLOWS = {}                                                        # e.g. {0: _example}
+def _ss(cfg, sub):
+    f = Flow()
+    last = _pre(f, cfg)
+    pem = forms.value('Mdl', 'ss', 'dis') == 2
+    f.node('n4', 'Subspace identification', [f"n = {val('Mdl', 'ss', 'K')}", "N4SID / MOESP"])
+    f.node('pem', 'Output-error fit', [opt('Mdl', 'ss', 'sta'), f"≤ {val('Mdl', 'gen', 'iterMax')} iterations"],
+           kind='opt', active=pem)
+    f.edge(last, 'n4').edge('n4', 'pem', active=pem)
+    _post(f, cfg, 'pem' if pem else 'n4', 'ss')
+    return f, PRE_STEPS + [('Subspace identification', "A, B, C from the Hankel matrices of inputs and outputs "
+                                                       "(fitN4sid)."),
+                           ('Output-error fit', "the simulated output is fitted to the data (fitPem), optionally "
+                                                "with stable poles.")] + POST_STEPS
+
+
+def _sf(cfg, sub):
+    f = Flow()
+    last = _pre(f, cfg)
+    f.node('zth', 'Self-heating Zthₖₖ', [f"{val('Mdl', 'rc', 'K')} RC pairs per node"])
+    f.node('rth', 'Rth matrix', ["ΔTᵢ(end)/Pₖ(end)", "G = Rth⁻¹"])
+    f.edge(last, 'zth').edge('zth', 'rth')
+    _post(f, cfg, 'rth', 'sf')
+    return f, PRE_STEPS + [('Self-heating', "one Foster network per node from the experiment that heats only this "
+                                            "node."),
+                           ('Rth matrix', "coupling from the steady-state end values of all experiments.")] + POST_STEPS
+
+
+def _po(cfg, sub, ps=False):
+    f = Flow()
+    last = _pre(f, cfg)
+    sel = forms.value('Mdl', 'pod', 'sel')
+    kk = f"K = {val('Mdl', 'pod', 'K')}" if sel != 2 else \
+        f"energy ≥ {val('Mdl', 'gen', 'Emax')}, K ≤ {val('Mdl', 'gen', 'Kmax')}"
+    f.node('svd', 'POD (SVD of snapshots)', [kk])
+    f.edge(last, 'svd')
+    if ps:
+        f.node('ss', 'SS identification of a(t)', [f"n = {val('Mdl', 'ss', 'K')}", opt('Mdl', 'ss', 'dis')])
+        f.edge('svd', 'ss')
+        _post(f, cfg, 'ss', 'ps')
+        return f, PRE_STEPS + [('POD', "spatial modes φₖ from the SVD of the training snapshots."),
+                               ('SS identification', "a state-space model from the losses to the modal coordinates "
+                                                     "aₖ(t) = φₖᵀ(T − T̄).")] + POST_STEPS
+    pr = int(forms.value('Mdl', 'pod', 'protocol'))
+    f.node('gal', 'Galerkin projection', ["C = ∫ρc φφ, G = ∫k ∇φ∇φ", "q = ∫Q φ"])
+    f.node('cal', 'Calibration', [opt('Mdl', 'pod', 'protocol')], kind='opt', active=pr >= 4)
+    f.edge('svd', 'gal').edge('gal', 'cal', active=pr >= 4)
+    _post(f, cfg, 'cal' if pr >= 4 else 'gal', 'po')
+    return f, PRE_STEPS + [('POD', "spatial modes φₖ from the SVD of the training snapshots (energy criterion or "
+                                   "fixed K)."),
+                           ('Galerkin projection', "the heat equation is projected onto the modes: K ODEs instead of "
+                                                   "one per node."),
+                           ('Calibration', "protocols 4–6 correct C, G and α with the training trajectories.")] + \
+        POST_STEPS
+
+
+def _ml(cfg, sub):
+    f = Flow()
+    last = _pre(f, cfg)
+    G = _g(cfg)
+    var = A.MODES['ML']['pick'][1].get(int(G.get('selML') or 1), '')
+    f.node('feat', 'Features', ["EWMA/EWMS" if G.get('featRoll') else "inputs at t"], kind='opt',
+           active=bool(G.get('featRoll')))
+    f.node('fit', 'Regressor', [var, "random search, 3-fold CV" if forms.value('Mdl', 'gen', 'opt') == 1 else ""])
+    f.edge(last, 'feat').edge('feat', 'fit')
+    _post(f, cfg, 'fit', 'ml')
+    return f, PRE_STEPS + [('Features', "optional rolling means/variances give the static regressor a memory."),
+                           ('Regressor', "maps the features at time t to the temperatures at time t.")] + POST_STEPS
+
+
+def _dl(cfg, sub, pinn=False):
+    f = Flow()
+    last = _pre(f, cfg)
+    G = _g(cfg)
+    m = 'PI' if pinn else 'DL'
+    var = A.MODES[m]['pick'][1].get(int(G.get(A.SEL[m]) or 1), '')
+    seq = 0 if pinn else int(forms.value('Mdl', 'dl', 'seq'))
+    f.node('win', 'Windows', [f"W = {val('Mdl', 'dl', 'W')}", "seq2seq" if seq == 0 else f"seq2point @ {seq}"])
+    f.node('net', 'Train network', [var, f"{val('Mdl', 'dl', 'epoch')} epochs, lr {val('Mdl', 'dl', 'initLr')}"])
+    f.edge(last, 'win').edge('win', 'net')
+    if pinn:
+        b = forms.value('Mdl', 'pinn', 'beta')
+        f.node('phy', 'Physics loss', [f"α = {val('Mdl', 'pinn', 'alpha')}, β = {val('Mdl', 'pinn', 'beta')}"],
+               kind='opt', active=b > 0)
+        f.edge('phy', 'net', active=b > 0)
+    _post(f, cfg, 'net', m.lower())
+    steps = [('Windows', "the profiles are cut into windows of W samples (no window across two profiles)."),
+             ('Train network', "Adam, learning-rate drops, early stopping on the validation data.")]
+    if pinn:
+        steps.append(('Physics loss', "residual of the lumped model Cth·T' = (T_amb − T)/Rth + 3·Rs·Is² in the loss."))
+    return f, PRE_STEPS + steps + POST_STEPS
+
+
+WORKFLOWS = {'RC': _rc, 'SS': _ss, 'SF': _sf, 'PO': _po, 'PS': lambda c, s: _po(c, s, True), 'ML': _ml,
+             'DL': _dl, 'PI': lambda c, s: _dl(c, s, True)}
 
 
 #######################################################################################################################
