@@ -1,0 +1,197 @@
+{
+  "Exp": {
+    "gen": {
+      "init": 1,
+      "samp": 2,
+      "Ts": 1,
+      "dx": 0.01,
+      "dy": 0.01,
+      "dz": 0.0005,
+      "pad": 0
+    }
+  },
+  "Dat": {
+    "gen": {
+      "dOut": 1,
+      "cut": 3,
+      "cutVal": 0,
+      "inpX": 0,
+      "inpY": 0,
+      "inpZ": 0,
+      "outX": 0,
+      "outY": 0,
+      "outZ": 0
+    }
+  },
+  "Mdl": {
+    "gen": {
+      "err": 0.001,
+      "eps": 1e-12,
+      "sol": 1,
+      "iterMax": 10000,
+      "nSub": 20,
+      "opt": 0,
+      "Kmax": 10,
+      "Emax": 0.9999
+    },
+    "rc": {
+      "K": 3,
+      "bc": 0
+    },
+    "ss": {
+      "K": 3,
+      "dis": 1,
+      "noise": 1,
+      "sol": 1,
+      "init": 2,
+      "sta": 1
+    },
+    "pod": {
+      "K": 3,
+      "sel": 1,
+      "protocol": 5
+    },
+    "knn": {
+      "K": 3,
+      "ns": 1,
+      "dist": 3
+    },
+    "dt": {
+      "leaf": 10,
+      "split": 50,
+      "parent": 20
+    },
+    "svm": {
+      "kernel": 1,
+      "C": 1,
+      "eps": 1
+    },
+    "dl": {
+      "epoch": 100,
+      "gradTh": 1,
+      "initLr": 0.005,
+      "lrDropPr": 50,
+      "lrDropFa": 0.2,
+      "valFreq": 10,
+      "batch": 64,
+      "shu": 1,
+      "W": 50,
+      "stride": 1,
+      "valPat": 5,
+      "loss": 1,
+      "seq": 50
+    },
+    "gpr": {
+      "basis": 1,
+      "kernel": 1,
+      "iterMax": 100
+    },
+    "en": {
+      "method": 1,
+      "cycle": 100,
+      "split": 50
+    },
+    "nn": {
+      "iterMax": 100,
+      "layer": 3,
+      "nodes": 32,
+      "act": 1
+    },
+    "pinn": {
+      "Rth": 0.0265,
+      "Cth": 20800,
+      "Rs": 0.0141,
+      "alpha": 1,
+      "beta": 0
+    }
+  },
+  "Par": {
+    "gen": {
+      "inter": 1,
+      "normX": 1,
+      "normY": 1,
+      "err": 0.001,
+      "eps": 1e-12,
+      "th": 0.1
+    },
+    "loss": {
+      "Rslope": 0.00393,
+      "Rcon": 0,
+      "Rohm": 0,
+      "Tref": 20,
+      "fw": 0,
+      "bw": 0
+    }
+  },
+  "Run": {
+    "user": "Pascal Schirmer",
+    "name": "tutorial_ML",
+    "config": "/tutorial/tutorial_ML",
+    "mode": "ML",
+    "plotOut": 1,
+    "plotMdl": 0,
+    "featRank": 0,
+    "save": 0,
+    "train": 1,
+    "test": 1,
+    "format": "mat",
+    "datDim": 1,
+    "datSep": 3,
+    "trFile": [
+      "motorTemp"
+    ],
+    "teFile": "motorTemp",
+    "vlFile": [
+      "motorTemp"
+    ],
+    "trSheet": [
+      "OP1",
+      "OP2"
+    ],
+    "teSheet": "OP3",
+    "vlSheet": [
+      "OP3"
+    ],
+    "trID": [],
+    "teID": [
+      62
+    ],
+    "vlID": [
+      10,
+      48,
+      63
+    ],
+    "rTr": 0.7,
+    "rVl": 0.2,
+    "inp": [
+      "Ta",
+      "Tc",
+      "Us",
+      "Is"
+    ],
+    "out": [
+      "T_sw"
+    ],
+    "ref": [
+      "Tc"
+    ],
+    "selRC": 1,
+    "selSS": 1,
+    "selSF": 1,
+    "selPO": 1,
+    "selPS": 1,
+    "selML": 2,
+    "selDL": 1,
+    "selPI": 3,
+    "featRoll": 0,
+    "EWMA": [
+      5,
+      50
+    ],
+    "EWMS": [
+      5,
+      50
+    ],
+    "legacy": 0
+  }
+}

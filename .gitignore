@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+config/gui/_gui_run.xlsx
+results/**/gui_*/
+.idea/

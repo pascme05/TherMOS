@@ -1,0 +1,195 @@
+{
+  "Exp": {
+    "gen": {
+      "init": 2,
+      "samp": 1,
+      "Ts": 0.2,
+      "dx": 0.01,
+      "dy": 0.01,
+      "dz": 0.0005,
+      "pad": 0
+    }
+  },
+  "Dat": {
+    "gen": {
+      "dOut": 1,
+      "cut": 3,
+      "cutVal": 0,
+      "inpX": 0,
+      "inpY": 0,
+      "inpZ": 0,
+      "outX": 0,
+      "outY": 0,
+      "outZ": 0
+    }
+  },
+  "Mdl": {
+    "gen": {
+      "err": 0.001,
+      "eps": 1e-12,
+      "sol": 1,
+      "iterMax": 10000,
+      "nSub": 20,
+      "opt": 0,
+      "Kmax": 10,
+      "Emax": 0.9999
+    },
+    "rc": {
+      "K": 3,
+      "bc": 0
+    },
+    "ss": {
+      "K": 3,
+      "dis": 1,
+      "noise": 1,
+      "sol": 1,
+      "init": 2,
+      "sta": 1
+    },
+    "pod": {
+      "K": 3,
+      "sel": 1,
+      "protocol": 5
+    },
+    "knn": {
+      "K": 3,
+      "ns": 1,
+      "dist": 3
+    },
+    "dt": {
+      "leaf": 10,
+      "split": 50,
+      "parent": 20
+    },
+    "svm": {
+      "kernel": 1,
+      "C": 1,
+      "eps": 1
+    },
+    "dl": {
+      "epoch": 100,
+      "gradTh": 1,
+      "initLr": 0.005,
+      "lrDropPr": 50,
+      "lrDropFa": 0.2,
+      "valFreq": 10,
+      "batch": 64,
+      "shu": 1,
+      "W": 50,
+      "stride": 1,
+      "valPat": 5,
+      "loss": 1,
+      "seq": 50
+    },
+    "gpr": {
+      "basis": 1,
+      "kernel": 1,
+      "iterMax": 100
+    },
+    "en": {
+      "method": 1,
+      "cycle": 100,
+      "split": 50
+    },
+    "nn": {
+      "iterMax": 100,
+      "layer": 1,
+      "nodes": 50,
+      "act": 1
+    },
+    "pinn": {
+      "Rth": 0.0265,
+      "Cth": 20800,
+      "Rs": 0.0141,
+      "alpha": 1,
+      "beta": 0
+    }
+  },
+  "Par": {
+    "gen": {
+      "inter": 1,
+      "normX": 1,
+      "normY": 1,
+      "err": 0.001,
+      "eps": 1e-12,
+      "th": 0.01
+    },
+    "loss": {
+      "Rslope": 0.00393,
+      "Rcon": 0,
+      "Rohm": 0,
+      "Tref": 20,
+      "fw": 0,
+      "bw": 0
+    }
+  },
+  "Run": {
+    "user": "Pascal Schirmer",
+    "name": "default",
+    "config": "/default/default",
+    "mode": "SS",
+    "plotOut": 1,
+    "plotMdl": 0,
+    "featRank": 0,
+    "save": 0,
+    "train": 1,
+    "test": 1,
+    "format": "mat",
+    "datDim": 1,
+    "datSep": 1,
+    "trFile": [
+      "default"
+    ],
+    "teFile": "default",
+    "vlFile": [
+      "default"
+    ],
+    "trSheet": [
+      "train-1",
+      "train-2",
+      "train-3"
+    ],
+    "teSheet": "test",
+    "vlSheet": [
+      "val"
+    ],
+    "trID": [],
+    "teID": [],
+    "vlID": [],
+    "rTr": 0.7,
+    "rVl": 0.2,
+    "inp": [
+      "P1",
+      "P2",
+      "P3"
+    ],
+    "out": [
+      "T1",
+      "T2",
+      "T3"
+    ],
+    "ref": [
+      "R1",
+      "R2",
+      "R3"
+    ],
+    "selRC": 1,
+    "selSS": 1,
+    "selSF": 1,
+    "selPO": 1,
+    "selPS": 1,
+    "selML": 1,
+    "selDL": 1,
+    "selPI": 3,
+    "featRoll": 0,
+    "EWMA": [
+      5,
+      50
+    ],
+    "EWMS": [
+      5,
+      50
+    ],
+    "legacy": 0
+  }
+}
