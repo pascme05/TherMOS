@@ -111,7 +111,8 @@
    "percent": false,
    "options": {
     "1": "1-dimensional",
-    "2": "2-dimensional"
+    "2": "2-dimensional",
+    "3": "3-dimensional"
    },
    "nested": true,
    "optional": false,

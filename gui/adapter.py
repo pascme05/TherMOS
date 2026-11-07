@@ -78,7 +78,7 @@ INTS = _ints()                                                        # {(sectio
 STRS = set()                                                          # {(section, cat, var)} forced text
 NO_OPTIONS = {('Mdl', 'dl', 'seq')}                                   # descriptions enumerate cases, value continuous
 OPTIONAL = set()                                                      # empty value allowed
-OPTIONS = {}                                                          # {(section, cat, var): {key: label or None}}
+OPTIONS = {('Dat', 'gen', 'dOut'): {3: '3-dimensional'}}                         # options the code accepts beyond the workbook
 LABELS = {}                                                           # {(section, cat, var): name} if Name is empty
 PERCENT_AS_FRACTION = True                                            # unit '%': stored 0.05, shown 5 %; False: 5
 
@@ -337,13 +337,18 @@ def compact(data, mode):
     out = {'results': copy.deepcopy(data.get('results')), 'pred': {}, 'grt': {}, 'mdls': {}}
     for tag, p in (data.get('pred') or {}).items():
         g = data['grt'][tag]
-        step = max(1, int(np.ceil(len(np.asarray(p['y'])) / 2000)))
+        y = np.asarray(g['y'])
+        nodes = y.reshape(len(y), -1).shape[1]
+        n = 2000 if nodes <= 50 else max(10, min(200, int(2e7 // (8 * 2 * max(nodes, 1)))))   # fields: ≤ 160 MB
+        step = max(1, int(np.ceil(len(y) / n)))
         out['pred'][tag] = {'y': np.asarray(p['y'])[::step], 'Ts': g.get('Ts', 1) * step}
-        out['grt'][tag] = {'y': np.asarray(g['y'])[::step], 'Ts': g.get('Ts', 1) * step,
-                           'Data': g.get('Data')}
+        D = g.get('Data')
+        D = {k: v for k, v in D.items() if k in ('geo', 'k', 'rho', 'Cp', 'hc', 'dx', 'dy', 'dz', 'Lx', 'Ly', 'Lz')} \
+            if isinstance(D, dict) else None
+        out['grt'][tag] = {'y': y[::step], 'Ts': g.get('Ts', 1) * step, 'Data': D}
     for tag, m in (data.get('mdls') or {}).items():
-        out['mdls'][tag] = {k: v for k, v in m.items() if isinstance(v, (int, float, str, list, np.ndarray, dict))
-                            and k not in ('sys', 'net')}
+        out['mdls'][tag] = {k: v for k, v in m.items() if isinstance(v, (int, float, str, list, np.ndarray, dict,
+                                                                         np.integer, np.floating))}
     return out
 
 
