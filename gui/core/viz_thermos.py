@@ -359,6 +359,33 @@ def dl_view(data, setup, key):
     show(fig, height=340, key=f"{key}|loss", info="**Training history.** Training loss per iteration/epoch and the "
          "validation loss. Training continues to fall while validation rises → overfitting (early stopping keeps "
          "the best validation state). Both flat and high → model too small or learning rate too low.")
+    if info.get('lossPhys'):
+        ep = np.arange(1, len(info['lossData']) + 1)
+        fig = go.Figure([line(ep, info['lossData'], 'L_data = mean((T̂ − T)²)', 0),
+                         line(ep, np.maximum(np.asarray(info['lossPhys'], dtype=float), 1e-30),
+                              'L_phys = mean(r²)', 2, yaxis='y2')])
+        fig.update_layout(xaxis_title='Epoch', yaxis=dict(type='log', title='L_data (normalised K²)'),
+                          yaxis2=dict(type='log', title='L_phys (W²)', overlaying='y', side='right'))
+        show(fig, height=320, key=f"{key}|lossPI", info=f"**Data and physics loss** (unweighted, α = "
+             f"{fmt(info.get('alpha', 1))}, β = {fmt(info.get('beta', 0))}). With β = 0 the physics loss is only "
+             "monitored: it shows how well the purely data-trained network satisfies the lumped stator model.")
+    mdl = data['mdls'].get(tag, {})
+    net = mdl.get('sys')
+    if net is not None and hasattr(net, 'mu'):
+        with st.expander("Architecture of the trained network", icon=':material/account_tree:'):
+            try:
+                from gui.core.theory_dl import arch_dot
+                F = int(np.asarray(net.mu.cpu()).size)
+                ph = None
+                if info.get('lossPhys') is not None and 'beta' in info:
+                    p = ((data.get('para') or {}).get('Mdl') or {}).get('pinn') or {}
+                    ph = {'Rth': p.get('Rth', 0.0265), 'Cth': p.get('Cth', 2.08e4), 'Rs': p.get('Rs', 14.1e-3),
+                          'alpha': info.get('alpha', 1.0), 'beta': info.get('beta', 0.0)}
+                st.graphviz_chart(arch_dot(net, int(mdl.get('W') or 100), F, None,
+                                           list((setup or {}).get('Run', {}).get('out') or []) or None, ph),
+                                  width='content')
+            except Exception as e:
+                st.caption(f"Architecture not available: {e}")
 
 
 #######################################################################################################################

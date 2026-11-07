@@ -35,4 +35,22 @@ def _intro(text):
 #######################################################################################################################
 # Theory per mode: mode -> function(cfg)
 #######################################################################################################################
-THEORY = {}
+def _lazy(module, fn):
+    """Imports the theory module only when the view is opened (torch, sklearn, board model)."""
+    def run(cfg):
+        import importlib
+        getattr(importlib.import_module(f"gui.core.{module}"), fn)(cfg)
+    return run
+
+
+THEORY = {
+    'RC': _lazy('theory_lumped', 'theory_rc'),
+    'SS': _lazy('theory_lumped', 'theory_ss'),
+    'SF': _lazy('theory_lumped', 'theory_sf'),
+    'PO': _lazy('theory_pod', 'theory_po'),
+    'PS': _lazy('theory_pod', 'theory_ps'),
+    'ML': _lazy('theory_dl', 'theory_ml'),
+    'DL': _lazy('theory_dl', 'theory_dl'),
+    'PI': _lazy('theory_dl', 'theory_pi'),
+}
+

@@ -5,7 +5,7 @@
 # File:         pinnFit
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.0
+# Version:      V.1.1
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -34,6 +34,10 @@ Outputs:    1) mdl:     model {'sys': network, 'info': training history, 'seq': 
 V1.0: 07.11.2026, Pascal Schirmer
 - Python port of pinnFit.m; windows per profile, physics constants configurable (F-I1), the time derivative uses the
   sampling time of the data instead of Ts = 1 sec (F-I2)
+
+V1.1: 07.11.2026, Pascal Schirmer
+- The training history stores the data loss and the physics loss separately (info['lossData'], info['lossPhys'],
+  unweighted means per epoch)
 """
 
 #######################################################################################################################
@@ -113,32 +117,36 @@ def pinnFit(data, val, para, setup, legacy=0):
 
     def lossFnc(X, y):
         yp = net(X)
-        loss = wD * torch.mean((yp - y) ** 2)
+        lD = torch.mean((yp - y) ** 2)
+        loss = wD * lD
+        lP = torch.zeros(())
         if wP > 0:
             T = yp[:, :, 0]
             dT = torch.diff(T, dim=1, append=T[:, -1:] + (T[:, -1:] - T[:, -2:-1])) / Ts
             r = Cth * dT - ((X[:, :, 1] - T) / Rth + 3 * Rs * X[:, :, 3] ** 2)
-            loss = loss + wP * torch.mean(r ** 2)
-        return loss
+            lP = torch.mean(r ** 2)
+            loss = loss + wP * lP
+        return loss, lD, lP
 
     ###################################################################################################################
     # Calculation
     ###################################################################################################################
     best, bestNet, wait = np.inf, copy.deepcopy(net.state_dict()), 0
-    info = {'loss': [], 'valLoss': [], 'learnRate': []}
+    info = {'loss': [], 'valLoss': [], 'learnRate': [], 'lossData': [], 'lossPhys': [], 'alpha': wD, 'beta': wP}
     order = torch.randperm(len(Xtr)) if dl['shu'] == 2 else torch.arange(len(Xtr))
     for ep in range(0, epoch):
         if dl['shu'] not in (1, 2):
             order = torch.randperm(len(Xtr))
         net.train()
-        lossEp = 0.0
+        lossEp, lossD, lossP, nB = 0.0, 0.0, 0.0, 0
         for b in range(0, len(Xtr), batch):
             idx = order[b:b + batch]
             opt.zero_grad()
-            loss = lossFnc(Xtr[idx], ytr[idx])
+            [loss, lD, lP] = lossFnc(Xtr[idx], ytr[idx])
             loss.backward()
             opt.step()
             lossEp = lossEp + float(loss)
+            lossD, lossP, nB = lossD + float(lD), lossP + float(lP), nB + 1
         if (ep + 1) % max(int(dl['lrDropPr']), 1) == 0:
             for g in opt.param_groups:
                 g['lr'] = g['lr'] * dl['lrDropFa']
@@ -148,6 +156,8 @@ def pinnFit(data, val, para, setup, legacy=0):
         info['loss'].append(lossEp)
         info['valLoss'].append(lv)
         info['learnRate'].append(opt.param_groups[0]['lr'])
+        info['lossData'].append(lossD / max(nB, 1))
+        info['lossPhys'].append(lossP / max(nB, 1))
         print("INFO: Epoch %d/%d, training loss %.4e, validation loss %.4e" % (ep + 1, epoch, lossEp, lv))
         if lv < best:
             best, bestNet, wait = lv, copy.deepcopy(net.state_dict()), 0
