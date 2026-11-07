@@ -315,7 +315,7 @@ def stack_inputs(tech, preset):
         c[0].metric("Thickness t_b", f"{fmt(tb * 1e3)} mm")
         c[1].metric("k_eff in-plane", f"{fmt(np.sum([p[0] * ti for p, ti in zip(props, t)]) / tb)} W/mK",
                     help="Thickness-weighted in-plane conductivity Σ k_xy,l t_l / t_b (spreading).")
-        c[2].metric("R_z (through)", f"{fmt(Rz * 1e6)} K·mm²/W", help="Σ t_l / k_z,l: resistance of 1 mm² of board "
+        c[2].metric("R_z through (K·mm²/W)", f"{fmt(Rz * 1e6)}", help="Σ t_l / k_z,l: resistance of 1 mm² of board "
                                                                        "from top to bottom (without vias).")
         with c[3]:
             b = st.columns(2)
@@ -342,11 +342,12 @@ def via_inputs():
     s = st.session_state
     with st.container(border=True):
         st.markdown("**:material/blur_on: Thermal vias** (averaged over the via array, through the FR4 layers)")
-        c = st.columns([2, 1, 1, 1, 1.4, 1])
-        mode = c[0].segmented_control("Vias", list(VIA_MODES), format_func=VIA_MODES.get, default='none',
+        mode = st.segmented_control("Vias", list(VIA_MODES), format_func=VIA_MODES.get, default='none',
                                       key=f"{K}|vmode", help="Under the chips: footprint of every chip plus the "
                                       "margin. Whole board: the via array covers the board.") or 'none'
         on = mode != 'none'
+        c = st.columns([1, 1, 1, 1.4, 1])
+        c = [None] + c                                                # keep the indices of the inputs below
         cm.num(c[1], "Drill d (mm)", 0.3, 'board|vd', min_value=0.05, max_value=2.0, step=0.05, disabled=not on)
         cm.num(c[2], "Plating (µm)", 25.0, 'board|vtpl', min_value=5.0, max_value=100.0, step=5.0, disabled=not on)
         cm.num(c[3], "Pitch (mm)", 1.0, 'board|vpitch', min_value=0.2, max_value=10.0, step=0.1, disabled=not on,

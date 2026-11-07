@@ -138,7 +138,7 @@ def page():
     # ------------------------------------------
     # Setup
     # ------------------------------------------
-    c = st.columns([2, 2, 1, 2])
+    c = st.columns([2, 3, 1.2, 2])
     modes = list(A.MODES)
     mode = c[0].selectbox("Operating mode", modes, format_func=lambda m: f"{m} · {A.MODES[m]['title']}",
                           key=f"{K}|mode")
