@@ -5,7 +5,7 @@
 # File:         mlFit
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.0
+# Version:      V.1.1
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -31,6 +31,9 @@ V1.0: 07.11.2026, Pascal Schirmer
 - Python port of mlFit.m; the target is the concatenated temperature of all profiles (MATLAB used the profile mean
   with a different length than the inputs, F-L1), the stray 'MPG' argument of the ensemble optimisation is removed
   (F-L2), the GPR basis function is approximated by a linear/constant mean (normalize_y)
+
+V1.1: 07.11.2026, Pascal Schirmer
+- Warning if the GPU is selected (scikit-learn runs on the CPU)
 """
 
 #######################################################################################################################
@@ -118,6 +121,8 @@ def mlFit(data, val, para, setup, legacy=0):
     # Initialisation
     ###################################################################################################################
     sel = int(setup['selML'])
+    if int(para['Mdl']['gen'].get('dev', 0) or 0) == 1:
+        print("WARN: The scikit-learn models run on the CPU only, the GPU setting (Mdl.gen.dev) is ignored")
     X, T = _feat(data, setup, legacy), np.asarray(data['y'], dtype=float)[:, 0]
     Xvl, Tvl = _feat(val, setup, legacy), np.asarray(val['y'], dtype=float)[:, 0]
     [mdl, grid] = _model(sel, para['Mdl'])

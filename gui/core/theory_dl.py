@@ -65,7 +65,7 @@ def _label(m):
 def arch_dot(net, W, F, names=None, outs=None, physics=None):
     """
     Graphviz DOT of a dlNet: input window → normalisation → layers (shape after each layer, parameters) → output.
-    physics: None or dict(Rth, Cth, Rs, alpha, beta) to append the PINN loss graph.
+    physics: None or dict(Rth, Cth, alpha, beta, PvTxt, TrefTxt, node) to append the PINN loss graph.
     """
     import torch
     rec = []
@@ -120,10 +120,10 @@ def arch_dot(net, W, F, names=None, outs=None, physics=None):
               'ld [label="data loss\\nL_data = mean((T̂ − T)²)", shape=hexagon, fillcolor="#fde8e8"];',
               'y -> ld; t -> ld;',
               'dt [label="∂T̂/∂t\\n(finite difference over the window)", fillcolor="#f3e8f7"];',
-              'phx [label="T_amb (feature 2), I_s (feature 4)\\nfrom the input window", shape=ellipse, '
-              'fillcolor="#fff4e5", color="#e07b00"];',
-              f'res [label="residual of the lumped stator model\\nr = C_th·∂T̂/∂t − ((T_amb − T̂)/R_th + 3·R_s·I_s²)'
-              f'\\nR_th = {fmt(ph["Rth"])} K/W, C_th = {fmt(ph["Cth"])} Ws/K, R_s = {fmt(ph["Rs"])} Ω", '
+              f'phx [label="P_v = {ph.get("PvTxt", "3·R_s·x4²")}\\nT_ref = {ph.get("TrefTxt", "x2")}\\nfrom the '
+              f'input window", shape=ellipse, fillcolor="#fff4e5", color="#e07b00"];',
+              f'res [label="residual of the lumped model (output {ph.get("node", 1)})\\nr = C_th·∂T̂/∂t − ((T_ref − '
+              f'T̂)/R_th + P_v)\\nR_th = {fmt(ph["Rth"])} K/W, C_th = {fmt(ph["Cth"])} Ws/K", '
               f'fillcolor="#e8f4ea", color="#3f8f4f"];',
               'lp [label="physics loss\\nL_phys = mean(r²)", shape=hexagon, fillcolor="#e8f4ea", color="#3f8f4f"];',
               f'tot [label="L = α·L_data + β·L_phys\\nα = {fmt(ph["alpha"])}, β = {fmt(ph["beta"])}", '
@@ -288,42 +288,91 @@ def theory_dl(cfg, sel=None, physics=None):
 #######################################################################################################################
 # PI
 #######################################################################################################################
+def phys_text(cfg):
+    """Physics settings of the config (pinnFit.physPara) with readable texts for the graphs."""
+    from src.py.model.PINN.pinnFit import physPara
+    ph = physPara(cfg)
+    names = list((cfg.get('Run') or {}).get('inp') or [])
+    nm = lambda k: f"x{k} ({names[k - 1]})" if 0 < k <= len(names) else f"x{k}"
+    ph['PvTxt'] = nm(ph['PvSrc']) if ph['PvSrc'] > 0 else ph['PvEq'].replace('**', '^').replace('*', '·')
+    ph['TrefTxt'] = nm(ph['TrefSrc']) if ph['TrefSrc'] > 0 else f"{fmt(ph['Tref'])} °C"
+    ph['names'] = names
+    return ph
+
+
 def theory_pi(cfg):
-    ph = {k: float(_get(cfg, 'Mdl', 'pinn', k, default=d)) for k, d in
-          (('Rth', 0.0265), ('Cth', 2.08e4), ('Rs', 14.1e-3), ('alpha', 1.0), ('beta', 0.0))}
-    intro("PI mode: the CNN + LSTM network of the DL mode, trained with a loss that adds the residual of a lumped "
-          "physical model of the stator temperature.")
+    ph = phys_text(cfg)
+    sel = int((cfg.get('Run') or {}).get('selPI', 3) or 3)
+    intro("PI mode: a network of the DL mode (CNN, LSTM or CNN + LSTM, sub-mode), trained with a loss that adds the "
+          "residual of a lumped thermal model of one output. The losses of the model come from an input feature or "
+          "from an equation of the inputs and constants.")
     cm.question("What does the physics loss add, and how are the data and the physics weighted?")
     cm.equations([
-        ("Lumped stator model", r"C_{th}\,\frac{dT}{dt} = \frac{T_{amb} - T}{R_{th}} + 3 R_s I_s^2",
-         "One thermal node heated by the copper losses of the stator current."),
-        ("Residual of the prediction", r"r(k) = C_{th}\,\frac{\hat T(k+1) - \hat T(k)}{T_s} - \left(\frac{T_{amb}(k) "
-                                       r"- \hat T(k)}{R_{th}} + 3R_s I_s(k)^2\right)",
+        ("Lumped thermal model of output j", r"C_{th}\,\frac{dT_j}{dt} = \frac{T_{ref} - T_j}{R_{th}} + P_v",
+         "One thermal node from the output to the reference (ambient / coolant)."),
+        ("Losses and reference", r"P_v = \begin{cases} x_k & \text{PvSrc} = k > 0 \\ f(x_1, x_2, \dots, T, "
+                                 r"\text{constants}) & \text{PvSrc} = 0 \end{cases},\qquad T_{ref} = "
+                                 r"\begin{cases} x_k & \text{TrefSrc} = k > 0 \\ \text{Tref} & \text{TrefSrc} = 0 "
+                                 r"\end{cases}",
+         "f is the equation PvEq, e.g. 3*Rs*x4**2 (copper losses of a three-phase winding with the current in "
+         "feature 4) or 3*Rs*(1+0.00393*(T-20))*x4**2 (with the temperature-dependent copper resistance)."),
+        ("Residual of the prediction", r"r(k) = C_{th}\,\frac{\hat T_j(k+1) - \hat T_j(k)}{T_s} - \left("
+                                       r"\frac{T_{ref}(k) - \hat T_j(k)}{R_{th}} + P_v(k)\right)",
          "Forward difference over the window (sampling time of the data, legacy = 0)."),
         ("Loss", r"L = \alpha\,\underbrace{\tfrac{1}{N}\textstyle\sum (\hat T - T)^2}_{L_{data}} + \beta\,"
                  r"\underbrace{\tfrac{1}{N}\textstyle\sum r^2}_{L_{phys}}",
          "α, β: Mdl › pinn › alpha, beta. β = 0 (default, as in MATLAB) trains on the data only."),
-    ], sym=[('T̂, T', 'predicted and measured temperature (first output)', '°C'),
-            ('T_amb, I_s', 'ambient temperature (input feature 2), stator current (feature 4)', '°C, A'),
-            ('R_th, C_th, R_s', 'thermal resistance, capacitance, stator resistance', 'K/W, Ws/K, Ω'),
+    ], sym=[('T̂_j, T_j', 'predicted and measured temperature of the residual output j (Mdl › pinn › node)', '°C'),
+            ('x_k', 'input feature k (raw units, Setup › channels)', '–'),
+            ('P_v, T_ref', 'losses and reference temperature of the lumped model', 'W, °C'),
+            ('R_th, C_th', 'thermal resistance and capacitance', 'K/W, Ws/K'),
             ('α, β', 'weights of the data and physics loss', '–')], expanded=True)
+
+    # Physics of the current config
+    cm.section(None, "Physics of the current configuration")
+    feats = ph['names'] or [f"x{i + 1}" for i in range(4)]
+    c = st.columns([3, 2])
+    with c[0]:
+        table(pd.DataFrame([
+            {'term': 'losses P_v', 'source': ph['PvTxt'], 'set by': 'Mdl › pinn › PvSrc / PvEq'},
+            {'term': 'reference T_ref', 'source': ph['TrefTxt'], 'set by': 'Mdl › pinn › TrefSrc / Tref'},
+            {'term': 'output j', 'source': str(ph['node']), 'set by': 'Mdl › pinn › node'},
+            {'term': 'constants', 'source': ', '.join(f"{k} = {fmt(v)}" for k, v in ph['const'].items()),
+             'set by': 'Mdl › pinn › Rth, Cth, Rs, const'}]), hide_index=True)
+    with c[1]:
+        st.markdown("**Check the loss equation** at an operating point")
+        vals = {}
+        cc = st.columns(2)
+        for k, n in enumerate(feats):
+            vals[f"x{k + 1}"] = cc[k % 2].number_input(f"x{k + 1} = {n}", value=60.0 if k == 3 else 25.0,
+                                                       key=f"thPI|x{k}")
+        vals['T'] = cc[len(feats) % 2].number_input("T (°C)", value=80.0, key='thPI|Tx')
+        try:
+            from src.py.general.calcEq import calcEq
+            Pv0 = float(vals[f"x{ph['PvSrc']}"]) if ph['PvSrc'] > 0 else float(calcEq(ph['PvEq'], vals, ph['const']))
+            st.success(f"P_v = {fmt(Pv0)} W → steady ΔT = P_v·R_th = {fmt(Pv0 * ph['Rth'])} K", icon=':material/check:')
+        except Exception as e:
+            Pv0 = None
+            st.warning(f"The loss equation does not fit the inputs of this configuration ({e}). Use the input "
+                       f"names x1 … x{len(feats)}, or set Mdl › pinn › PvSrc to the feature that holds the losses; "
+                       f"the PI run stops with this error otherwise.", icon=':material/warning:')
     if ph['beta'] == 0:
-        st.info("β = 0 in the current config: the PINN trains on the data only (the physics loss is logged but has no "
-                "influence). Set Mdl › pinn › beta > 0 to use it.", icon=':material/info:')
+        st.info("β = 0 in the current config: the PINN trains on the data only (the physics loss is monitored on the "
+                "validation data but has no influence). Set Mdl › pinn › beta > 0 to use it.", icon=':material/info:')
     cm.section(None, "Network and loss")
-    theory_dl(cfg, sel=3, physics=ph)
+    theory_dl(cfg, sel=sel, physics=ph)
 
     cm.section(None, "Explorer: residual of a prediction")
-    c = st.columns(4)
-    Is = num(c[0], "Stator current I_s (A rms)", 60.0, 'thPI|Is', min_value=0.0)
-    Ta = num(c[1], "T_amb (°C)", 25.0, 'thPI|Ta')
-    bias = num(c[2], "Prediction offset (K)", 2.0, 'thPI|bias')
-    noise = num(c[3], "Prediction noise σ (K)", 0.5, 'thPI|noise', min_value=0.0)
+    st.caption("The losses alternate between P_v of the operating point above and 30 % of it (load cycle).")
+    c = st.columns(3)
+    Ta = num(c[0], "T_ref (°C)", 25.0, 'thPI|Ta')
+    bias = num(c[1], "Prediction offset (K)", 2.0, 'thPI|bias')
+    noise = num(c[2], "Prediction noise σ (K)", 0.5, 'thPI|noise', min_value=0.0)
+    P0 = Pv0 if Pv0 is not None and np.isfinite(Pv0) else 100.0
     tau = ph['Rth'] * ph['Cth']
     Ts = max(tau / 400, 1e-3)
     t = np.arange(0, 4 * tau, Ts)
-    I = np.where((t % (tau * 1.5)) < tau * 0.9, Is, Is * 0.3)
-    Pcu = 3 * ph['Rs'] * I ** 2
+    Pcu = np.where((t % (tau * 1.5)) < tau * 0.9, P0, P0 * 0.3)
     T, _ = rcSim(np.array([ph['Rth']]), np.array([tau]), Pcu, Ts)
     T = T + Ta
     That = T + bias + np.random.default_rng(42).normal(0, noise, len(t))
@@ -333,8 +382,7 @@ def theory_pi(cfg):
     r0, r1 = resid(T), resid(That)
     Ld = float(np.mean((That - T) ** 2))
     Lp = float(np.mean(r1 ** 2))
-    cm.tiles([("τ = R_th·C_th", f"{fmt(tau)} s", None), ("Steady ΔT at I_s", f"{fmt(3 * ph['Rs'] * Is ** 2 * ph['Rth'])} "
-                                                                             f"K", None),
+    cm.tiles([("τ = R_th·C_th", f"{fmt(tau)} s", None), ("Steady ΔT at P_v", f"{fmt(P0 * ph['Rth'])} K", None),
               ("L_data of the prediction", f"{fmt(Ld)} K²", None), ("L_phys of the prediction", f"{fmt(Lp)} W²",
                                                                      f"exact solution: {fmt(np.mean(r0 ** 2))} W²")])
     tabs = st.tabs(["Temperatures", "Residual"])

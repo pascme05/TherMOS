@@ -5,7 +5,7 @@
 # File:         dlSol
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.0
+# Version:      V.1.1
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -30,6 +30,9 @@ Outputs:    1) out:     prediction
 
 V1.0: 07.11.2026, Pascal Schirmer
 - Python port of dlSol.m; the loss iteration of MATLAB did not run (undefined variable, endless loop, F-L6)
+
+V1.1: 07.11.2026, Pascal Schirmer
+- Prediction on the CPU or the GPU (para['Mdl']['gen']['dev']) in chunks of 4096 windows
 """
 
 #######################################################################################################################
@@ -41,6 +44,7 @@ V1.0: 07.11.2026, Pascal Schirmer
 from src.py.model.DL.dlWin import dlWin
 from src.py.general.calcFeat import calcFeat
 from src.py.general.calcTheta import calcTheta
+from src.py.general.getDevice import getDevice
 
 # ==============================================================================
 # External
@@ -52,15 +56,15 @@ import torch
 #######################################################################################################################
 # Additional Functions
 #######################################################################################################################
-def _predict(mdl, X2, setup, legacy):
-    net, W, seq = mdl['sys'], mdl['W'], mdl['seq']
+def _predict(mdl, X2, setup, legacy, dev):
+    net, W, seq = mdl['sys'].to(dev), mdl['W'], mdl['seq']
     out = []
     for X in X2:
         if setup.get('featRoll', 0) != 0:
             X = calcFeat(X, setup['EWMA'], setup['EWMS'], None, legacy)
-        Xw = dlWin(X, None, W, seq, 1, 1)[0]
+        Xw = torch.from_numpy(dlWin(X, None, W, seq, 1, 1)[0])
         with torch.no_grad():
-            y = net(torch.from_numpy(Xw)).numpy()
+            y = np.concatenate([net(Xw[i:i + 4096].to(dev)).cpu().numpy() for i in range(0, len(Xw), 4096)])
         if seq == 0:
             y = y.reshape(-1, y.shape[-1])[0:len(X)]
         out.append(y)
@@ -86,6 +90,7 @@ def dlSol(mdl, data, para, setup, legacy=0):
     errMax = para['Mdl']['gen']['err']
     nSub = int(para['Mdl']['gen']['nSub'])
     out = dict(data)
+    dev = getDevice(para)
 
     ###################################################################################################################
     # Calculation
@@ -93,7 +98,7 @@ def dlSol(mdl, data, para, setup, legacy=0):
     # ==============================================================================
     # Constant Losses
     # ==============================================================================
-    y2 = _predict(mdl, X2, setup, legacy)
+    y2 = _predict(mdl, X2, setup, legacy, dev)
 
     # ==============================================================================
     # Temperature Dependent Losses
@@ -102,7 +107,7 @@ def dlSol(mdl, data, para, setup, legacy=0):
         Pv2 = X2
         for it in range(0, nSub):
             Pv2 = [x * calcTheta(y[:, 0:1] + r[:, 0:1], para, legacy) for x, y, r in zip(X2, y2, Toff2)]
-            yNew = _predict(mdl, Pv2, setup, legacy)
+            yNew = _predict(mdl, Pv2, setup, legacy, dev)
             err = np.mean(np.abs(np.concatenate(yNew) - np.concatenate(y2)))
             y2 = yNew
             if err < errMax:
@@ -115,6 +120,7 @@ def dlSol(mdl, data, para, setup, legacy=0):
     ###################################################################################################################
     out['y'] = np.concatenate(y2)
     out['X'] = np.concatenate(X2)
+    mdl['sys'].to('cpu')
 
     ###################################################################################################################
     # MSG Out

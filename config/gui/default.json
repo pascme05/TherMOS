@@ -104,10 +104,10 @@
       "Rs": 0.0141,
       "alpha": 1,
       "beta": 0,
-      "PvSrc": 0,
+      "PvSrc": 1,
       "PvEq": "3*Rs*x4**2",
       "const": 0,
-      "TrefSrc": 2,
+      "TrefSrc": 0,
       "Tref": 25,
       "node": 1
     },

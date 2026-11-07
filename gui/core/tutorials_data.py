@@ -197,7 +197,8 @@ TUTORIALS = [
     dict(id='pi_physics', mode='PI', level='Advanced', minutes=25, base='tutorial_PI',
          title="Physics-informed training: data loss and physics loss",
          story="The CNN + LSTM is trained on the stator winding temperature with an additional loss: the residual "
-               "of a lumped stator model C_th·dT/dt = (T_amb − T)/R_th + 3·R_s·I_s². 3 epochs.",
+               "of a lumped stator model C_th·dT/dt = (T_amb − T)/R_th + P_v with the copper losses P_v = 3·R_s·I_s² "
+               "(Mdl › pinn › PvEq = 3*Rs*x4**2, x4 = I_s). 3 epochs.",
          goals=["understand the PINN loss", "balance the data and the physics loss with β"],
          changes={'Mdl.dl.epoch': 3},
          steps=["Open *Theory*: network and loss graph, and the residual explorer.",
@@ -212,7 +213,8 @@ TUTORIALS = [
               "on a CPU). The physics loss stays large: the lumped stator model is only a rough description of "
               "the motor, which limits how large β can be.",
          exercise=["Try β = 1e-5 and 1e-7: where is the best compromise?",
-                   "Change R_th by ±50 %: how sensitive is the result to wrong physics?"]),
+                   "Change R_th by ±50 %: how sensitive is the result to wrong physics?",
+                   "Use the temperature-dependent copper resistance: PvEq = 3*Rs*(1+0.00393*(T-20))*x4**2."]),
 
     # ------------------------------------------
     # Studies

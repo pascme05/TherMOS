@@ -5,7 +5,7 @@
 # File:         dlFit
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.0
+# Version:      V.1.1
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -29,6 +29,9 @@ Outputs:    1) mdl:     model {'sys': network, 'info': training history, 'seq', 
 V1.0: 07.11.2026, Pascal Schirmer
 - Python port of dlFit.m; windows per profile, the seq2point target is the seq-th sample in training and inference
   (F-L5), CNN seq2seq network (MATLAB had no layers for this case, F-L7)
+
+V1.1: 07.11.2026, Pascal Schirmer
+- Training on the CPU or the GPU (para['Mdl']['gen']['dev'], getDevice); the network is returned on the CPU
 """
 
 #######################################################################################################################
@@ -40,6 +43,7 @@ V1.0: 07.11.2026, Pascal Schirmer
 from src.py.model.DL.dlNet import dlNet
 from src.py.model.DL.dlWin import dlWin
 from src.py.general.calcFeat import calcFeat
+from src.py.general.getDevice import getDevice
 
 # ==============================================================================
 # External
@@ -102,6 +106,7 @@ def dlFit(data, val, para, setup, legacy=0):
     epoch, batch = int(dl['epoch']), int(dl['batch'])
     valFreq = max(int(dl['valFreq']), 1)
     valPat = int(dl.get('valPat', 10) or 10)
+    dev = getDevice(para)
     torch.manual_seed(42)
     np.random.seed(42)
 
@@ -118,12 +123,12 @@ def dlFit(data, val, para, setup, legacy=0):
     mu = Xtr.reshape(-1, F).mean(axis=0)
     sd = Xtr.reshape(-1, F).std(axis=0)
     sd[sd < 1e-12] = 1
-    net = dlNet(int(setup['selDL']), F, M, seq, mu, sd)
+    net = dlNet(int(setup['selDL']), F, M, seq, mu, sd).to(dev)
     opt = torch.optim.Adam(net.parameters(), lr=dl['initLr'])
     sch = torch.optim.lr_scheduler.StepLR(opt, step_size=max(int(dl['lrDropPr']), 1), gamma=dl['lrDropFa'])
     lossFnc = _loss(int(dl['loss']), legacy)
     Xtr, ytr = torch.from_numpy(Xtr), torch.from_numpy(ytr)
-    Xvl, yvl = torch.from_numpy(Xvl), torch.from_numpy(yvl)
+    Xvl, yvl = torch.from_numpy(Xvl).to(dev), torch.from_numpy(yvl).to(dev)
     order = torch.arange(len(Xtr))
     if dl['shu'] == 2:
         order = torch.randperm(len(Xtr))
@@ -132,7 +137,7 @@ def dlFit(data, val, para, setup, legacy=0):
     # Calculation
     ###################################################################################################################
     best, bestNet, wait, it, stop = np.inf, copy.deepcopy(net.state_dict()), 0, 0, False
-    info = {'iter': [], 'loss': [], 'valIter': [], 'valLoss': []}
+    info = {'iter': [], 'loss': [], 'valIter': [], 'valLoss': [], 'device': str(dev)}
     for ep in range(0, epoch):
         if dl['shu'] not in (1, 2):
             order = torch.randperm(len(Xtr))
@@ -142,7 +147,7 @@ def dlFit(data, val, para, setup, legacy=0):
             if len(idx) < 2 and int(setup['selDL']) == 1:
                 continue
             opt.zero_grad()
-            loss = lossFnc(net(Xtr[idx]), ytr[idx])
+            loss = lossFnc(net(Xtr[idx].to(dev)), ytr[idx].to(dev))
             loss.backward()
             if dl['gradTh'] > 0 and np.isfinite(dl['gradTh']):
                 nn.utils.clip_grad_norm_(net.parameters(), dl['gradTh'])
@@ -176,6 +181,7 @@ def dlFit(data, val, para, setup, legacy=0):
     # Post-Processing
     ###################################################################################################################
     net.load_state_dict(bestNet)
+    net = net.to('cpu')
     net.eval()
 
     ###################################################################################################################
