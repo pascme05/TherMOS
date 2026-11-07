@@ -5,7 +5,7 @@
 # File:         dlWin
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.0
+# Version:      V.1.1
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -26,6 +26,10 @@ Inputs:     1) X:       input features (Nt x F)
             6) pad:     (1) pad (inference), (0) only complete windows (training)
 Outputs:    1) Xw:      windows (Nw x W x F)
             2) yw:      targets (Nw x M) or (Nw x W x M), None if y is None
+
+V1.1: 07.11.2026, Pascal Schirmer
+- Seq2seq windows taken from a sliding window view; before, y was converted once per window and every window kept
+  its own full copy of y alive (out of memory for long profiles, e.g. tutorial_PI with 630k samples)
 """
 
 #######################################################################################################################
@@ -80,8 +84,8 @@ def dlWin(X, y, W, seq, stride=1, pad=1):
             yw = None
         else:
             starts = np.arange(0, Nt - W + 1, stride)
-            Xw = np.stack([X[s:s + W] for s in starts])
-            yw = None if y is None else np.stack([np.asarray(y, dtype=np.float32)[s:s + W] for s in starts])
+            Xw = sliding_window_view(X, W, axis=0).transpose(0, 2, 1)[starts]
+            yw = None if y is None else                 sliding_window_view(np.asarray(y, dtype=np.float32), W, axis=0).transpose(0, 2, 1)[starts]
 
     ###################################################################################################################
     # Return
