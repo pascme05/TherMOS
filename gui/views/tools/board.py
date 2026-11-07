@@ -35,7 +35,7 @@ import streamlit as st
 
 from gui.core.style import table, SERIES, SEQ, INK2, MUTED, show, line, fmt
 from gui.views.tools import _common as cm
-from src.py.board.boardLib import BOARDS, CHIPS, COOL, H_TOP
+from src.py.board.boardLib import BOARDS, CHIPS, COOL, H_TOP, LAYER_MATS, VIA_FILL, layerProps, viaK
 from src.py.board.genBoard import genBoard
 from src.py.board.calcBoardMat import calcBoardMat
 from src.py.board.simBoard import simBoard
@@ -52,20 +52,67 @@ CHIP_COLS = ['name', 'tech', 'x [mm]', 'y [mm]', 'w [mm]', 'l [mm]', 'P [W]', 'p
 DEFAULT_CHIPS = [['T1', 'Si IGBT', 15.0, 15.0, 10.0, 10.0, 60.0, 'pulse', 40.0],
                  ['D1', 'Si diode', 30.0, 15.0, 6.0, 8.0, 20.0, 'pulse', 40.0],
                  ['M1', 'SiC MOSFET', 45.0, 28.0, 4.0, 5.0, 25.0, 'sine', 60.0]]
+STACK_COLS = ['layer', 'material', 't [µm]', 'Cu coverage [%]', 'k_xy [W/mK]', 'k_z [W/mK]']
+CHIPLIB_COLS = ['technology', 'die', 't die [mm]', 'w [mm]', 'l [mm]', 'die attach', 't attach [mm]', 'P typ. [W]',
+                'T_j,max [°C]', 'note']
+SEMI = ['Si', 'SiC (4H)', 'GaN']
+ATTACH = ['SAC305 solder', 'SnPb solder', 'High-Pb solder', 'Sintered Ag']
+VIA_MODES = {'none': 'No vias', 'chips': 'Under the chips', 'all': 'Whole board'}
+STAR = '★ '
+
+
+#######################################################################################################################
+# Library (config/gui/board_lib.json: custom chips and stack-ups)
+#######################################################################################################################
+def _lib_file():
+    from gui import adapter as A
+    return os.path.join(A.ROOT, 'config', 'gui', 'board_lib.json')
+
+
+def lib_load():
+    try:
+        with open(_lib_file(), 'r', encoding='utf-8') as f:
+            d = json.load(f)
+        return {'chips': d.get('chips', {}), 'stacks': d.get('stacks', {})}
+    except (OSError, ValueError):
+        return {'chips': {}, 'stacks': {}}
+
+
+def lib_save(chips=None, stacks=None):
+    d = lib_load()
+    d['chips'].update(chips or {})
+    d['stacks'].update(stacks or {})
+    os.makedirs(os.path.dirname(_lib_file()), exist_ok=True)
+    with open(_lib_file(), 'w', encoding='utf-8') as f:
+        json.dump(d, f, indent=2, ensure_ascii=False)
+
+
+def _chip_lib():
+    """All chip technologies: built-in + custom (session, initialised from the library file)."""
+    return {**CHIPS, **st.session_state.get(f"{K}|chipLib", lib_load()['chips'])}
+
+
+def _presets():
+    return {**BOARDS, **{STAR + n: v for n, v in lib_load()['stacks'].items()}}
 
 
 #######################################################################################################################
 # Functions
 #######################################################################################################################
+def _nan(v):
+    return v is None or (isinstance(v, float) and np.isnan(v)) or (not isinstance(v, str) and pd.isna(v))
+
+
 def _layout(view):
     """Layout dictionary of genBoard from the widgets."""
     s = st.session_state
     df = s.get(f"{K}|chips_df")
+    lib = _chip_lib()
     chips = []
     for _, r in (df if df is not None else pd.DataFrame(DEFAULT_CHIPS, columns=CHIP_COLS)).iterrows():
-        if pd.isna(r['tech']) or r['tech'] not in CHIPS or pd.isna(r['x [mm]']) or pd.isna(r['y [mm]']):
+        if pd.isna(r['tech']) or r['tech'] not in lib or pd.isna(r['x [mm]']) or pd.isna(r['y [mm]']):
             continue
-        t = CHIPS[r['tech']]
+        t = lib[r['tech']]
         chips.append({'name': str(r['name']) if not pd.isna(r['name']) else r['tech'], 'tech': r['tech'],
                       'x': float(r['x [mm]']), 'y': float(r['y [mm]']),
                       'w': float(t['w'] if pd.isna(r['w [mm]']) else r['w [mm]']),
@@ -73,10 +120,33 @@ def _layout(view):
                       'P': float(t['P'] if pd.isna(r['P [W]']) else r['P [W]']),
                       'profile': r['profile'] if r['profile'] in PROFILES else 'step',
                       'period': float(40.0 if pd.isna(r['period [s]']) else r['period [s]'])})
-    return {'view': view, 'W': s.get(f"{K}|W", 60.0), 'L': s.get(f"{K}|L", 40.0),
-            'board': s.get(f"{K}|tech", 'DBC Al₂O₃ (0.38 mm)'), 'h': s.get(f"{K}|h", 5000.0),
-            'hTop': s.get(f"{K}|hTop", H_TOP), 'Ta': s.get(f"{K}|Ta", 25.0), 'dx': s.get(f"{K}|dx", 1.0),
-            'yCut': s.get(f"{K}|yCut", 15.0), 'chips': chips}
+    board = s.get(f"{K}|tech", 'DBC Al₂O₃ (0.38 mm)')
+    custom = {n: v for n, v in s.get(f"{K}|chipLib", lib_load()['chips']).items()
+              if n in {c['tech'] for c in chips}}
+    vias = {'mode': s.get(f"{K}|vmode") or 'none', 'd': s.get(f"{K}|vd", 0.3), 'tpl': s.get(f"{K}|vtpl", 25.0),
+            'pitch': s.get(f"{K}|vpitch", 1.0), 'fill': s.get(f"{K}|vfill", 'open (air)'),
+            'margin': s.get(f"{K}|vmargin", 1.0)}
+    return {'view': view, 'W': s.get(f"{K}|W", 60.0), 'L': s.get(f"{K}|L", 40.0), 'board': board,
+            'layers': s.get(f"{K}|layers") or _presets().get(board, BOARDS['DBC Al₂O₃ (0.38 mm)']),
+            'h': s.get(f"{K}|h", 5000.0), 'hTop': s.get(f"{K}|hTop", H_TOP), 'Ta': s.get(f"{K}|Ta", 25.0),
+            'dx': s.get(f"{K}|dx", 1.0), 'yCut': s.get(f"{K}|yCut", 15.0), 'chips': chips, 'chipLib': custom,
+            'vias': vias}
+
+
+def _via_regions(lay):
+    """Rectangles (x0, x1, y0, y1 in mm) of the via region."""
+    v = lay.get('vias') or {}
+    if v.get('mode') == 'all':
+        return [(0, lay['W'], 0, lay['L'])]
+    if v.get('mode') == 'chips':
+        g = float(v.get('margin', 0.0))
+        return [(max(c['x'] - c['w'] / 2 - g, 0), min(c['x'] + c['w'] / 2 + g, lay['W']),
+                 max(c['y'] - c['l'] / 2 - g, 0), min(c['y'] + c['l'] / 2 + g, lay['L'])) for c in lay['chips']]
+    return []
+
+
+def _has_fr4(lay):
+    return any(l['mat'] == 'FR4' for l in lay['layers'])
 
 
 def _profiles(lay, D, t, kind=None, seed=0):
@@ -115,6 +185,13 @@ def _top_fig(lay):
     fig = go.Figure()
     fig.add_shape(type='rect', x0=0, y0=0, x1=lay['W'], y1=lay['L'], line=dict(color=INK2, width=2),
                   fillcolor='rgba(180,170,140,0.25)')
+    if _has_fr4(lay):
+        for j, (x0, x1, y0, y1) in enumerate(_via_regions(lay)):
+            fig.add_shape(type='rect', x0=x0, x1=x1, y0=y0, y1=y1, line=dict(color=MUTED, width=1, dash='dot'),
+                          fillcolor='rgba(184,115,51,0.18)')
+        if _via_regions(lay):
+            fig.add_trace(go.Scatter(x=[None], y=[None], mode='markers', name='thermal vias (averaged)',
+                                     marker=dict(symbol='square', size=12, color='rgba(184,115,51,0.4)')))
     for i, c in enumerate(lay['chips']):
         col = SERIES[i % len(SERIES)]
         fig.add_shape(type='rect', x0=c['x'] - c['w'] / 2, x1=c['x'] + c['w'] / 2, y0=c['y'] - c['l'] / 2,
@@ -133,17 +210,27 @@ def _cut_fig(lay):
     """Cross-section of the stack-up at y = yCut (thickness not to scale with x)."""
     fig = go.Figure()
     z = 0.0
-    for i, l in enumerate(reversed(BOARDS[lay['board']])):
-        fig.add_shape(type='rect', x0=0, x1=lay['W'], y0=z, y1=z + l[2], line=dict(width=0.5, color=INK2),
-                      fillcolor='#c98b4b' if l[1] in ('Cu',) else ('#b8c2cc' if 'Al' in l[1] else '#9fc39b'),
-                      opacity=0.8)
-        fig.add_annotation(x=lay['W'] * 1.01, y=z + l[2] / 2, text=f"{l[0]} · {l[2]} mm · k={fmt(l[4])}",
-                           showarrow=False, xanchor='left', font=dict(size=10))
-        z += l[2]
+    vr = [(x0, x1) for x0, x1, y0, y1 in _via_regions(lay) if y0 <= lay['yCut'] <= y1]
+    layers = [l for l in lay['layers'] if float(l['t']) > 0]
+    tMin = 0.04 * sum(float(l['t']) for l in layers)                    # thin layers drawn with a minimum height
+    for i, l in enumerate(reversed(layers)):
+        th = max(float(l['t']), tMin)
+        kxy, kz = layerProps(l)[0:2]
+        fig.add_shape(type='rect', x0=0, x1=lay['W'], y0=z, y1=z + th, line=dict(width=0.5, color=INK2),
+                      fillcolor='#c98b4b' if l['mat'] == 'Cu' else ('#b8c2cc' if 'Al' in l['mat'] else '#9fc39b'),
+                      opacity=0.35 + 0.6 * (float(l.get('cov') or 100) / 100 if l['mat'] == 'Cu' else 0.75))
+        if l['mat'] == 'FR4':
+            for x0, x1 in vr:
+                fig.add_shape(type='rect', x0=x0, x1=x1, y0=z, y1=z + th, line=dict(width=0),
+                              fillcolor='rgba(184,115,51,0.45)')
+        fig.add_annotation(x=lay['W'] * 1.01, y=z + th / 2, text=f"{l.get('layer', '')} · {fmt(float(l['t']) * 1e3)} µm"
+                           f" · k_z={fmt(kz)}", showarrow=False, xanchor='left', font=dict(size=10))
+        z += th
+    lib = _chip_lib()
     for i, c in enumerate(lay['chips']):
         if abs(c['y'] - lay['yCut']) > c['l'] / 2:
             continue
-        t = CHIPS[c['tech']]
+        t = lib.get(c['tech'], CHIPS['Si MOSFET'])
         fig.add_shape(type='rect', x0=c['x'] - c['w'] / 2, x1=c['x'] + c['w'] / 2, y0=z, y1=z + t['t_att'],
                       fillcolor='#8a8a8a', line=dict(width=0.5))
         fig.add_shape(type='rect', x0=c['x'] - c['w'] / 2, x1=c['x'] + c['w'] / 2, y0=z + t['t_att'],
@@ -163,8 +250,10 @@ def board_inputs():
     cm.section(1, "Board and cooling", "Board technology (stack-up from the material library), size, cooling of the "
                                         "bottom side and ambient temperature.", divider=False)
     c = st.columns(4)
-    tech = c[0].selectbox("Board technology", list(BOARDS), index=list(BOARDS).index('DBC Al₂O₃ (0.38 mm)'),
-                          key=f"{K}|tech", help="Layer stack-up of the board (top → bottom), see the table below.")
+    pre = _presets()
+    tech = c[0].selectbox("Board technology", list(pre), index=list(pre).index('DBC Al₂O₃ (0.38 mm)'),
+                          key=f"{K}|tech", help="Preset of the layer stack-up (top → bottom). It fills the stack-up "
+                                                "table below, which can be edited. ★: stack-ups from your library.")
     cm.num(c[1], "Width W (mm)", 60.0, 'board|W', min_value=5.0, max_value=500.0, step=5.0)
     cm.num(c[2], "Length L (mm)", 40.0, 'board|L', min_value=5.0, max_value=500.0, step=5.0)
     cm.num(c[3], "Ambient / coolant T_a (°C)", 25.0, 'board|Ta', min_value=-40.0, max_value=150.0)
@@ -179,20 +268,137 @@ def board_inputs():
     cm.num(c[2], "h top (W/m²K)", H_TOP, 'board|hTop', min_value=0.0, help="Natural convection on the top side.")
     cm.num(c[3], "Grid spacing dx (mm)", 1.0, 'board|dx', min_value=0.1, max_value=10.0, step=0.25,
            help="Node spacing of the finite-volume grid (dx = dy). Chips should span at least 3 nodes.")
-    rows = [{'layer': l[0], 'material': l[1], 't (mm)': l[2], 'k in-plane (W/mK)': l[3], 'k through (W/mK)': l[4],
-             'ρ (kg/m³)': l[5], 'c (J/kgK)': l[6]} for l in BOARDS[tech]]
-    with st.expander(f"Stack-up of '{tech}' (top → bottom)", icon=':material/layers:'):
-        table(pd.DataFrame(rows), hide_index=True)
-        cm.refs(['Incropera2007', 'Wintrich2015'])
+    stack_inputs(tech, pre[tech])
+    via_inputs()
+
+
+def stack_inputs(tech, preset):
+    """Editable stack-up (top → bottom), starting from the preset."""
+    s = st.session_state
+    ver = s.get(f"{K}|stackver", 0)
+    df0 = pd.DataFrame([{'layer': l.get('layer', ''), 'material': l['mat'], 't [µm]': float(l['t']) * 1e3,
+                         'Cu coverage [%]': float(l.get('cov', 100.0)) if l['mat'] == 'Cu' else None,
+                         'k_xy [W/mK]': l.get('kxy'), 'k_z [W/mK]': l.get('kz')} for l in preset], columns=STACK_COLS)
+    with st.container(border=True):
+        st.markdown(f"**:material/layers: Stack-up** (top → bottom), from '{tech}'")
+        df = st.data_editor(df0, key=f"{K}|stack|{tech}|{ver}", num_rows='dynamic', hide_index=True, width='stretch',
+                            column_config={
+                                'material': st.column_config.SelectboxColumn('material', options=LAYER_MATS,
+                                                                             required=True, help="FR4: glass-epoxy "
+                                                                             "laminate (k_xy 0.8, k_z 0.3 W/mK)."),
+                                't [µm]': st.column_config.NumberColumn(min_value=0.0, format='%.0f'),
+                                'Cu coverage [%]': st.column_config.NumberColumn(
+                                    min_value=0.0, max_value=100.0, format='%.0f', help="Copper area of a patterned "
+                                    "Cu layer (signal ≈ 30–50 %, plane ≈ 90 %), the rest is laminate. Empty = 100 %."),
+                                'k_xy [W/mK]': st.column_config.NumberColumn(format='%g', help="Optional override of "
+                                                                             "the in-plane conductivity."),
+                                'k_z [W/mK]': st.column_config.NumberColumn(format='%g', help="Optional override of "
+                                                                            "the through-plane conductivity.")})
+        layers = []
+        for _, r in df.iterrows():
+            if _nan(r['material']) or r['material'] not in LAYER_MATS or _nan(r['t [µm]']) or r['t [µm]'] <= 0:
+                continue
+            layers.append({'layer': '' if _nan(r['layer']) else str(r['layer']), 'mat': r['material'],
+                           't': float(r['t [µm]']) * 1e-3,
+                           'cov': 100.0 if _nan(r['Cu coverage [%]']) else float(r['Cu coverage [%]']),
+                           'kxy': None if _nan(r['k_xy [W/mK]']) else float(r['k_xy [W/mK]']),
+                           'kz': None if _nan(r['k_z [W/mK]']) else float(r['k_z [W/mK]'])})
+        if not layers:
+            st.warning("The stack-up is empty — the preset is used.", icon=':material/warning:')
+            layers = [dict(l) for l in preset]
+        s[f"{K}|layers"] = layers
+        props = [layerProps(l) for l in layers]
+        t = np.array([l['t'] for l in layers]) * 1e-3
+        tb = t.sum()
+        Rz = float(np.sum(t / np.array([p[1] for p in props])))
+        c = st.columns([1, 1, 1, 2], vertical_alignment='bottom')
+        c[0].metric("Thickness t_b", f"{fmt(tb * 1e3)} mm")
+        c[1].metric("k_eff in-plane", f"{fmt(np.sum([p[0] * ti for p, ti in zip(props, t)]) / tb)} W/mK",
+                    help="Thickness-weighted in-plane conductivity Σ k_xy,l t_l / t_b (spreading).")
+        c[2].metric("R_z (through)", f"{fmt(Rz * 1e6)} K·mm²/W", help="Σ t_l / k_z,l: resistance of 1 mm² of board "
+                                                                       "from top to bottom (without vias).")
+        with c[3]:
+            b = st.columns(2)
+            if b[0].button("Reset to preset", icon=':material/restart_alt:', key=f"{K}|stackreset", width='stretch'):
+                s[f"{K}|stackver"] = ver + 1
+                st.rerun()
+            with b[1].popover("Save to library", icon=':material/bookmark_add:', width='stretch'):
+                nm = st.text_input("Name of the stack-up", tech.replace(STAR, '') + ' (custom)', key=f"{K}|stackname")
+                if st.button("Save", key=f"{K}|stacksave", icon=':material/save:') and nm.strip():
+                    lib_save(stacks={nm.strip(): layers})
+                    st.toast(f"Stack-up '{nm.strip()}' saved to config/gui/board_lib.json", icon=':material/check:')
+        with st.expander("Layer properties (computed)", icon=':material/calculate:'):
+            table(pd.DataFrame([{'layer': l['layer'], 'material': l['mat'], 't (µm)': l['t'] * 1e3,
+                                 'k_xy (W/mK)': p[0], 'k_z (W/mK)': p[1], 'ρ (kg/m³)': p[2], 'c (J/kgK)': p[3],
+                                 't/k_z (K·mm²/W)': l['t'] * 1e-3 / p[1] * 1e6} for l, p in zip(layers, props)]),
+                  hide_index=True)
+            st.caption("Patterned Cu layers: k_xy = c·k_Cu + (1 − c)·k_FR4,xy (parallel), k_z = 1/(c/k_Cu + "
+                       "(1 − c)/k_FR4,z) (series) with the coverage c [Shabany 2010].")
+            cm.refs(['Incropera2007', 'Wintrich2015'])
+
+
+def via_inputs():
+    """Averaged thermal vias through the FR4 layers."""
+    s = st.session_state
+    with st.container(border=True):
+        st.markdown("**:material/blur_on: Thermal vias** (averaged over the via array, through the FR4 layers)")
+        c = st.columns([2, 1, 1, 1, 1.4, 1])
+        mode = c[0].segmented_control("Vias", list(VIA_MODES), format_func=VIA_MODES.get, default='none',
+                                      key=f"{K}|vmode", help="Under the chips: footprint of every chip plus the "
+                                      "margin. Whole board: the via array covers the board.") or 'none'
+        on = mode != 'none'
+        cm.num(c[1], "Drill d (mm)", 0.3, 'board|vd', min_value=0.05, max_value=2.0, step=0.05, disabled=not on)
+        cm.num(c[2], "Plating (µm)", 25.0, 'board|vtpl', min_value=5.0, max_value=100.0, step=5.0, disabled=not on)
+        cm.num(c[3], "Pitch (mm)", 1.0, 'board|vpitch', min_value=0.2, max_value=10.0, step=0.1, disabled=not on,
+               help="Distance of the vias in a square array.")
+        c[4].selectbox("Fill", list(VIA_FILL), key=f"{K}|vfill", disabled=not on, help="Open vias conduct only "
+                       "through the copper barrel; filled vias also through the filling.")
+        cm.num(c[5], "Margin (mm)", 1.0, 'board|vmargin', min_value=0.0, max_value=20.0, disabled=not on or mode != 'chips',
+               help="Extension of the via region beyond the chip footprint.")
+        if on:
+            v = {'d': s[f"{K}|vd"], 'tpl': s[f"{K}|vtpl"], 'pitch': s[f"{K}|vpitch"], 'fill': s[f"{K}|vfill"]}
+            if v['d'] >= v['pitch']:
+                st.warning("The drill is larger than the pitch.", icon=':material/warning:')
+            r, ri = v['d'] / 2, max(v['d'] / 2 - v['tpl'] * 1e-3, 0)
+            phi = np.pi * (r ** 2 - ri ** 2) / v['pitch'] ** 2
+            layers = s.get(f"{K}|layers") or []
+            if not any(l['mat'] == 'FR4' for l in layers):
+                st.info("The stack-up has no FR4 layer — vias have no effect (ceramic and IMS boards conduct through "
+                        "the substrate).", icon=':material/info:')
+            else:
+                st.caption(f"Copper area of the barrels φ_Cu = {100 * phi:.2f} % → k_z of FR4 in the via region "
+                           f"{fmt(viaK(v, 0.3))} W/mK instead of 0.3 W/mK (×{fmt(viaK(v, 0.3) / 0.3)}). The in-plane "
+                           f"conductivity is not changed.")
 
 
 def chip_inputs():
     cm.section(2, "Chips", "One row per chip: technology, centre position (x, y from the lower left corner of the "
                            "board), footprint, loss and loss profile. Empty w, l or P take the values of the "
                            "technology. Rows can be added at the bottom and deleted with the row menu.")
-    df0 = pd.DataFrame(DEFAULT_CHIPS, columns=CHIP_COLS)
-    df = st.data_editor(df0, key=f"{K}|chips", num_rows='dynamic', hide_index=True, width='stretch', column_config={
-        'tech': st.column_config.SelectboxColumn('tech', options=list(CHIPS), required=True,
+    s = st.session_state
+    lib = _chip_lib()
+    ver = s.get(f"{K}|chipver", 0)
+    df0 = s.get(f"{K}|chips_base")
+    if df0 is None:
+        df0 = pd.DataFrame(DEFAULT_CHIPS, columns=CHIP_COLS)
+    with st.container(border=True):
+        c = st.columns([2, 1, 1, 1, 1], vertical_alignment='bottom')
+        nt = c[0].selectbox("Add a chip", list(lib), key=f"{K}|addtech", help="Technology of the new chip.")
+        ax = cm.num(c[1], "x (mm)", 10.0, 'board|addx', min_value=0.0)
+        ay = cm.num(c[2], "y (mm)", 10.0, 'board|addy', min_value=0.0)
+        ap = cm.num(c[3], "P (W)", float(lib[nt]['P']), f'board|addp|{nt}', min_value=0.0)
+        if c[4].button("Add chip", icon=':material/add_circle:', key=f"{K}|add", width='stretch'):
+            cur = s.get(f"{K}|chips_df", df0)
+            pre = ''.join(w[0] for w in nt.split()[-1:]).upper() or 'C'
+            n = 1 + sum(str(x).startswith(pre) for x in cur['name'])
+            row = pd.DataFrame([[f"{pre}{n}", nt, ax, ay, lib[nt]['w'], lib[nt]['l'], ap, 'step', 40.0]],
+                               columns=CHIP_COLS)
+            s[f"{K}|chips_base"] = pd.concat([cur, row], ignore_index=True)
+            s[f"{K}|chipver"] = ver + 1
+            st.rerun()
+    df = st.data_editor(df0, key=f"{K}|chips|{ver}", num_rows='dynamic', hide_index=True, width='stretch',
+                        column_config={
+        'tech': st.column_config.SelectboxColumn('tech', options=list(lib), required=True,
                                                  help="Chip technology (die material, thickness, die attach)."),
         'profile': st.column_config.SelectboxColumn('profile', options=PROFILES, help="Loss profile P(t): step, "
                                                     "pulse (50 % duty), sine (between P/3 and P), random levels."),
@@ -201,10 +407,44 @@ def chip_inputs():
         'period [s]': st.column_config.NumberColumn(format='%.0f', help="Period of pulse/sine, 4× hold of random.")})
     st.session_state[f"{K}|chips_df"] = df
     with st.expander("Chip technologies", icon=':material/memory:'):
+        st.markdown("**Built-in**")
         table(pd.DataFrame([{'technology': n, 'die': c['mat'], 't die (mm)': c['t'], 'w × l (mm)': f"{c['w']} × "
                              f"{c['l']}", 'die attach': c['attach'], 't attach (mm)': c['t_att'], 'P typ. (W)': c['P'],
                              'T_j,max (°C)': c['Tjmax'], 'note': c['note']} for n, c in CHIPS.items()]),
               hide_index=True)
+        chip_lib_editor()
+
+
+def chip_lib_editor():
+    """Own chip technologies (session + library file)."""
+    s = st.session_state
+    st.markdown("**Own technologies** — add rows; they can be used in the chip table right away and saved to the "
+                "library (config/gui/board_lib.json).")
+    own = s.get(f"{K}|chipLib", lib_load()['chips'])
+    df0 = pd.DataFrame([[n, c['mat'], c['t'], c['w'], c['l'], c['attach'], c['t_att'], c['P'], c['Tjmax'],
+                         c.get('note', '')] for n, c in own.items()], columns=CHIPLIB_COLS)
+    if df0.empty:
+        df0 = pd.DataFrame({c: pd.Series(dtype=str if c in ('technology', 'die', 'die attach', 'note') else float)
+                            for c in CHIPLIB_COLS})
+    df = st.data_editor(df0, key=f"{K}|chiplib", num_rows='dynamic', hide_index=True, width='stretch', column_config={
+        'die': st.column_config.SelectboxColumn('die', options=SEMI, required=True),
+        'die attach': st.column_config.SelectboxColumn('die attach', options=ATTACH, required=True)})
+    lib = {}
+    for _, r in df.iterrows():
+        if _nan(r['technology']) or str(r['technology']).strip() in CHIPS or any(
+                _nan(r[k]) for k in CHIPLIB_COLS[1:9]):
+            continue
+        lib[str(r['technology']).strip()] = dict(mat=r['die'], t=float(r['t die [mm]']), w=float(r['w [mm]']),
+                                                 l=float(r['l [mm]']), attach=r['die attach'],
+                                                 t_att=float(r['t attach [mm]']), P=float(r['P typ. [W]']),
+                                                 Tjmax=float(r['T_j,max [°C]']),
+                                                 note='' if _nan(r['note']) else str(r['note']))
+    if lib != own:
+        s[f"{K}|chipLib"] = lib
+        st.rerun()
+    if st.button("Save own technologies to the library", icon=':material/bookmark_add:', key=f"{K}|chipsave"):
+        lib_save(chips=lib)
+        st.toast(f"{len(lib)} chip technologies saved to config/gui/board_lib.json", icon=':material/check:')
 
     lay = _layout('xy')
     out = [c['name'] for c in lay['chips'] if c['x'] - c['w'] / 2 < 0 or c['x'] + c['w'] / 2 > lay['W']
@@ -425,6 +665,11 @@ def interpretation(res, Tj, rom, err):
                  f"better ceramic spreads the heat (larger k_eff); better cooling raises h_eff. The spreading length "
                  f"√(k_eff t_b / h_eff) = {fmt(np.sqrt(D['kEff'] * D['tb'] / D['hEff']) * 1e3)} mm tells how far the "
                  f"heat of a chip spreads — chips closer than about twice this length heat each other.")
+        if D['via'].any():
+            p.append(f"The thermal vias lower the through-plane resistance of the board from {fmt(D['Rz'] * 1e6)} to "
+                     f"{fmt(D['RzVia'] * 1e6)} K mm²/W in the via region, i.e. h_eff rises from {fmt(D['hEff'])} to "
+                     f"{fmt(D['hEffVia'])} W/(m² K) under the chips — compare the junction temperatures with "
+                     f"'No vias' to see the benefit.")
     else:
         p.append("The cross-section resolves every layer, so the temperature drop across the die attach, the "
                  "ceramic and the cooling interface is visible directly. It neglects the spreading along y, so it "
@@ -459,6 +704,11 @@ def page():
                            r"h_v = h_{eff}/t_b,\quad Q = \frac{P}{A_{chip} t_b}"], None),
         ("Finite volumes", [r"C\,\dot\theta = -G\,\theta + B\,P,\quad C_i = (\rho c)_i V_i,\quad G_{ij} = "
                             r"-\frac{A_{ij}}{d/2k_i + d/2k_j}"], "Vertex-centred control volumes, implicit Euler."),
+        ("Copper coverage and vias", [r"k_{xy} = c\,k_{Cu} + (1-c)\,k_{FR4,xy},\quad k_z = \left(\frac{c}{k_{Cu}} + "
+                                      r"\frac{1-c}{k_{FR4,z}}\right)^{-1},\quad k_{z,via} = \varphi_{Cu} k_{Cu} + "
+                                      r"\varphi_h k_{fill} + (1-\varphi_{Cu}-\varphi_h)\,k_{FR4,z}"],
+         "Patterned Cu layer with coverage c; FR4 in the via region with the area fractions of the barrels φ_Cu = "
+         "π(r² − (r − t_pl)²)/p² and of the holes φ_h."),
         ("Junction temperature", [r"T_j = \max_{chip} T + P\,R_{jb},\quad R_{jb} = \frac{t_{die}/k_{die} + "
                                   r"t_{att}/k_{att}}{w\,l}"], "Top view; the cross-section resolves the die."),
     ], sym=[('k_xy, k_z', 'in-plane and through-plane conductivity of layer l', 'W/(m K)'),
@@ -466,5 +716,7 @@ def page():
                                                              'W/(m² K)'),
             ('h_v', 'distributed heat sink', 'W/(m³ K)'), ('Q', 'volumetric heat source', 'W/m³'),
             ('V_i, A_ij, d', 'control volume, face area, node distance', 'm², m, m (per m depth)'),
-            ('R_jb', 'junction-to-board resistance of die and die attach', 'K/W')], title="Model equations")
+            ('R_jb', 'junction-to-board resistance of die and die attach', 'K/W'),
+            ('c', 'copper coverage of a layer', '–'), ('p, r, t_pl', 'via pitch, drill radius, plating thickness',
+                                                       'm')], title="Model equations")
     interpretation(res, Tj, rom, err)

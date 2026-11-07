@@ -5,7 +5,7 @@
 # File:         genBoard
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.0
+# Version:      V.1.1
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -34,11 +34,22 @@ available:
    (k: x direction, ky: z direction). Only chips cut by y = yCut are included; their heat Q = P/(w·t_die·l) assumes
    no spreading along y (2D cross-section).
 
-Inputs:     1) layout:  board layout {'view', 'W', 'L' (mm), 'board', 'h' (W/m²K), 'hTop' (W/m²K), 'Ta' (°C),
-                        'dx' (mm), 'yCut' (mm), 'chips': [{'name', 'tech', 'x', 'y', 'w', 'l' (mm), ...}]}
+Thermal vias (layout['vias'], averaged, boardLib.viaK) raise the through-plane conductivity of all FR4 layers in
+the via region (under every chip plus a margin, or the whole board): in the top view through a smaller local
+stack-up resistance R_z(x, y) and therefore a larger local h_eff(x, y); in the cross-section through k_z of the FR4
+cells in the via columns.
+
+Inputs:     1) layout:  board layout {'view', 'W', 'L' (mm), 'board' (preset), 'layers' (stack-up, top → bottom,
+                        optional, replaces the preset), 'h' (W/m²K), 'hTop' (W/m²K), 'Ta' (°C), 'dx' (mm), 'yCut'
+                        (mm), 'chips': [{'name', 'tech', 'x', 'y', 'w', 'l' (mm), ...}], 'chipLib' (custom chip
+                        technologies, optional), 'vias': {'mode': 'none' | 'chips' | 'all', 'd' (mm), 'tpl' (µm),
+                        'pitch' (mm), 'fill', 'margin' (mm)} (optional)}
 Outputs:    1) D:       field data (TherMOS format, SI units): geo, k, ky, rho, Cp, hv, hc, Ta, fl, dx, dy, Lx, Ly,
                         B (N x nChips, W/m³ per W of every chip), Rjb (K/W per chip), shape (ny, nx), wA (N, control
-                        volume per cell volume: 1, 1/2 on edges, 1/4 in corners), chips (used)
+                        volume per cell volume: 1, 1/2 on edges, 1/4 in corners), chips (used), via (via mask)
+
+V1.1: 07.11.2026, Pascal Schirmer
+- Stack-up from the layout (layers with copper coverage), custom chip technologies, averaged thermal vias
 """
 
 #######################################################################################################################
@@ -47,7 +58,7 @@ Outputs:    1) D:       field data (TherMOS format, SI units): geo, k, ky, rho, 
 # ==============================================================================
 # Internal
 # ==============================================================================
-from src.py.board.boardLib import BOARDS, CHIPS, H_TOP
+from src.py.board.boardLib import BOARDS, CHIPS, H_TOP, layerProps, viaK
 from src.py.tools.toolData import MATERIALS
 
 # ==============================================================================
@@ -59,9 +70,9 @@ import numpy as np
 #######################################################################################################################
 # Additional Functions
 #######################################################################################################################
-def _chip(c):
+def _chip(c, lib):
     """Chip with the defaults of its technology."""
-    t = CHIPS[c.get('tech', 'Si MOSFET')]
+    t = lib.get(c.get('tech', 'Si MOSFET'), CHIPS['Si MOSFET'])
     out = {**t, **{k: v for k, v in c.items() if v is not None}}
     out['w'], out['l'] = float(out['w']), float(out['l'])
     return out
@@ -80,6 +91,20 @@ def _mat(name):
     return k, rho, cp
 
 
+def _viaMask(X, Y, chips, vias):
+    """Nodes in the via region (under every chip plus the margin, or everywhere)."""
+    mode = (vias or {}).get('mode', 'none')
+    if mode == 'all':
+        return np.ones(X.shape, dtype=bool)
+    m = np.zeros(X.shape, dtype=bool)
+    if mode == 'chips':
+        g = float(vias.get('margin', 0.0)) * 1e-3
+        for c in chips:
+            m |= (np.abs(X - c['x'] * 1e-3) <= c['w'] * 5e-4 + g + 1e-9) & \
+                 (np.abs(Y - c['y'] * 1e-3) <= c['l'] * 5e-4 + g + 1e-9)
+    return m
+
+
 #######################################################################################################################
 # Main Function
 #######################################################################################################################
@@ -95,8 +120,12 @@ def genBoard(layout):
     dx = float(layout.get('dx', 1.0)) * 1e-3
     h, hTop = float(layout.get('h', 1500.0)), float(layout.get('hTop', H_TOP))
     Ta = float(layout.get('Ta', 25.0))
-    layers = BOARDS[layout['board']]
-    chips = [_chip(c) for c in layout.get('chips', [])]
+    stack = layout.get('layers') or BOARDS[layout['board']]
+    layers = [(l.get('layer', ''), l['mat'], float(l['t'])) + layerProps(l) for l in stack if float(l['t']) > 0]
+    lib = {**CHIPS, **(layout.get('chipLib') or {})}
+    chips = [_chip(c, lib) for c in layout.get('chips', [])]
+    vias = layout.get('vias') or {'mode': 'none'}
+    isFR4 = np.array([l[1] == 'FR4' for l in layers])
 
     # ==============================================================================
     # Variables
@@ -124,6 +153,11 @@ def genBoard(layout):
         rho = np.sum([l[5] * ti for l, ti in zip(layers, t)]) / tb
         Rz = np.sum([ti / l[4] for l, ti in zip(layers, t)])
         hEff = 1.0 / (Rz + 1.0 / max(h, 1e-9)) + hTop
+        via = _viaMask(X, Y, chips, vias) if isFR4.any() else np.zeros((ny, nx), dtype=bool)
+        RzV = np.sum([ti / (viaK(vias, l[4]) if f else l[4]) for l, ti, f in zip(layers, t, isFR4)]) if via.any() \
+            else Rz
+        hEffV = 1.0 / (RzV + 1.0 / max(h, 1e-9)) + hTop
+        HV = np.where(via, hEffV, hEff) / tb
         K = np.full((ny, nx), kxy)
         RC = np.full((ny, nx), rc)
         B, Rjb, used = [], [], []
@@ -143,7 +177,8 @@ def genBoard(layout):
             Rjb.append((c['t'] * 1e-3 / kd + c['t_att'] * 1e-3 / ka) / (c['w'] * c['l'] * 1e-6))
             used.append(c)
         D.update({'k': K.ravel(), 'ky': K.ravel(), 'rho': np.full(nx * ny, rho), 'Cp': RC.ravel() / rho,
-                  'hv': np.full(nx * ny, hEff / tb), 'tb': tb, 'kEff': kxy, 'hEff': hEff, 'Rz': Rz})
+                  'hv': HV.ravel(), 'tb': tb, 'kEff': kxy, 'hEff': hEff, 'Rz': Rz, 'hEffVia': hEffV, 'RzVia': RzV,
+                  'via': via.ravel()})
 
     # ==============================================================================
     # Cross-Section
@@ -151,7 +186,7 @@ def genBoard(layout):
     else:
         yCut = float(layout.get('yCut', layout['L'] / 2)) * 1e-3
         used = [c for c in chips if abs(c['y'] * 1e-3 - yCut) <= c['l'] * 5e-4]
-        stack = list(reversed(layers))                                                           # bottom → top
+        stack = list(reversed(layers))                                                          # bottom → top
         tMin = min([l[2] for l in stack] + [c['t'] for c in used] + [c['t_att'] for c in used]) * 1e-3
         tTot = sum(l[2] for l in stack) * 1e-3 + max([(c['t'] + c['t_att']) * 1e-3 for c in used] + [0.0])
         dz = max(tMin, tTot / 150.0)
@@ -159,9 +194,11 @@ def genBoard(layout):
         x = np.arange(nx) * dx
 
         # Rows of the board
-        rows = []
+        rows, fr4 = [], []
         for l in stack:
-            rows += [(l[3], l[4], l[5] * l[6], l[5])] * max(1, int(round(l[2] * 1e-3 / dz)))
+            n = max(1, int(round(l[2] * 1e-3 / dz)))
+            rows += [(l[3], l[4], l[5] * l[6], l[5])] * n
+            fr4 += [l[1] == 'FR4'] * n
         nb = len(rows)
         nTop = max([max(1, int(round(c['t_att'] * 1e-3 / dz))) + max(1, int(round(c['t'] * 1e-3 / dz)))
                     for c in used] + [0]) + 1
@@ -174,6 +211,12 @@ def genBoard(layout):
         RHO = np.full((nz, nx), ra)
         for j, (kxy, kz, rc, rho) in enumerate(rows):
             Kx[j], Kz[j], RC[j], RHO[j] = kxy, kz, rc, rho
+
+        # Vias (columns of the via region at y = yCut)
+        via = _viaMask(x[None, :], np.full((1, nx), yCut), chips, vias)[0]
+        if via.any():
+            for j in np.where(fr4)[0]:
+                Kz[j, via] = viaK(vias, rows[j][1])
 
         # Chips
         B, Rjb = [], []
@@ -201,7 +244,8 @@ def genBoard(layout):
         y = np.arange(nz) * dz
         ny, dyv = nz, dz
         D.update({'k': Kx.ravel(), 'ky': Kz.ravel(), 'rho': RHO.ravel(), 'Cp': (RC / RHO).ravel(), 'hv': HV.ravel(),
-                  'tb': nb * dz, 'nBoard': nb})
+                  'tb': nb * dz, 'nBoard': nb, 'via': np.tile(via, (nz, 1)).ravel() & np.repeat(
+                      np.r_[np.array(fr4, dtype=bool), np.zeros(nz - nb, dtype=bool)], nx)})
 
     ###################################################################################################################
     # Post-Processing

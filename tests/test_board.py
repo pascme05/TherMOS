@@ -76,3 +76,41 @@ def test_transient_and_rom():
     rom = romBoard(C, G, Bp, T, 25, 10)
     Tr = simRom(rom, P, 1.0, 25, nSub=2)
     assert np.abs(Tr - T).max() < 0.02 * (T.max() - 25)
+
+
+def test_coverage_and_six_layer():
+    from src.py.board.boardLib import BOARDS, layerProps
+    assert np.allclose(layerProps({'mat': 'Cu', 't': 0.035, 'cov': 100})[0:2], (390.0, 390.0))
+    for name in ('FR4 6-layer, 35 µm Cu', 'FR4 6-layer, 70 µm Cu'):
+        assert abs(sum(l['t'] for l in BOARDS[name]) - 1.6) < 5e-3
+        test_lay = dict(LAY, board=name, chips=[{'tech': 'Si MOSFET', 'x': 20, 'y': 15, 'w': 50, 'l': 40, 'P': 2.0}])
+        D = genBoard(test_lay)
+        _, Tss = simBoard(*calcBoardMat(D), np.full((2, 1), 2.0), 1.0, 25)
+        assert np.allclose(Tss - 25, 2.0 / (D['hEff'] * 0.040 * 0.030), rtol=1e-9)
+
+
+def test_vias():
+    base = dict(LAY, board='FR4 4-layer, 35 µm Cu planes')
+    vias = {'mode': 'chips', 'd': 0.3, 'tpl': 25, 'fill': 'open (air)', 'margin': 1.0}
+    for view in ('xy', 'xz'):
+        D0 = genBoard(dict(base, view=view))
+        D1 = genBoard(dict(base, view=view, vias=dict(vias, mode='none', pitch=1.0)))
+        assert np.array_equal(D0['hv'], D1['hv']) and np.array_equal(D0['ky'], D1['ky'])
+        tj = []
+        for pitch in (3.0, 1.5, 1.0, 0.7):
+            D = genBoard(dict(base, view=view, vias=dict(vias, pitch=pitch)))
+            C, G, Bp = calcBoardMat(D)
+            P = np.array([[30.0, 15.0][0:len(D['chips'])]] * 2)
+            _, Tss = simBoard(C, G, Bp, P, 1.0, 25)
+            d = D['tb'] if view == 'xy' else D['chips'][0]['l'] * 1e-3
+            assert np.isclose(np.sum(D['wA'] * D['hv'] * (Tss - 25)) * D['dx'] * D['dy'] * d, P[-1].sum(), rtol=1e-8)
+            tj.append(Tss.max())
+        assert np.all(np.diff(tj) < 0)
+
+
+def test_custom_stack_and_chip():
+    lay = dict(LAY, layers=[{'layer': 'Cu', 'mat': 'Cu', 't': 0.5}], chipLib={'myChip': dict(
+        mat='Si', t=0.2, w=4.0, l=4.0, attach='Sintered Ag', t_att=0.05, P=5.0, Tjmax=150.0, note='')},
+        chips=[{'tech': 'myChip', 'x': 20, 'y': 15, 'P': 5.0}])
+    D = genBoard(lay)
+    assert np.isclose(D['kEff'], 390.0) and D['chips'][0]['Tjmax'] == 150.0
