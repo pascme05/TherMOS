@@ -96,10 +96,12 @@ python start_gui.py                      # opens http://localhost:8501
   - power losses and thermal stack;
   - thermal networks (Foster/Cauer, structure function);
   - MOR & POD;
-  - numerics;
+  - numerics (time integration, quadrature weights, calibration of the reduced matrices);
   - the **board designer**: chips on an editable stack-up (FR4 2/4/6-layer, IMS, DBC/AMB) with averaged thermal
-    vias, top view and cross-section, POD reduced model, and export of the data as a TherMOS data set for the
-    PO/PS modes.
+    vias and layers below the board (gap filler, heat sink), top view and cross-section, POD reduced model, and
+    export of the data as a TherMOS data set for the PO/PS modes.
+- **Field insight:** line profiles, z slices and probes over time for all 2D/3D fields.
+- **GPU:** `Mdl › gen › dev = 1` trains DL/PI on CUDA (needs a CUDA build of PyTorch).
 - **Tutorials:** at least one per mode, plus board → PO, grid search, optimisation and feature selection.
 
 The user guide is `docu/GUI.md`; it is also shown in the GUI under *Help › Documentation*.

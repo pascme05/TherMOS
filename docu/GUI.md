@@ -53,7 +53,7 @@ Every page has the views below:
 |---|---|---|---|---|
 | RC | Foster network with K RC pairs, output-error fit | – | 1D | Fit of K = 1…6 pairs to a known 4-pair heat path; Z_th, error over K |
 | SS | Linear state space (N4SID/MOESP, optional output-error refinement) | – | 1D | Identification of a 3-node chain; singular values, poles, step test |
-| SF | Nodal Foster network C·dT/dt = P − G·T (experimental) | – | 1D | Two coupled chips; self- and cross-heating, R_th matrix |
+| SF | Coupled Cauer network: one ladder per heat source, couplings at every stage, fitted to any profiles (sub-mode 1: nodal Foster from single-source experiments) | – | 1D | Full bridge with 4 chips; self- and cross-heating, R_th matrix |
 | PO | POD-Galerkin, 6 calibration protocols | – | 2D | DBC board with two chips; energy, modes, error over K, effect of the cooling term h_v |
 | PS | POD + identified modal state space | 2D / 3D | 2D/3D | Same board; identified modal dynamics vs. Galerkin |
 | ML | Static regression on (rolled) features | LR, tree, SVR, GPR, ensemble, MLP | 1D | Linear regression with and without EWMA features |
@@ -65,11 +65,23 @@ Every page has the views below:
   - the training history;
   - for PI, the data loss and the physics loss separately;
   - the architecture of the trained network.
-- The PINN uses the lumped stator model `C_th·dT/dt = (T_amb − T)/R_th + 3·R_s·I_s²`. It needs T_amb as input
-  feature 2 and I_s as feature 4.
+- The PINN adds the residual of a lumped model of one output (`Mdl › pinn › node`):
+  `C_th·dT/dt = (T_ref − T)/R_th + P_v`.
+  - P_v is an input feature (`PvSrc = k`) or an equation (`PvSrc = 0`, `PvEq`) of the inputs `x1, x2, …` (raw
+    units), the predicted temperature `T` and the constants `Rth, Cth, Rs` and those of `const` (`a=1; b=2`).
+    Allowed: `+ − * / **`, `abs sqrt exp log sin cos tan tanh minimum maximum where`. Example with the
+    temperature-dependent copper resistance: `3*Rs*(1+0.00393*(T-20))*x4**2`.
+  - T_ref is an input feature (`TrefSrc = k`) or the constant `Tref` (`TrefSrc = 0`).
+  - The equation is checked before training; the PI theory page evaluates it at an operating point.
+  - The network follows the sub-mode (CNN, LSTM, CNN + LSTM).
 - The physics weight β (`Mdl › pinn › beta`) is 0 by default, as in MATLAB. The network then trains on the data
   only.
-- DL and PI training on the CPU takes minutes to hours.
+- DL and PI training on the CPU takes minutes to hours. `Mdl › gen › dev = 1` trains on the GPU (CUDA). This needs
+  a CUDA build of PyTorch, e.g. `pip install torch --index-url https://download.pytorch.org/whl/cu126`; otherwise a
+  warning is printed and the CPU is used. The ML models (scikit-learn) always run on the CPU.
+
+- PO/PS results and the 2D/3D data viewer have a z slider (3D), line profiles T(x), T(y) through any point and
+  probes over time (hot spot, coolest node, mean, any point) with the error at the probes.
 
 ## 4. Study (grid search, optimisation, feature selection)
 
@@ -99,7 +111,7 @@ Self-contained calculators. They do not change the configuration.
 | Thermal stack | Junction-to-coolant stack with spreading, Foster/Cauer networks (from OPTELIA) |
 | Thermal networks | Sketch of a heat path next to its Foster and Cauer networks; Foster → Cauer conversion, Z_th, structure function, pulse response (rcSim) |
 | MOR & POD | Sketch of the POD pipeline; POD-Galerkin vs. modal truncation on a 1D rod |
-| Numerics | Sketch of the rod with control volumes and its RC ladder; explicit/implicit/Crank-Nicolson, stability, stiffness, grid convergence |
+| Numerics | Sketch of the rod with control volumes and its RC ladder; explicit/implicit/Crank-Nicolson, stability, stiffness, grid convergence; quadrature weights W, relative element size J (legacy) and the calibration of C_th/G_th (rcond, prior λ, SF bounds) with explorers |
 | Board designer | 2D board model, POD reduced model, export to the PO/PS modes (section 6) |
 
 ## 6. Board designer
@@ -119,6 +131,14 @@ The board designer builds a finite-volume model of a board with chips. The model
 - The 6-layer presets use signal layers with 40 % and planes with 90 % coverage.
 - *Save to library* stores the stack-up in `config/gui/board_lib.json`. Saved stack-ups appear in the preset list
   marked ★.
+
+**Below the board**
+- A preset (none, gap filler 2 mm + Al heat sink 5 mm, gap pad + Al housing, grease + Al heat sink, insulating foil
+  + Cu cold plate) fills an editable table (top → bottom): layer, material, thickness in mm, optional k.
+- The cooling h then acts on the bottom of the last layer.
+- Top view: the layers form a second plane (heat sink temperature T₂), coupled to the board through the stack-up and
+  the interface layers (R₁₂) and cooled through R₂ₐ = t/(2k) + 1/h. Cross-section: every layer is resolved.
+- The results show the heat sink plane in its own tab; the export uses the board plane with the equivalent sink.
 
 **Thermal vias (averaged)**
 - Region: none, under the chips plus a margin, or the whole board.
@@ -140,6 +160,7 @@ The board designer builds a finite-volume model of a board with chips. The model
 - Results:
   - junction temperatures with their margin to T_j,max;
   - steady-state and transient fields;
+  - line profiles through any point and probes over time (hot spot, mean, any x/y);
   - a POD reduced model with energy, modes and error.
 
 **Export to TherMOS**
@@ -183,7 +204,8 @@ configurations. The configs are in `config/gui/tutorials/`; regenerate them with
 | A config from an older version misses parameters | Missing parameters are filled with the defaults when it is loaded |
 
 **Known limits**
-- **SF mode:** experimental (F-F1). The steady state R_th·P is exact; the dynamics can differ from the Foster fit.
+- **SF mode:** sources driven always together (e.g. diagonal chips of a full bridge) cannot be separated by the
+  network fit; the R_th matrix entries of such pairs are not identifiable (see SF › Theory).
 - **PO on exported board data:**
   - The board designer's own POD model (discrete Galerkin on the finite-volume matrices) reaches errors well below
     0.1 K.
