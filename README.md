@@ -78,6 +78,33 @@ listed in `docu/pythonPort.md`. Models trained in Python are saved as `mdl/mdl_<
 learning models), the MATLAB `.mat` models cannot be loaded in Python.
 
 
+# Graphical User Interface
+The Python version comes with a local browser GUI (Streamlit). It wraps `src/py/main.py` without changing it, so the
+start scripts and the GUI always give the same results.
+
+```
+pip install -r requirements.txt
+pip install -r gui/requirements.txt      # streamlit, plotly, openpyxl (optional: optuna)
+python start_gui.py                      # opens http://localhost:8501
+```
+
+- **Operating modes:** one page per model family (RC, SS, SF, PO, PS, ML, DL, PI). Each page has the views
+  workflow, parameters, inputs, theory, run and interactive results. The theory views of DL and PI draw the network
+  architecture and the physics loss.
+- **Study:** grid search, optimisation (built-in or Optuna) and forward feature selection on the validation data.
+- **Theory & Tools:**
+  - power losses and thermal stack;
+  - thermal networks (Foster/Cauer, structure function);
+  - MOR & POD;
+  - numerics;
+  - the **board designer**: chips on an editable stack-up (FR4 2/4/6-layer, IMS, DBC/AMB) with averaged thermal
+    vias, top view and cross-section, POD reduced model, and export of the data as a TherMOS data set for the
+    PO/PS modes.
+- **Tutorials:** at least one per mode, plus board → PO, grid search, optimisation and feature selection.
+
+The user guide is `docu/GUI.md`; it is also shown in the GUI under *Help › Documentation*.
+
+
 # Datasets
 The toolkit utilizes 1D and 2D datasets, as well as a large dataset for machine and deep learning
 applications.

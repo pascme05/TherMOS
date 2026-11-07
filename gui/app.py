@@ -131,19 +131,20 @@ with st.sidebar:
 multi = len(A.MODES) > 1
 PAGES.update({m: st.Page(mode.make_page(m), title=f"{m} · {d['title']}" if multi else d['title'], icon=d['icon'],
                          url_path=f"mode{m}") for m, d in A.MODES.items()})
+PAGES['study'] = st.Page(study.page, title='Study', icon=':material/tune:', url_path='study')
 PAGES['results'] = st.Page(results.page, title='Results browser', icon=':material/folder_data:', url_path='results')
 TOOLS = {}
 for _url, (_mod, _title, _icon) in A.TOOLS.items():
     try:
         _m = __import__(f"gui.views.tools.{_mod}", fromlist=['page'])
         TOOLS[_url] = st.Page(_m.page, title=_title, icon=_icon, url_path=_url)
+        PAGES[_url] = TOOLS[_url]
     except ImportError as _e:                                         # a tool page that is not available is skipped
         st.sidebar.caption(f"{_title}: {_e}")
 pages = {
     'Project': [st.Page(project.page, title='Setup', icon=':material/settings:', default=True),
                 st.Page(inputs.page, title='Input data', icon=':material/table_chart:', url_path='data')],
-    'Operating modes' if multi else 'Simulation': [PAGES[m] for m in A.MODES] +
-        [st.Page(study.page, title='Study', icon=':material/tune:', url_path='study')],
+    'Operating modes' if multi else 'Simulation': [PAGES[m] for m in A.MODES] + [PAGES['study']],
     'Theory & Tools': list(TOOLS.values()),
     'Results': [PAGES['results']],
     'Help': ([st.Page(tutorials.page, title='Tutorials', icon=':material/school:', url_path='tutorials')]

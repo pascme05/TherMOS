@@ -1,6 +1,6 @@
 # Plan: TherMOS GUI, phase 2
 
-Status: 07.11.2026, decisions taken (section 6), in implementation. Builds on `plan/planGUI.md` (WP 1–7 done, WP 8 open).
+Status: 07.11.2026, decisions taken (section 6), WP A–G implemented. Builds on `plan/planGUI.md` (WP 1–7 done, WP 8 open).
 
 ## 1. Requests
 

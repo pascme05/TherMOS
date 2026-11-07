@@ -62,9 +62,26 @@ def _changes(t):
     return pd.DataFrame(rows)
 
 
+def _target(t):
+    """Page the tutorial opens: its own page ('study', a tool) or the mode page."""
+    return t.get('page', t['mode'])
+
+
+def _title(t):
+    p = _target(t)
+    if p == 'study':
+        return 'Study'
+    if p in A.MODES:
+        return A.MODES[p]['title']
+    return getattr(A, 'TOOLS', {}).get(p, (None, p))[1]
+
+
 def _load(t):
     forms.set_config(tut.load(t['id']), f"tutorials/{t['id']}")
-    st.session_state[f"goto|{t['mode']}"] = 'Theory' if 'Theory' in _views(t['mode']) else 'Parameters'
+    if t['mode'] in A.MODES:
+        st.session_state[f"goto|{t['mode']}"] = 'Theory' if 'Theory' in _views(t['mode']) else 'Parameters'
+    for k, v in (t.get('preset') or {}).items():                    # widget values of the study / tool page
+        st.session_state[k] = v
     st.session_state['tutorial'] = t['id']
 
 
@@ -84,7 +101,8 @@ def page():
     st.caption("Guided scenarios for the operating modes. *Load* sets the configuration of the tutorial — your current "
                "configuration is replaced, save it first in the sidebar if needed. The values under *What you should "
                "see* come from runs of the tutorial configurations.")
-    modes = sorted({t['mode'] for t in tut.TUTORIALS})
+    modes = list(dict.fromkeys([m for m in A.MODES if any(t['mode'] == m for t in tut.TUTORIALS)] +
+                               [t['mode'] for t in tut.TUTORIALS]))
     m = st.segmented_control("Mode", ['all'] + modes, default='all', key='tut|mode',
                              format_func=lambda x: 'All modes' if x == 'all' else _mode(x))
     lst = [t for t in tut.TUTORIALS if m in (None, 'all') or t['mode'] == m]
@@ -109,12 +127,11 @@ def page():
                              width='stretch'):
                     _load(t)
                     st.toast(f"Tutorial '{t['title']}' loaded", icon=':material/check:')
-                    if t['mode'] in PAGES:
-                        st.switch_page(PAGES[t['mode']])
+                    if _target(t) in PAGES:
+                        st.switch_page(PAGES[_target(t)])
             with b2:
-                if t['mode'] in PAGES:
-                    st.page_link(PAGES[t['mode']], label=f"Open {A.MODES[t['mode']]['title']}",
-                                 icon=':material/arrow_forward:')
+                if _target(t) in PAGES:
+                    st.page_link(PAGES[_target(t)], label=f"Open {_title(t)}", icon=':material/arrow_forward:')
             if st.session_state.get('cfg_name') == f"tutorials/{t['id']}":
                 st.caption(":material/check_circle: This tutorial is the active configuration.")
         t1, t2, t3, t4 = st.tabs(["Steps", "What you should see", "Exercises", "Settings of the tutorial"])

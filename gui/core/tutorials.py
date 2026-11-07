@@ -38,7 +38,7 @@ RUN = {}                                                              # run sett
 #######################################################################################################################
 # Tutorials
 #######################################################################################################################
-TUTORIALS = []
+from gui.core.tutorials_data import TUTORIALS                       # noqa: E402  (definitions in a separate file)
 
 
 #######################################################################################################################
@@ -54,8 +54,9 @@ def merge_changes(cfg, t):
         for p in path:
             d = d.setdefault(p, {})
         d[last] = copy.deepcopy(v)
-    if A.MODE_VAR:
-        cfg[A.RUN_SECTION][A.MODE_VAR] = t['mode']
+    m = t.get('runMode', t['mode'])
+    if A.MODE_VAR and m in A.MODES:
+        cfg[A.RUN_SECTION][A.MODE_VAR] = m
     return cfg
 
 
