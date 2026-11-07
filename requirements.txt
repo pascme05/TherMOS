@@ -1,0 +1,8 @@
+numpy>=2.0
+scipy>=1.13
+pandas>=2.2
+matplotlib>=3.9
+openpyxl>=3.1
+scikit-learn>=1.5
+torch>=2.5
+pytest>=8.0

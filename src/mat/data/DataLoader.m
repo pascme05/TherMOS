@@ -178,6 +178,9 @@ classdef DataLoader
             try
                 obj.Data = load(FileName, "-mat");
                 obj.Data = obj.Data.data;
+                if isstruct(obj.Data)                                       % struct of columns (Python compatible, 07.11.2026)
+                    obj.Data = struct2table(obj.Data);
+                end
                 disp('INFO: 1D Matlab data successfully loaded');
             catch ME
                 disp('INFO: Failed to load data');

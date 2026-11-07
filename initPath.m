@@ -41,7 +41,7 @@ function path = initPath()
     path.data = fullfile(baseDir, 'data');
     path.mdl = fullfile(baseDir, 'mdl');
     path.setup = fullfile(baseDir, 'setup');
-    path.src = fullfile(baseDir, 'src');
+    path.src = fullfile(baseDir, 'src', 'mat');                                % MATLAB sources (Python: src/py)
     path.results = fullfile(baseDir, 'results');
     path.docu = fullfile(baseDir, 'docu');
     
