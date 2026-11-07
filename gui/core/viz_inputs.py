@@ -84,4 +84,5 @@ def workbook(kind, name, key, field=None):
 #######################################################################################################################
 # Inputs per mode: mode -> function(cfg)
 #######################################################################################################################
-INPUTS = {}
+from gui.core.viz_data import view as _view                                 # TherMOS data viewer
+INPUTS = {m: _view for m in ('RC', 'SS', 'SF', 'PO', 'PS', 'ML', 'DL', 'PI')}

@@ -71,21 +71,25 @@ def _info(name, fmt, _m):
         return {'kind': 'missing'}
     if fmt == 'xlsx':
         xl = pd.ExcelFile(p)
-        sheets = xl.sheet_names
-        cols = [str(c) for c in pd.read_excel(p, sheet_name=sheets[0], nrows=0).columns]
+        sheets = [s for s in xl.sheet_names if s.lower() not in ('readme', 'features')]
+        cols = []
+        for sh in sheets:                                            # union of the columns of the data sheets
+            cols += [str(c) for c in pd.read_excel(p, sheet_name=sh, nrows=0).columns if str(c) not in cols]
         return {'kind': '1D', 'sheets': sheets, 'cols': cols, 'ids': []}
-    keys = sio.whosmat(p)
-    names = [k[0] for k in keys]
-    if 'data' in names:
-        raw = sio.loadmat(p, squeeze_me=True, struct_as_record=False)['data']
+    try:
+        shape = {k[0]: k[1] for k in sio.whosmat(p)}
+    except Exception:                                                # whosmat fails on some MATLAB types
+        raw = sio.loadmat(p, variable_names=['data', 'geo', 'Ts'])
+        shape = {k: np.shape(v) for k, v in raw.items() if not k.startswith('__')}
+    if 'data' in shape:
+        raw = sio.loadmat(p, squeeze_me=True, struct_as_record=False, variable_names=['data'])['data']
         cols = list(raw._fieldnames)
         ids = sorted(set(np.atleast_1d(raw.id).astype(int).tolist())) if 'id' in cols else []
         return {'kind': '1D', 'sheets': [], 'cols': cols, 'ids': ids, 'n': len(np.atleast_1d(getattr(raw, cols[0])))}
-    shape = dict((k[0], k[1]) for k in keys)
     geo = shape.get('geo', (0, 2))
     X = shape.get('X', (0, 0))
     return {'kind': '3D' if len(geo) > 1 and geo[1] == 3 else '2D', 'sheets': [], 'cols': [], 'ids': [],
-            'nodes': X[1] if len(X) > 1 else 0, 'steps': X[0]}
+            'nodes': X[1] if len(X) > 1 else 0, 'steps': X[0] if len(X) else 0}
 
 
 def info(name, fmt):
@@ -120,7 +124,8 @@ def table(name, fmt, sheet=None):
 def _field(name, _m):
     import scipy.io as sio
     raw = sio.loadmat(path(name, 'mat'), variable_names=FIELD_KEYS, squeeze_me=True)
-    return {k: (raw[k].item() if np.ndim(raw[k]) == 0 else np.asarray(raw[k])) for k in FIELD_KEYS if k in raw}
+    return {k: (np.asarray(raw[k]).item() if np.size(raw[k]) == 1 else np.asarray(raw[k])) for k in FIELD_KEYS
+            if k in raw}
 
 
 def field(name):

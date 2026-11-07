@@ -68,19 +68,10 @@ def _group(cfg, g, fields, active):
 #######################################################################################################################
 def page():
     st.title("Input data")
+    st.caption("The data sets selected on the Setup page, as stored in data/ (before resampling and normalisation).")
     cfg = forms.cfg()
-    groups = [g for g in file_groups(cfg) if g[1]]
-    if not groups or not groups[0][0]['title']:
-        _browse(cfg)
-        return
-    groups.sort(key=lambda g: not g[2])                               # group used by the current settings first
-    titles = [g[0]['title'] for g in groups] + [ALL]
-    icons = {g[0]['title']: g[0].get('icon', '') for g in groups}
-    icons[ALL] = ':material/folder_open:'
-    sel = st.segmented_control("Input files", titles, default=titles[0], key='in|group',
-                               format_func=lambda t: f"{icons[t]} {t}", label_visibility='collapsed') or titles[0]
-    st.divider()
-    if sel == ALL:
-        _browse(cfg)
-    else:
-        _group(cfg, *next(g for g in groups if g[0]['title'] == sel))
+    with st.expander("Data selection", icon=':material/database:'):
+        from gui.views.project import data_form
+        data_form(cfg)
+    from gui.core.viz_data import view
+    view(cfg, key='in')
