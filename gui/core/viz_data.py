@@ -122,12 +122,13 @@ def view_field(cfg, key):
     c[2].metric("Time steps", f"{len(y)}", help=f"Snapshots, Ts = {fmt(Ts)} s.")
     c[3].metric("T range (°C)", f"{np.nanmin(y):.1f} … {np.nanmax(y):.1f}", help="Minimum and maximum temperature.")
     if d3:
-        st.caption(f"3D data: the x-y plane at z = {z0 * 1e3:.2f} mm is shown (Dat › gen › inpZ).")
+        from gui.core.field_explore import zslice
+        z0 = zslice(g, key, z0)
     if np.all(np.asarray(D.get('hc', 0)) == 0):
         st.info("hc = 0 everywhere: the data carry no convection boundary. The pure Galerkin projection (POD "
                 "protocol 2/3) then has no heat sink — use the calibrated protocol 5 or 6 (F-P16).")
 
-    tab = st.tabs(["Materials", "Heat input & temperature", "Over time"])
+    tab = st.tabs(["Materials", "Heat input & temperature", "Over time", "Profiles & probes"])
     with tab[0]:
         cols = st.columns(2)
         for i, (k, ttl, u) in enumerate((('k', 'Thermal conductivity k', 'W/mK'), ('rho', 'Density ρ', 'kg/m³'),
@@ -162,6 +163,13 @@ def view_field(cfg, key):
         fig.update_xaxes(title_text='Time (s)')
         show(fig, height=380, key=f"{key}|ot", info="**Total heat and temperature over time.** Σ q·dV is the heat "
              "input (per metre depth for 2D data); T max is the hot spot, T mean the average of all nodes.")
+    with tab[3]:
+        from gui.core.field_explore import profiles, probes
+        it2 = st.slider("Time step of the profiles", 0, len(y) - 1, len(y) - 1, key=f"{key}|pit")
+        [F, x, yy] = _grid(y[it2], D, z0)
+        profiles([(f"T at t = {it2 * Ts:.0f} s", F[0] if F.ndim == 3 else F, False)], x, yy, f"{key}|prof")
+        tt = t if len(t) == len(y) else np.arange(len(y)) * Ts
+        probes(g, [('T', y, False)], tt, f"{key}|probe", z=z0, mark=tt[it2])
 
 
 #######################################################################################################################

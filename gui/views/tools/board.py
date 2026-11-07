@@ -599,7 +599,9 @@ def results(res):
     table(pd.DataFrame(rows), hide_index=True)
     st.caption("T_j: hottest board node under the chip + P·R_jb (die and die attach, top view) or hottest node of the "
                "die (cross-section). Margin = T_j,max − T_j max of the run; OK > 25 K, tight 0–25 K.")
-    tabs = st.tabs(["Steady state", "Transient field", "Junction temperatures", "Losses"])
+    T2 = res.get('T2')
+    tabs = st.tabs(["Steady state", "Transient field", "Profiles & probes", "Junction temperatures", "Losses"] +
+                   (["Heat sink plane"] if T2 is not None else []))
     with tabs[0]:
         show(_heat(Tss.reshape(ny, nx), D['x'], D['y'], '°C', 'Steady-state temperature', equal=xy, scale=TEMP),
              height=430 if xy else 330, key=f"{K}|ss")
@@ -609,13 +611,35 @@ def results(res):
         show(_heat(T[i].reshape(ny, nx), D['x'], D['y'], '°C', f"Temperature at t = {fmt(t[i])} s", equal=xy,
                    zlim=[lay['Ta'], max(T.max(), lay['Ta'] + 1e-6)]), height=430 if xy else 330, key=f"{K}|tr")
     with tabs[2]:
+        from gui.core.field_explore import profiles, probes
+        i = st.session_state.get(f"{K}|tsl", len(t) - 1)
+        lab = ('x (mm)', 'y (mm)') if xy else ('x (mm)', 'z (mm)')
+        fl = [(f"board at t = {fmt(t[i])} s", T[i].reshape(ny, nx), False), ('steady state', Tss.reshape(ny, nx), True)]
+        if T2 is not None:
+            fl.append(('heat sink at t', T2[i].reshape(ny, nx), True))
+        profiles(fl, D['x'], D['y'], f"{K}|prof", vlabel=lab)
+        st.caption("Time step from the slider of the tab *Transient field*.")
+        ser = [('board', T, False)] + ([('heat sink', T2, True)] if T2 is not None else [])
+        probes(D['geo'] if xy else D['geo'][:, :2], ser, t, f"{K}|probe", mark=t[i])
+    with tabs[3]:
         fig = go.Figure([line(t, Tj[:, i], n, i) for i, n in enumerate(names)])
         fig.update_layout(xaxis_title='t (s)', yaxis_title='T_j (°C)')
         show(fig, key=f"{K}|tj")
-    with tabs[3]:
+    with tabs[4]:
         fig = go.Figure([line(t, P[:, i], n, i) for i, n in enumerate(names)])
         fig.update_layout(xaxis_title='t (s)', yaxis_title='P (W)')
         show(fig, key=f"{K}|p")
+    if T2 is not None:
+        with tabs[5]:
+            Ts2 = res['Tss2']
+            c = st.columns(3)
+            c[0].metric("T_max heat sink (steady)", f"{fmt(Ts2.max())} °C")
+            c[1].metric("ΔT board → heat sink (hot spot)", f"{fmt(Tss.max() - Ts2.max())} K")
+            c[2].metric("ΔT heat sink → coolant", f"{fmt(Ts2.max() - lay['Ta'])} K")
+            show(_heat(Ts2.reshape(ny, nx), D['x'], D['y'], '°C', 'Heat sink plane, steady state', scale=TEMP),
+                 height=430, key=f"{K}|ss2", info="**Temperature of the layers below the board** (heat sink plane "
+                 "T₂). A uniform field = the heat sink spreads well and the interface dominates; hot spots under the "
+                 "chips = the heat sink is too thin or the coolant h is the bottleneck.")
     return Tj
 
 

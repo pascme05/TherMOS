@@ -325,6 +325,9 @@ def pod_view(data, setup, key):
                                                           if m.get('matCond') is not None else ''))
     if not D or 'geo' not in D:
         return
+    from gui.core.field_explore import zslice, profiles, probes
+    zs = zslice(D['geo'], key, z0)
+    z0 = z0 if zs is None else zs
 
     # Mode shapes
     Phi = m.get('rPhi')
@@ -356,13 +359,20 @@ def pod_view(data, setup, key):
                  info="**Temperature field.** Measured and predicted share one colour scale; the error uses a "
                       "symmetric scale (red: model too cold, blue: too warm). Move the time slider to follow "
                       "the transient.")
-    mae = np.mean(np.abs(yT - yP), axis=1)
-    fig = go.Figure(line(np.arange(len(mae)) * Ts, mae, 'MAE all nodes', 0))
-    fig.add_vline(x=it * Ts, line=dict(color=INK2, dash='dot'))
-    fig.update_layout(xaxis_title='Time (s)', yaxis_title='MAE over all nodes (K)', showlegend=False)
-    show(fig, height=260, key=f"{key}|mae", info="**Mean absolute error over all nodes per time step.** Peaks "
-         "follow load changes; a growing error means the reduced model drifts away (missing heat sink, wrong "
-         "steady state).")
+    tabs = st.tabs(["Line profiles", "Probes over time", "Error over time"])
+    with tabs[0]:
+        profiles([('Measured', F[0], False), ('Predicted', F[1], True)], x, y, f"{key}|prof")
+    with tabs[1]:
+        probes(D['geo'], [('measured', yT, False), ('predicted', yP, True)], np.arange(len(yT)) * Ts,
+               f"{key}|probe", z=z0, mark=it * Ts)
+    with tabs[2]:
+        mae = np.mean(np.abs(yT - yP), axis=1)
+        fig = go.Figure(line(np.arange(len(mae)) * Ts, mae, 'MAE all nodes', 0))
+        fig.add_vline(x=it * Ts, line=dict(color=INK2, dash='dot'))
+        fig.update_layout(xaxis_title='Time (s)', yaxis_title='MAE over all nodes (K)', showlegend=False)
+        show(fig, height=260, key=f"{key}|mae", info="**Mean absolute error over all nodes per time step.** Peaks "
+             "follow load changes; a growing error means the reduced model drifts away (missing heat sink, wrong "
+             "steady state).")
 
 
 def dl_view(data, setup, key):
@@ -390,7 +400,10 @@ def dl_view(data, setup, key):
                           yaxis2=dict(type='log', title='L_phys (W²)', overlaying='y', side='right'))
         show(fig, height=320, key=f"{key}|lossPI", info=f"**Data and physics loss** (unweighted, α = "
              f"{fmt(info.get('alpha', 1))}, β = {fmt(info.get('beta', 0))}). With β = 0 the physics loss is only "
-             "monitored: it shows how well the purely data-trained network satisfies the lumped stator model.")
+             "monitored on the validation data: it shows how well the purely data-trained network satisfies the "
+             "lumped thermal model.")
+    if info.get('device'):
+        st.caption(f"Trained on: {info['device']}")
     mdl = data['mdls'].get(tag, {})
     net = mdl.get('sys')
     if net is not None and hasattr(net, 'mu'):
@@ -400,9 +413,10 @@ def dl_view(data, setup, key):
                 F = int(np.asarray(net.mu.cpu()).size)
                 ph = None
                 if info.get('lossPhys') is not None and 'beta' in info:
-                    p = ((data.get('para') or {}).get('Mdl') or {}).get('pinn') or {}
-                    ph = {'Rth': p.get('Rth', 0.0265), 'Cth': p.get('Cth', 2.08e4), 'Rs': p.get('Rs', 14.1e-3),
-                          'alpha': info.get('alpha', 1.0), 'beta': info.get('beta', 0.0)}
+                    from gui.core.theory_dl import phys_text
+                    ph = phys_text({'Mdl': (data.get('para') or {}).get('Mdl') or {}, 'Run': (setup or {}).get('Run')
+                                    or {}})
+                    ph.update({'alpha': info.get('alpha', 1.0), 'beta': info.get('beta', 0.0)})
                 st.graphviz_chart(arch_dot(net, int(mdl.get('W') or 100), F, None,
                                            list((setup or {}).get('Run', {}).get('out') or []) or None, ph),
                                   width='content')

@@ -186,3 +186,10 @@ def page():
         f"large steps. TherMOS therefore uses implicit or exact (modal/Tustin) updates in all reduced models.",
         "Model order reduction attacks exactly this problem: the POD/SS/Foster models keep only the few slow modes "
         "that carry the energy, so the stiffness disappears and large steps become accurate."])
+
+    from gui.views.tools import numerics_rom
+    st.divider()
+    st.markdown("#### Numerics of the reduced models")
+    numerics_rom.quadrature()
+    numerics_rom.element_size()
+    numerics_rom.calibration()
