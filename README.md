@@ -58,7 +58,10 @@ The data for exact reproduction of the results can be regenerated using the scri
 
 
 # Dependencies
-The requirements of the PyPowerSim toolkit are summarized below:
+TherMOS is available in two versions with the same configuration, data and folder structure: the original MATLAB
+version (`src/mat`, start scripts `*.m`) and a Python version (`src/py`, start scripts `*.py`).
+
+The requirements of the MATLAB version are summarized below:
 - Matlab R2023b
 - identification_toolbox
 - optimization_toolbox
@@ -66,6 +69,13 @@ The requirements of the PyPowerSim toolkit are summarized below:
 - distrib_computing_toolbox
 - image_toolbox
 - neural_network_toolbox
+
+The requirements of the Python version (Python 3.10 or newer) are listed in `requirements.txt` (numpy, scipy, pandas,
+matplotlib, openpyxl, scikit-learn, torch, pytest) and are installed with `pip install -r requirements.txt`. A
+simulation is started with `python start.py` (or any script under `setup/`). The Python version fixes the numerical
+problems found during the port; `setup['legacy'] = 1` restores the MATLAB behaviour. All deviations from MATLAB are
+listed in `docu/pythonPort.md`. Models trained in Python are saved as `mdl/mdl_<model>_<name>.pkl` (`.pt` for deep
+learning models), the MATLAB `.mat` models cannot be loaded in Python.
 
 
 # Datasets

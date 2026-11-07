@@ -237,3 +237,11 @@ Further defaults (unless you object):
 - **Multiple models**: `training`/`testing` loop over all selected models and keep `mdl`/`pred` per model
   (F-M2). The 1:1 behaviour is not kept here, because the MATLAB behaviour is a bug.
 - **Setup scripts**: each `setup/**/x.m` gets a `setup/**/x.py`. Like now, they are copied to the root to run them.
+
+## 8. Status (07.11.2026)
+
+WP0–WP7 are implemented in `src/py` (all models, pipeline, plotting, Python twins of all start/setup scripts,
+`tests/test_numeric.py`). The list of deviations from MATLAB and the verification results are in
+`docu/pythonPort.md`. New findings during the port: F-M8 (SS fitted on un-normalised `idData`), F-P14 (POD modal
+coordinates across profile borders), F-P15 (protocol 5 C/G fit underdetermined and unstable on `exp11`).
+Open: F-F1 (nodal Foster dynamics), full-length DL/PINN tutorial runs (only 2-epoch smoke tests on CPU so far).
