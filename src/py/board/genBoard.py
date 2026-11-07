@@ -5,7 +5,7 @@
 # File:         genBoard
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.1
+# Version:      V.1.2
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -34,6 +34,21 @@ available:
    (k: x direction, ky: z direction). Only chips cut by y = yCut are included; their heat Q = P/(w·t_die·l) assumes
    no spreading along y (2D cross-section).
 
+Layers below the board (layout['below'], top → bottom, e.g. a gap filler and an aluminium heat sink) are placed
+between the board and the cooling h, which then acts on the bottom of the last layer:
+
+1) Top view: the layers below form a second plane (the heat sink) with its own temperature T_2, lateral conductance
+   Σ k_xy,i·t_i and heat capacity Σ ρ_i·c_i·t_i, so the heat sink spreads the heat of the chips sideways. The planes
+   are coupled through the board and the interface layers, the heat sink is cooled from its bottom:
+
+       R_12 = Σ_board t_l/k_z,l + Σ_i<last t_i/k_z,i + t_last/(2·k_z,last),   R_2a = t_last/(2·k_z,last) + 1/h
+
+   The board plane is then only cooled by the natural convection on top. All plane-2 quantities are stored per
+   metre of board thickness (k2 = Σ k_i·t_i / t_b, rc2, h12 = 1/(R_12·t_b), h2 = 1/(R_2a·t_b)) so that calcBoardMat
+   assembles both planes with the same control volumes. For the export (PO mode, one temperature per node) the
+   equivalent distributed sink of the series path hvEq = h_eff/t_b with h_eff = 1/(R_12 + R_2a) + h_top is stored.
+2) Cross-section: the layers below are resolved like the board layers.
+
 Thermal vias (layout['vias'], averaged, boardLib.viaK) raise the through-plane conductivity of all FR4 layers in
 the via region (under every chip plus a margin, or the whole board): in the top view through a smaller local
 stack-up resistance R_z(x, y) and therefore a larger local h_eff(x, y); in the cross-section through k_z of the FR4
@@ -43,13 +58,19 @@ Inputs:     1) layout:  board layout {'view', 'W', 'L' (mm), 'board' (preset), '
                         optional, replaces the preset), 'h' (W/m²K), 'hTop' (W/m²K), 'Ta' (°C), 'dx' (mm), 'yCut'
                         (mm), 'chips': [{'name', 'tech', 'x', 'y', 'w', 'l' (mm), ...}], 'chipLib' (custom chip
                         technologies, optional), 'vias': {'mode': 'none' | 'chips' | 'all', 'd' (mm), 'tpl' (µm),
-                        'pitch' (mm), 'fill', 'margin' (mm)} (optional)}
+                        'pitch' (mm), 'fill', 'margin' (mm)} (optional), 'below': layers below the board (top →
+                        bottom, optional)}
 Outputs:    1) D:       field data (TherMOS format, SI units): geo, k, ky, rho, Cp, hv, hc, Ta, fl, dx, dy, Lx, Ly,
                         B (N x nChips, W/m³ per W of every chip), Rjb (K/W per chip), shape (ny, nx), wA (N, control
-                        volume per cell volume: 1, 1/2 on edges, 1/4 in corners), chips (used), via (via mask)
+                        volume per cell volume: 1, 1/2 on edges, 1/4 in corners), chips (used), via (via mask);
+                        with layers below in the top view also k2, rc2, h12, h2 (plane 2) and hvEq
 
 V1.1: 07.11.2026, Pascal Schirmer
 - Stack-up from the layout (layers with copper coverage), custom chip technologies, averaged thermal vias
+
+V1.2: 07.11.2026, Pascal Schirmer
+- Layers below the board (interface material, heat sink): second plane in the top view, resolved rows in the
+  cross-section
 """
 
 #######################################################################################################################
@@ -126,6 +147,8 @@ def genBoard(layout):
     chips = [_chip(c, lib) for c in layout.get('chips', [])]
     vias = layout.get('vias') or {'mode': 'none'}
     isFR4 = np.array([l[1] == 'FR4' for l in layers])
+    below = [(l.get('layer', ''), l['mat'], float(l['t'])) + layerProps(l) for l in (layout.get('below') or [])
+             if float(l['t']) > 0]
 
     # ==============================================================================
     # Variables
@@ -158,6 +181,22 @@ def genBoard(layout):
             else Rz
         hEffV = 1.0 / (RzV + 1.0 / max(h, 1e-9)) + hTop
         HV = np.where(via, hEffV, hEff) / tb
+
+        # Plane 2: layers below the board (heat sink)
+        if below:
+            tl = np.array([l[2] for l in below]) * 1e-3
+            kzl = np.array([l[4] for l in below])
+            Rup = np.sum(tl[:-1] / kzl[:-1]) + tl[-1] / (2 * kzl[-1])          # interface layers + half the sink
+            R2a = tl[-1] / (2 * kzl[-1]) + 1.0 / max(h, 1e-9)
+            R12 = np.where(via, RzV, Rz) + Rup
+            hEff = 1.0 / (Rz + Rup + R2a) + hTop
+            hEffV = 1.0 / (RzV + Rup + R2a) + hTop
+            D.update({'k2': np.full(nx * ny, np.sum([l[3] * ti for l, ti in zip(below, tl)]) / tb),
+                      'rc2': np.full(nx * ny, np.sum([l[5] * l[6] * ti for l, ti in zip(below, tl)]) / tb),
+                      'h12': (1.0 / R12 / tb).ravel(), 'h2': np.full(nx * ny, 1.0 / R2a / tb),
+                      'hvEq': (np.where(via, hEffV, hEff) / tb).ravel(), 'R12': Rz + Rup, 'R2a': R2a,
+                      'tBelow': tl.sum(), 'ktBelow': np.sum([l[3] * ti for l, ti in zip(below, tl)])})
+            HV = np.full((ny, nx), hTop / tb)
         K = np.full((ny, nx), kxy)
         RC = np.full((ny, nx), rc)
         B, Rjb, used = [], [], []
@@ -186,7 +225,7 @@ def genBoard(layout):
     else:
         yCut = float(layout.get('yCut', layout['L'] / 2)) * 1e-3
         used = [c for c in chips if abs(c['y'] * 1e-3 - yCut) <= c['l'] * 5e-4]
-        stack = list(reversed(layers))                                                          # bottom → top
+        stack = list(reversed(below)) + list(reversed(layers))                                   # bottom → top
         tMin = min([l[2] for l in stack] + [c['t'] for c in used] + [c['t_att'] for c in used]) * 1e-3
         tTot = sum(l[2] for l in stack) * 1e-3 + max([(c['t'] + c['t_att']) * 1e-3 for c in used] + [0.0])
         dz = max(tMin, tTot / 150.0)
@@ -244,7 +283,8 @@ def genBoard(layout):
         y = np.arange(nz) * dz
         ny, dyv = nz, dz
         D.update({'k': Kx.ravel(), 'ky': Kz.ravel(), 'rho': RHO.ravel(), 'Cp': (RC / RHO).ravel(), 'hv': HV.ravel(),
-                  'tb': nb * dz, 'nBoard': nb, 'via': np.tile(via, (nz, 1)).ravel() & np.repeat(
+                  'tb': nb * dz, 'nBoard': nb, 'nBelow': sum(max(1, int(round(l[2] * 1e-3 / dz))) for l in below),
+                  'via': np.tile(via, (nz, 1)).ravel() & np.repeat(
                       np.r_[np.array(fr4, dtype=bool), np.zeros(nz - nb, dtype=bool)], nx)})
 
     ###################################################################################################################

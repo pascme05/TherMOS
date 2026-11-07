@@ -5,7 +5,7 @@
 # File:         boardLib
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.1
+# Version:      V.1.2
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -34,6 +34,9 @@ not changed.
 
 V1.1: 07.11.2026, Pascal Schirmer
 - Layers as dicts with copper coverage, 4-layer 70 µm and 6-layer 35/70 µm FR4 boards, averaged thermal vias
+
+V1.2: 07.11.2026, Pascal Schirmer
+- Presets of the layers below the board (interface material and heat sink / housing)
 """
 
 #######################################################################################################################
@@ -172,7 +175,20 @@ CHIPS = {
 }
 
 #######################################################################################################################
-# Cooling (h on the bottom of the board, W/m²K)
+# Layers below the board (top → bottom): interface material and heat sink / housing; the cooling h acts on the
+# bottom of the last layer
+BELOW = {
+    'none (cooling directly on the board)': [],
+    'Gap filler 2 mm + Al heat sink 5 mm': [_lay('Gap filler', 'Gap filler (dispensed)', 2.0),
+                                            _lay('Heat sink base', 'Al alloy (6063)', 5.0)],
+    'Gap pad 1 mm + Al housing 3 mm': [_lay('Gap pad', 'Gap pad', 1.0), _lay('Housing', 'Al die-cast (A380)', 3.0)],
+    'Thermal grease 50 µm + Al heat sink 5 mm': [_lay('Grease', 'Thermal grease', 0.05),
+                                                 _lay('Heat sink base', 'Al alloy (6063)', 5.0)],
+    'Insulating foil 0.2 mm + Cu cold plate 3 mm': [_lay('Insulating foil', 'Insulating foil', 0.2),
+                                                    _lay('Cold plate', 'Cu', 3.0)],
+}
+
+# Cooling (h on the bottom of the board or of the last layer below it, W/m²K)
 #######################################################################################################################
 COOL = {k: v for k, v in COOLING.items() if v is not None and v > 0}
 H_TOP = 10.0                                                                                     # natural convection top

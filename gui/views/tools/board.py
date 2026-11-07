@@ -35,7 +35,7 @@ import streamlit as st
 
 from gui.core.style import table, SERIES, SEQ, TEMP, INK2, MUTED, show, line, fmt
 from gui.views.tools import _common as cm
-from src.py.board.boardLib import BOARDS, CHIPS, COOL, H_TOP, LAYER_MATS, VIA_FILL, layerProps, viaK
+from src.py.board.boardLib import BOARDS, BELOW, CHIPS, COOL, H_TOP, LAYER_MATS, VIA_FILL, layerProps, viaK
 from src.py.board.genBoard import genBoard
 from src.py.board.calcBoardMat import calcBoardMat
 from src.py.board.simBoard import simBoard
@@ -53,6 +53,7 @@ DEFAULT_CHIPS = [['T1', 'Si IGBT', 15.0, 15.0, 10.0, 10.0, 60.0, 'pulse', 40.0],
                  ['D1', 'Si diode', 30.0, 15.0, 6.0, 8.0, 20.0, 'pulse', 40.0],
                  ['M1', 'SiC MOSFET', 45.0, 28.0, 4.0, 5.0, 25.0, 'sine', 60.0]]
 STACK_COLS = ['layer', 'material', 't [µm]', 'Cu coverage [%]', 'k_xy [W/mK]', 'k_z [W/mK]']
+BELOW_COLS = ['layer', 'material', 't [mm]', 'k [W/mK]']
 CHIPLIB_COLS = ['technology', 'die', 't die [mm]', 'w [mm]', 'l [mm]', 'die attach', 't attach [mm]', 'P typ. [W]',
                 'T_j,max [°C]', 'note']
 SEMI = ['Si', 'SiC (4H)', 'GaN']
@@ -130,7 +131,7 @@ def _layout(view):
             'layers': s.get(f"{K}|layers") or _presets().get(board, BOARDS['DBC Al₂O₃ (0.38 mm)']),
             'h': s.get(f"{K}|h", 5000.0), 'hTop': s.get(f"{K}|hTop", H_TOP), 'Ta': s.get(f"{K}|Ta", 25.0),
             'dx': s.get(f"{K}|dx", 1.0), 'yCut': s.get(f"{K}|yCut", 15.0), 'chips': chips, 'chipLib': custom,
-            'vias': vias}
+            'vias': vias, 'below': s.get(f"{K}|below") or []}
 
 
 def _via_regions(lay):
@@ -213,6 +214,16 @@ def _cut_fig(lay):
     vr = [(x0, x1) for x0, x1, y0, y1 in _via_regions(lay) if y0 <= lay['yCut'] <= y1]
     layers = [l for l in lay['layers'] if float(l['t']) > 0]
     tMin = 0.04 * sum(float(l['t']) for l in layers)                    # thin layers drawn with a minimum height
+    below = [l for l in lay.get('below') or [] if float(l['t']) > 0]
+    zb = 0.0
+    for l in reversed(below):                                           # below the board, drawn at reduced scale
+        th = max(min(float(l['t']), 4 * sum(float(m['t']) for m in layers)) * 0.35, tMin)
+        k = layerProps(l)[1]
+        zb -= th
+        fig.add_shape(type='rect', x0=-1, x1=lay['W'] + 1, y0=zb, y1=zb + th, line=dict(width=0.5, color=INK2),
+                      fillcolor='#b8c2cc' if 'Al' in l['mat'] or l['mat'] == 'Cu' else '#eda100', opacity=0.55)
+        fig.add_annotation(x=lay['W'] * 1.01, y=zb + th / 2, text=f"{l.get('layer', '')} · {fmt(float(l['t']))} mm"
+                           f" · k={fmt(k)}", showarrow=False, xanchor='left', font=dict(size=10))
     for i, l in enumerate(reversed(layers)):
         th = max(float(l['t']), tMin)
         kxy, kz = layerProps(l)[0:2]
@@ -236,9 +247,9 @@ def _cut_fig(lay):
         fig.add_shape(type='rect', x0=c['x'] - c['w'] / 2, x1=c['x'] + c['w'] / 2, y0=z + t['t_att'],
                       y1=z + t['t_att'] + t['t'], fillcolor=SERIES[i % len(SERIES)], line=dict(width=0.5))
         fig.add_annotation(x=c['x'], y=z + t['t_att'] + t['t'], text=c['name'], showarrow=False, yanchor='bottom')
-    fig.add_annotation(x=lay['W'] / 2, y=-0.08 * z, text=f"coolant h = {fmt(lay['h'])} W/m²K", showarrow=False)
+    fig.add_annotation(x=lay['W'] / 2, y=zb - 0.08 * z, text=f"coolant h = {fmt(lay['h'])} W/m²K", showarrow=False)
     fig.update_xaxes(range=[-2, lay['W'] * 1.45], title='x (mm)')
-    fig.update_yaxes(range=[-0.2 * z, z * 1.6 + 0.3], title='z (mm)')
+    fig.update_yaxes(range=[zb - 0.2 * z, z * 1.6 + 0.3], title='z (mm)')
     fig.update_layout(title=f"Cross-section (x-z) at y = {fmt(lay['yCut'])} mm (z not to scale)")
     return fig
 
@@ -264,11 +275,13 @@ def board_inputs():
         st.session_state[f"{K}|h"] = float(COOL[cool])
         st.session_state[f"{K}|cool_last"] = cool
     c[1].number_input("h bottom (W/m²K)", min_value=0.1, key=f"{K}|h", format='%g', help="Heat transfer "
-                      "coefficient of the cooling on the bottom of the board (incl. the interface to the heat sink).")
+                      "coefficient of the cooling on the bottom of the board, or on the bottom of the last layer "
+                      "below the board (heat sink) if layers below are defined.")
     cm.num(c[2], "h top (W/m²K)", H_TOP, 'board|hTop', min_value=0.0, help="Natural convection on the top side.")
     cm.num(c[3], "Grid spacing dx (mm)", 1.0, 'board|dx', min_value=0.1, max_value=10.0, step=0.25,
            help="Node spacing of the finite-volume grid (dx = dy). Chips should span at least 3 nodes.")
     stack_inputs(tech, pre[tech])
+    below_inputs()
     via_inputs()
 
 
@@ -335,6 +348,56 @@ def stack_inputs(tech, preset):
             st.caption("Patterned Cu layers: k_xy = c·k_Cu + (1 − c)·k_FR4,xy (parallel), k_z = 1/(c/k_Cu + "
                        "(1 − c)/k_FR4,z) (series) with the coverage c [Shabany 2010].")
             cm.refs(['Incropera2007', 'Wintrich2015'])
+
+
+def below_inputs():
+    """Layers below the board (interface material, heat sink), top → bottom; the cooling acts on the last one."""
+    s = st.session_state
+    with st.container(border=True):
+        st.markdown("**:material/vertical_align_bottom: Below the board** (top → bottom: interface material, heat "
+                    "sink / housing; the cooling h acts on the bottom of the last layer)")
+        c = st.columns([2, 1], vertical_alignment='bottom')
+        pre = c[0].selectbox("Preset", list(BELOW), index=0, key=f"{K}|belowpre",
+                             help="Fills the table, which can be edited. 'none': the cooling acts directly on the "
+                                  "bottom of the board.")
+        ver = s.get(f"{K}|belowver", 0)
+        if c[1].button("Reset to preset", icon=':material/restart_alt:', key=f"{K}|belowreset", width='stretch'):
+            s[f"{K}|belowver"] = ver + 1
+            st.rerun()
+        df0 = pd.DataFrame([{'layer': l.get('layer', ''), 'material': l['mat'], 't [mm]': float(l['t']),
+                             'k [W/mK]': l.get('kz')} for l in BELOW[pre]], columns=BELOW_COLS)
+        df = st.data_editor(df0, key=f"{K}|below|{pre}|{ver}", num_rows='dynamic', hide_index=True, width='stretch',
+                            column_config={
+                                'material': st.column_config.SelectboxColumn('material', options=LAYER_MATS,
+                                                                             required=True),
+                                't [mm]': st.column_config.NumberColumn(min_value=0.0, format='%g'),
+                                'k [W/mK]': st.column_config.NumberColumn(format='%g', help="Optional override of "
+                                                                          "the conductivity (e.g. of the gap filler "
+                                                                          "datasheet).")})
+        below = []
+        for _, r in df.iterrows():
+            if _nan(r['material']) or r['material'] not in LAYER_MATS or _nan(r['t [mm]']) or r['t [mm]'] <= 0:
+                continue
+            k = None if _nan(r['k [W/mK]']) else float(r['k [W/mK]'])
+            below.append({'layer': '' if _nan(r['layer']) else str(r['layer']), 'mat': r['material'],
+                          't': float(r['t [mm]']), 'cov': 100.0, 'kxy': k, 'kz': k})
+        s[f"{K}|below"] = below
+        if below:
+            props = [layerProps(l) for l in below]
+            t = np.array([l['t'] for l in below]) * 1e-3
+            Rif = float(np.sum(t[:-1] / np.array([p[1] for p in props[:-1]]))) if len(below) > 1 else 0.0
+            c = st.columns(3)
+            c[0].metric("R interface (K·mm²/W)", fmt(Rif * 1e6), help="Σ t/k of all layers except the last one: "
+                        "resistance of 1 mm² of the interface (gap filler, grease, foil).")
+            c[1].metric("Spreading k·t of the heat sink (W/K)", fmt(float(np.sum([p[0] * ti for p, ti in
+                                                                                  zip(props, t)]))),
+                        help="Σ k_i t_i: lateral conductance of the layers below. Large values = the heat sink "
+                             "spreads the heat of the chips over the whole board.")
+            c[2].metric("1/h (K·mm²/W)", fmt(1e6 / max(float(s.get(f'{K}|h', 5000.0)), 1e-9)),
+                        help="Resistance of the cooling on the bottom of the heat sink for 1 mm².")
+            st.caption("Top view: the layers below form a second plane (heat sink temperature T₂) that is coupled to "
+                       "the board through the board stack-up and the interface layers and cooled by h from below. "
+                       "Cross-section: every layer is resolved.")
 
 
 def via_inputs():
@@ -499,9 +562,12 @@ def simulation():
             C, G, Bp = calcBoardMat(D)
             t = np.arange(0.0, tEnd + Ts * 1e-9, Ts)
             P = _profiles(lay, D, t)
-            T, Tss = simBoard(C, G, Bp, P, Ts, lay['Ta'], nSub)
-            s[f"{K}|res"] = res = {'sig': sig, 'lay': lay, 'D': D, 't': t, 'P': P, 'T': T, 'Tss': Tss, 'C': C,
-                                   'G': G, 'Bp': Bp, 'nSub': nSub, 'time': time.perf_counter() - t0}
+            Tf, Tssf = simBoard(C, G, Bp, P, Ts, lay['Ta'], nSub)
+            N = D['geo'].shape[0]
+            s[f"{K}|res"] = res = {'sig': sig, 'lay': lay, 'D': D, 't': t, 'P': P, 'T': Tf[:, :N], 'Tss': Tssf[:N],
+                                   'T2': Tf[:, N:] if Tf.shape[1] > N else None,
+                                   'Tss2': Tssf[N:] if len(Tssf) > N else None, 'Tf': Tf, 'C': C, 'G': G,
+                                   'Bp': Bp, 'nSub': nSub, 'time': time.perf_counter() - t0}
     if res is None:
         st.info("Press *Simulate* to run the board model.", icon=':material/info:')
         return None
@@ -561,9 +627,9 @@ def pod(res):
     Kmax = int(min(30, len(t)))
     c = st.columns([1, 3])
     Kr = c[0].slider("Modes K", 1, Kmax, min(5, Kmax), key=f"{K}|K")
-    rom = romBoard(res['C'], res['G'], res['Bp'], T, lay['Ta'], Kr)
+    rom = romBoard(res['C'], res['G'], res['Bp'], res.get('Tf', T), lay['Ta'], Kr)
     t0 = time.perf_counter()
-    Tr = simRom(rom, res['P'], t[1] - t[0] if len(t) > 1 else 1.0, lay['Ta'], res['nSub'])
+    Tr = simRom(rom, res['P'], t[1] - t[0] if len(t) > 1 else 1.0, lay['Ta'], res['nSub'])[:, :T.shape[1]]
     tr = time.perf_counter() - t0
     err = np.abs(Tr - T)
     rise = max(T.max() - lay['Ta'], 1e-9)
@@ -584,7 +650,7 @@ def pod(res):
             show(fig, key=f"{K}|en")
         with tabs[1]:
             k = st.slider("Mode", 1, Kr, 1, key=f"{K}|mode")
-            show(_heat(rom['Phi'][:, k - 1].reshape(ny, nx), D['x'], D['y'], '–', f"POD mode {k}",
+            show(_heat(rom['Phi'][:ny * nx, k - 1].reshape(ny, nx), D['x'], D['y'], '–', f"POD mode {k}",
                        equal=D['view'] == 'xy', scale='RdBu_r'), height=380, key=f"{K}|ph")
         with tabs[2]:
             fig = go.Figure([line(t, err.max(axis=1), 'max |T_ROM − T_FV|', 0),
@@ -666,6 +732,14 @@ def interpretation(res, Tj, rom, err):
                  f"better ceramic spreads the heat (larger k_eff); better cooling raises h_eff. The spreading length "
                  f"√(k_eff t_b / h_eff) = {fmt(np.sqrt(D['kEff'] * D['tb'] / D['hEff']) * 1e3)} mm tells how far the "
                  f"heat of a chip spreads — chips closer than about twice this length heat each other.")
+        if res.get('Tss2') is not None:
+            p.append(f"Below the board the heat passes the interface layers and the heat sink: board → heat sink "
+                     f"{fmt(D['R12'] * 1e6)} K mm²/W, heat sink → coolant {fmt(D['R2a'] * 1e6)} K mm²/W. The heat "
+                     f"sink "
+                     f"reaches {fmt(res['Tss2'].max())} °C at its hottest point (steady state) and spreads the heat "
+                     f"sideways with k·t = {fmt(D['ktBelow'])} W/K; the temperature drop from the board to the heat "
+                     f"sink ({fmt(res['Tss'].max() - res['Tss2'].max())} K at the hot spot) is set by the board "
+                     f"stack-up and the interface material — a thinner or better gap filler lowers it directly.")
         if D['via'].any():
             p.append(f"The thermal vias lower the through-plane resistance of the board from {fmt(D['Rz'] * 1e6)} to "
                      f"{fmt(D['RzVia'] * 1e6)} K mm²/W in the via region, i.e. h_eff rises from {fmt(D['hEff'])} to "
@@ -703,6 +777,13 @@ def page():
                                     r"1/h} + h_{top}"], "Stack-up of thickness t_b lumped into one plane."),
         ("Heat equation", [r"(\rho c)\,\partial_t T = \nabla\cdot(k\nabla T) - h_v (T - T_a) + Q,\quad "
                            r"h_v = h_{eff}/t_b,\quad Q = \frac{P}{A_{chip} t_b}"], None),
+        ("Layers below the board (top view): heat sink plane T₂",
+         [r"(\rho c t)_2\,\partial_t T_2 = \nabla\cdot((k t)_2\nabla T_2) + \frac{T - T_2}{R_{12}} - "
+          r"\frac{T_2 - T_a}{R_{2a}}",
+          r"R_{12} = \sum_{board}\frac{t_l}{k_{z,l}} + \sum_{i<last}\frac{t_i}{k_i} + \frac{t_{last}}{2k_{last}},\quad "
+          r"R_{2a} = \frac{t_{last}}{2k_{last}} + \frac{1}{h}"],
+         "With layers below, the board is cooled through the heat sink plane (and h_top on top); R in m²K/W per "
+         "area."),
         ("Finite volumes", [r"C\,\dot\theta = -G\,\theta + B\,P,\quad C_i = (\rho c)_i V_i,\quad G_{ij} = "
                             r"-\frac{A_{ij}}{d/2k_i + d/2k_j}"], "Vertex-centred control volumes, implicit Euler."),
         ("Copper coverage and vias", [r"k_{xy} = c\,k_{Cu} + (1-c)\,k_{FR4,xy},\quad k_z = \left(\frac{c}{k_{Cu}} + "

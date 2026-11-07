@@ -114,3 +114,29 @@ def test_custom_stack_and_chip():
         chips=[{'tech': 'myChip', 'x': 20, 'y': 15, 'P': 5.0}])
     D = genBoard(lay)
     assert np.isclose(D['kEff'], 390.0) and D['chips'][0]['Tjmax'] == 150.0
+
+
+def test_layers_below():
+    # uniform heating: plane 2 stays uniform, the series path board → interface → heat sink → coolant is exact
+    from src.py.board.boardLib import BELOW
+    lay = dict(LAY, chips=[{'tech': 'Si MOSFET', 'x': 20, 'y': 15, 'w': 50, 'l': 40, 'P': 2.0}], hTop=0.0,
+               below=BELOW['Gap filler 2 mm + Al heat sink 5 mm'])
+    D = genBoard(lay)
+    C, G, Bp = calcBoardMat(D)
+    assert len(C) == 2 * D['geo'].shape[0]
+    _, Tss = simBoard(C, G, Bp, np.full((2, 1), 2.0), 1.0, 25)
+    N = D['geo'].shape[0]
+    assert np.allclose(Tss[:N] - 25, 2.0 * (D['R12'] + D['R2a']) / (0.040 * 0.030), rtol=1e-9)
+    assert np.allclose(Tss[N:] - 25, 2.0 * D['R2a'] / (0.040 * 0.030), rtol=1e-9)
+
+    # energy balance with chips: the heat leaves through the bottom of the heat sink (plane 2) and the top
+    D = genBoard(dict(LAY, below=BELOW['Gap filler 2 mm + Al heat sink 5 mm']))
+    C, G, Bp = calcBoardMat(D)
+    _, Tss = simBoard(C, G, Bp, np.array([[30.0, 15.0]] * 2), 1.0, 25)
+    V = D['wA'] * D['dx'] * D['dy'] * D['tb']
+    Qout = np.sum(V * D['h2'] * (Tss[N:] - 25)) + np.sum(V * D['hv'] * (Tss[:N] - 25))
+    assert np.isclose(Qout, 45.0, rtol=1e-8)
+
+    # cross-section: the layers below are resolved
+    D = genBoard(dict(LAY, view='xz', below=BELOW['Gap filler 2 mm + Al heat sink 5 mm']))
+    assert D['nBelow'] > 0 and D['Ly'] > 7e-3

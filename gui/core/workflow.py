@@ -182,7 +182,8 @@ def _sf(cfg, sub):
         return f, PRE_STEPS + [('Self-heating', "one Foster network per node from the experiment that heats only "
                                                 "this node (falls back to the coupled network if there are fewer "
                                                 "experiments than nodes)."),
-                               ('Rth matrix', "coupling from the steady-state end values of all experiments.")] +             POST_STEPS
+                               ('Rth matrix', "coupling from the steady-state end values of all experiments.")] + (
+            POST_STEPS)
     f.node('init', 'Initial network', [f"{val('Mdl', 'rc', 'K')} Cauer stages per source", "R from the end values"])
     f.node('fit', 'Output-error fit', [f"bounds ×/÷ {val('Mdl', 'sf', 'bnd')}", f"≤ {val('Mdl', 'sf', 'Nmax')} "
                                                                              "samples"])

@@ -182,7 +182,8 @@ HELP = {
     'Mdl.pinn.alpha': "Weight α of the data loss mean((T̂ − T)²).",
     'Mdl.pinn.beta':
         "Weight β of the physics residual mean(r²). 0 = data only (as MATLAB). The residual is in W, its square is "
-        "large (10⁶–10⁸ W²), so useful values are small (1e-8–1e-5): compare β·L_phys with α·L_data in the results.",
+        "large (10⁶–10⁸ W²), so useful values are small (1e-8–1e-5): compare β·L_phys with α·L_data in the "
+        "results.",
     'Mdl.pinn.PvSrc':
         "Where the losses Pv of the physics residual come from. 0: the equation PvEq; k > 0: input feature k is "
         "already the loss in W (e.g. measured or simulated losses).",

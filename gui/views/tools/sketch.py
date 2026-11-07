@@ -281,7 +281,8 @@ def _resd(x0, y0, x1, y1, lab=None, dash=None, op=1.0, size=9, off=10, frac=0.5,
     a = np.degrees(np.arctan2(y1 - y0, x1 - x0))
     mx, my = x0 + frac * (x1 - x0), y0 + frac * (y1 - y0)
     u = np.array([x1 - x0, y1 - y0]) / max(np.hypot(x1 - x0, y1 - y0), 1e-9)
-    s = _l(x0, y0, mx - 11 * u[0], my - 11 * u[1], dash=dash, op=op) +         _l(mx + 11 * u[0], my + 11 * u[1], x1, y1, dash=dash, op=op)
+    s = (_l(x0, y0, mx - 11 * u[0], my - 11 * u[1], dash=dash, op=op) +
+         _l(mx + 11 * u[0], my + 11 * u[1], x1, y1, dash=dash, op=op))
     s += (f"<rect x='{mx - 11:.1f}' y='{my - 4.5:.1f}' width='22' height='9' fill='none' stroke='currentColor' "
           f"stroke-width='1.1' stroke-opacity='{op}' transform='rotate({a:.1f} {mx:.1f} {my:.1f})'/>")
     if lab:
