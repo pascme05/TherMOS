@@ -74,18 +74,24 @@ TUTORIALS = [
     # ------------------------------------------
     dict(id='sf_nodes', mode='SF', level='Intermediate', minutes=10, base='startRth',
          title="Coupled heat sources and the R_th matrix",
-         story="Four heat sources on a common substrate, every source heated alone once (one profile per node). "
-               "The nodal Foster model (SF) builds the resistance matrix and the coupled network.",
-         goals=["interpret self- and cross-heating resistances", "know the limits of the experimental SF mode"],
-         changes={},
-         steps=["Open *Theory* and vary the coupling of the two-chip example.", "*Run* the mode.",
-                "Open *Results › R_th matrix*."],
-         look="- R_th matrix: diagonal ≈ **6.10 K/W** (self-heating), neighbours 1.81 K/W, diagonal partner "
-              "1.61 K/W — a symmetric 2 × 2 arrangement.\n"
-              "- Error on the test profiles: MAE ≈ 4.93 K, MAX ≈ 40 K, FIT ≈ −13 %: the steady state is right, "
-              "the dynamics are not (known limitation F-F1, the mode is experimental).",
+         story="Four heat sources in a 2 × 2 arrangement on a common substrate (like the four switches of a full "
+               "bridge), every source heated alone once (one profile per source). The SF mode fits a coupled "
+               "Cauer network: one RC ladder per source plus coupling resistances between the sources.",
+         goals=["interpret self- and cross-heating resistances", "see why a coupled network beats single-input "
+                                                                 "models here"],
+         changes={'Run.selSF': 2, 'Mdl.rc.K': 3},
+         steps=["Open *Theory*: look at the full-bridge sketch and fit the explorer with single-chip steps and with "
+                "full-bridge operation.", "*Run* the mode (fit ≈ 5 s).",
+                "Open *Results*: R_th matrix, fitted ladders and couplings."],
+         look="- R_th matrix: diagonal ≈ **6.10 K/W** (self-heating), neighbours **1.82 K/W**, diagonal partner "
+              "**1.62 K/W** — a symmetric 2 × 2 arrangement.\n"
+              "- Error on the test profile: **MAE ≈ 0.77 K**, MAX ≈ 1.7 K, FIT ≈ 89 % (K = 3 stages; K = 2: "
+              "MAE 0.80 K).\n"
+              "- For comparison on the same data: the nodal Foster method of the MATLAB version (sub-mode 1) "
+              "MAE 4.93 K, MAX 40 K; the RC mode (one input) 23 K.",
          exercise=["Which source heats source 1 most, and by how much at 10 W?",
-                   "Compare with an SS model on the same data (mode SS, same config)."]),
+                   "Switch the sub-mode to *Nodal Foster* and compare the transient error (Trans column).",
+                   "Reduce Mdl › sf › bnd to 10: which parameters stop at their bounds (warning in the log)?"]),
 
     # ------------------------------------------
     # PO

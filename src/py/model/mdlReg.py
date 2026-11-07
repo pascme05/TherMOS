@@ -84,10 +84,11 @@ def mdlReg(setup):
         reg.append({'tag': 'ss', 'name': 'State Space', 'siso': 0,
                     'fit': lambda d, v, p: ssFit(d, v, p), 'sol': lambda m, d, p: ssSol(m, d, p, lg),
                     'size': lambda m: _nSys(m['sys'])})
-    if setup.get('selSF', 0) == 1:
-        reg.append({'tag': 'sf', 'name': 'Nodal Foster', 'siso': 0,
-                    'fit': lambda d, v, p: sfFit(d, v, p, lg), 'sol': lambda m, d, p: sfSol(m, d, p, lg),
-                    'size': lambda m: int(np.size(m['Rth']) + np.size(np.diag(m['Cth'])))})
+    if setup.get('selSF', 0) != 0:
+        reg.append({'tag': 'sf', 'name': 'Nodal thermal network', 'siso': 0,
+                    'fit': lambda d, v, p: sfFit(d, v, p, lg, int(setup['selSF'])),
+                    'sol': lambda m, d, p: sfSol(m, d, p, lg),
+                    'size': lambda m: int(np.size(m['p']) if 'p' in m else np.size(m['Rth']) + np.size(np.diag(m['Cth'])))})
     if setup.get('selPO', 0) == 1:
         reg.append({'tag': 'po', 'name': 'POD Galerkin', 'siso': 0,
                     'fit': lambda d, v, p: poFit(d, v, p, lg), 'sol': lambda m, d, p: poSol(m, d, p, lg),

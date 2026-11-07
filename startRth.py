@@ -143,7 +143,7 @@ setup['selRC'] = 0                                                              
 
 # Multiple-Input Multiple-Output (MIMO)
 setup['selSS'] = 0                                                                                                       # SS-Model (State-Space) (0): de-activated, (1): activated
-setup['selSF'] = 1                                                                                                       # SF-Model (Thermal Structure Function) (0): de-activated, (1): activated
+setup['selSF'] = 2                                                                                                       # SF-Model (Thermal Network) (0): de-activated, (1): nodal Foster (single-source experiments), (2): coupled Cauer network
 
 # ------------------------------------------
 # Analytical 2D Models

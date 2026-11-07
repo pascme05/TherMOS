@@ -140,11 +140,11 @@ setup['ref'] = ['R1', 'R2', 'R3']                                               
 # ------------------------------------------
 # Single-Input Single-Output (SISO)
 setup['selRC'] = 0                                                                                                       # RC-Model (Foster) (0): de-activated, (1): activated
-setup['selSF'] = 0                                                                                                       # SF-Model (Thermal Structure Function) (0): de-activated, (1): activated
+setup['selSF'] = 0                                                                                                       # SF-Model (Thermal Network) (0): de-activated, (1): nodal Foster (single-source experiments), (2): coupled Cauer network
 
 # Multiple-Input Multiple-Output (MIMO)
 setup['selSS'] = 0                                                                                                       # SS-Model (State-Space) (0): de-activated, (1): activated
-setup['selSF'] = 0                                                                                                       # SF-Model (Structure-Function) (0): de-activated, (1): activated
+setup['selSF'] = 0                                                                                                       # SF-Model (Thermal Network) (0): de-activated, (1): nodal Foster (single-source experiments), (2): coupled Cauer network
 
 # ------------------------------------------
 # Analytical 2D Models

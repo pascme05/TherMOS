@@ -75,7 +75,7 @@ def _ints():
 
 
 INTS = _ints()                                                        # {(section, cat, var)} forced integer
-STRS = set()                                                          # {(section, cat, var)} forced text
+STRS = {('Mdl', 'pinn', 'PvEq'), ('Mdl', 'pinn', 'const')}            # {(section, cat, var)} forced text
 NO_OPTIONS = {('Mdl', 'dl', 'seq')}                                   # descriptions enumerate cases, value continuous
 OPTIONAL = set()                                                      # empty value allowed
 OPTIONS = {('Dat', 'gen', 'dOut'): {3: '3-dimensional'}}                         # options the code accepts beyond the workbook
@@ -97,7 +97,7 @@ RUN = {'user': 'Pascal Schirmer', 'name': 'default', 'config': '/default/default
        'trSheet': ['train-1', 'train-2', 'train-3'], 'teSheet': 'test', 'vlSheet': ['val'],
        'trID': [], 'teID': [], 'vlID': [], 'rTr': 0.7, 'rVl': 0.2,
        'inp': ['P1', 'P2', 'P3'], 'out': ['T1', 'T2', 'T3'], 'ref': ['R1', 'R2', 'R3'],
-       'selRC': 1, 'selSS': 1, 'selSF': 1, 'selPO': 1, 'selPS': 1, 'selML': 1, 'selDL': 1, 'selPI': 3,
+       'selRC': 1, 'selSS': 1, 'selSF': 2, 'selPO': 1, 'selPS': 1, 'selML': 1, 'selDL': 1, 'selPI': 3,
        'featRoll': 0, 'EWMA': [5, 50], 'EWMS': [5, 50], 'legacy': 0}
 # (var, kind, label, help): kind 'text', 'toggle', 'int', 'select:a|b|c', 'expert:<kind>'; the data settings
 # (files, sheets, IDs, ratios, channels) have their own form on the Setup page (gui/views/project.py)
@@ -134,11 +134,12 @@ MODES = {
                text="Linear state-space model x' = A·x + B·u, T = C·x + D·u identified from the data (subspace "
                     "N4SID/MOESP + output-error fit). Multi-input multi-output, cross-coupling included.",
                cats=['gen', 'ss'], script='setup/tutorial/tutorial_SS.py'),
-    'SF': dict(title='Nodal Foster (SF)', section='Mdl', extra=['Par'], icon=':material/hub:',
-               text="Nodal Foster model of M coupled nodes C·dT/dt = P - G·T ('structure function' model of the "
-                    "MATLAB version): Foster pairs from the self-heating curves, coupling from the steady-state Rth "
-                    "matrix. Needs one single-source experiment per node. Experimental (F-F1).",
-               cats=['gen', 'rc'], script='startRth.py'),
+    'SF': dict(title='Nodal network (SF)', section='Mdl', extra=['Par'], icon=':material/hub:',
+               text="Thermal network of M coupled heat sources C·dT/dt = P - G·T. Coupled Cauer network: one RC "
+                    "ladder per source plus coupling resistances between the sources, fitted to any profiles "
+                    "(default). Nodal Foster: the MATLAB method, needs one single-source experiment per source.",
+               pick=('selSF', {2: 'Coupled Cauer network', 1: 'Nodal Foster (single-source experiments)'}),
+               cats=['gen', 'rc', 'sf'], script='startRth.py'),
     'PO': dict(title='POD-Galerkin (2D)', section='Mdl', extra=['Dat', 'Exp'], icon=':material/grid_on:',
                text="Proper orthogonal decomposition of 2D temperature fields: K spatial modes from the snapshots, "
                     "heat equation projected onto them (Galerkin) and calibrated with the training data.",

@@ -174,13 +174,27 @@ def _ss(cfg, sub):
 def _sf(cfg, sub):
     f = Flow()
     last = _pre(f, cfg)
-    f.node('zth', 'Self-heating Zthₖₖ', [f"{val('Mdl', 'rc', 'K')} RC pairs per node"])
-    f.node('rth', 'Rth matrix', ["ΔTᵢ(end)/Pₖ(end)", "G = Rth⁻¹"])
-    f.edge(last, 'zth').edge('zth', 'rth')
+    if int(sub or 2) == 1:
+        f.node('zth', 'Self-heating Zthₖₖ', [f"{val('Mdl', 'rc', 'K')} RC pairs per node"])
+        f.node('rth', 'Rth matrix', ["ΔTᵢ(end)/Pₖ(end)", "G = Rth⁻¹"])
+        f.edge(last, 'zth').edge('zth', 'rth')
+        _post(f, cfg, 'rth', 'sf')
+        return f, PRE_STEPS + [('Self-heating', "one Foster network per node from the experiment that heats only "
+                                                "this node (falls back to the coupled network if there are fewer "
+                                                "experiments than nodes)."),
+                               ('Rth matrix', "coupling from the steady-state end values of all experiments.")] +             POST_STEPS
+    f.node('init', 'Initial network', [f"{val('Mdl', 'rc', 'K')} Cauer stages per source", "R from the end values"])
+    f.node('fit', 'Output-error fit', [f"bounds ×/÷ {val('Mdl', 'sf', 'bnd')}", f"≤ {val('Mdl', 'sf', 'Nmax')} "
+                                                                             "samples"])
+    f.node('rth', 'Network & Rth', ["Rth = [G⁻¹]ⱼⱼ", "couplings per stage"])
+    f.edge(last, 'init').edge('init', 'fit').edge('fit', 'rth')
     _post(f, cfg, 'rth', 'sf')
-    return f, PRE_STEPS + [('Self-heating', "one Foster network per node from the experiment that heats only this "
-                                            "node."),
-                           ('Rth matrix', "coupling from the steady-state end values of all experiments.")] + POST_STEPS
+    return f, PRE_STEPS + [('Initial network', "one Cauer ladder per heat source, stage resistances from the "
+                                               "steady-state end values, time constants log-spaced."),
+                           ('Output-error fit', "all resistances, capacitances and couplings are fitted to the "
+                                                "measured temperatures (bounded log-parameters)."),
+                           ('Network & Rth', "steady-state resistance matrix of the junctions and the fitted "
+                                             "couplings.")] + POST_STEPS
 
 
 def _po(cfg, sub, ps=False):

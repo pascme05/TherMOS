@@ -264,3 +264,103 @@ def heat_path(n=4):
     b.append(_t(x0, yg + 24, "same Z_th(t); from the junction outwards the Cauer elements follow the layers on the left",
                 size=9))
     return _svg(''.join(b), 660, 222)
+
+
+#######################################################################################################################
+# Coupled heat sources (SF mode)
+#######################################################################################################################
+_SUB = str.maketrans('0123456789', '₀₁₂₃₄₅₆₇₈₉')
+
+
+def _sub(*v):
+    return ''.join(str(x) for x in v).translate(_SUB)
+
+
+def _resd(x0, y0, x1, y1, lab=None, dash=None, op=1.0, size=9, off=10, frac=0.5, anchor='middle'):
+    """Resistor between two points in any direction (box rotated onto the wire at frac), label beside the box."""
+    a = np.degrees(np.arctan2(y1 - y0, x1 - x0))
+    mx, my = x0 + frac * (x1 - x0), y0 + frac * (y1 - y0)
+    u = np.array([x1 - x0, y1 - y0]) / max(np.hypot(x1 - x0, y1 - y0), 1e-9)
+    s = _l(x0, y0, mx - 11 * u[0], my - 11 * u[1], dash=dash, op=op) +         _l(mx + 11 * u[0], my + 11 * u[1], x1, y1, dash=dash, op=op)
+    s += (f"<rect x='{mx - 11:.1f}' y='{my - 4.5:.1f}' width='22' height='9' fill='none' stroke='currentColor' "
+          f"stroke-width='1.1' stroke-opacity='{op}' transform='rotate({a:.1f} {mx:.1f} {my:.1f})'/>")
+    if lab:
+        n = np.array([-(y1 - y0), x1 - x0]) / max(np.hypot(x1 - x0, y1 - y0), 1e-9)
+        if n[1] > 0 or (n[1] == 0 and n[0] > 0):
+            n = -n
+        s += _t(mx + off * n[0], my + off * n[1] + 3, lab, anchor, size)
+    return s
+
+
+def coupled(M=4, Nr=2, names=None):
+    """
+    Four chips of a full bridge on a common substrate (top view, coupling resistances between all chips) next to the
+    coupled Cauer network of the SF mode: one ladder of Nr stages per chip, couplings at every stage.
+    """
+    M = int(max(2, min(M, 4)))
+    Nr = int(max(1, min(Nr, 3)))
+    names = names or [f"T{i + 1}" for i in range(M)]
+    b = []
+
+    # ==============================================================================
+    # Top view: full bridge on a DBC
+    # ==============================================================================
+    b.append(_t(130, 16, "full bridge on a common substrate (top view)", 'middle', 10, it=True))
+    b.append(_r(18, 26, 224, 214, '#b87333', sw=0.6, op=0.25) + _t(24, 234, "DBC / board on heat sink", size=9))
+    pos = [(70, 80), (70, 186), (190, 80), (190, 186)][:M]
+    lbl = ['HS leg A', 'LS leg A', 'HS leg B', 'LS leg B']
+    pairs = [(i, j) for i in range(M) for j in range(i + 1, M)]
+    for i, j in pairs:
+        (x0, y0), (x1, y1) = pos[i], pos[j]
+        diag = x0 != x1 and y0 != y1
+        fr = (0.3 if i == 0 else 0.7) if diag else 0.5
+        b.append(_resd(x0, y0, x1, y1, "R" + _sub(i + 1, j + 1), dash='3 3' if diag else None,
+                       op=0.6 if diag else 1.0, off=11, frac=fr))
+    for k, (x, y) in enumerate(pos):
+        b.append(_r(x - 24, y - 20, 48, 40, HOT, sw=0.8, op=0.9))
+        b.append(_t(x, y - 2, names[k], 'middle', 11, col='white') + _t(x, y + 12, lbl[k], 'middle', 8, col='white'))
+
+    # ==============================================================================
+    # Network: one Cauer ladder per chip, couplings per stage
+    # ==============================================================================
+    x0, x1 = 290, 730
+    xs = np.linspace(x0 + 50, x1 - 50, M)
+    yj = 40 + 14 * len(pairs) + 20
+    dy = 66
+    ys = [yj + k * dy for k in range(Nr)]
+    yr = yj + Nr * dy
+    b.append(_t(x0, 16, f"coupled Cauer network: {Nr} stage(s) per chip, couplings at every stage", size=10, it=True))
+
+    # Couplings of the junctions (arcs above, one height per pair)
+    order = sorted(pairs, key=lambda q: (q[1] - q[0], q[0]))
+    for r, (i, j) in enumerate(order):
+        ym = yj - 22 - 14 * r
+        xa, xb = xs[i], xs[j]
+        xm = (xa + xb) / 2 + (r % 2) * 18 - 9
+        b.append(_poly([xa, xa + 6, xm - 10], [yj, ym, ym], w=1) + _poly([xm + 10, xb - 6, xb], [ym, ym, yj], w=1))
+        b.append(_r(xm - 10, ym - 4, 20, 8, 'none', sw=1.1))
+        b.append(_t(xm + 14, ym + 3, "R" + _sub(i + 1, j + 1) + ",₁", size=8))
+
+    # Couplings of the deeper stages (neighbours, dashed)
+    for k in range(1, Nr):
+        for i in range(M - 1):
+            b.append(_resd(xs[i], ys[k], xs[i + 1], ys[k], "R" + _sub(i + 1, i + 2) + "," + _sub(k + 1),
+                           dash='3 3', op=0.7, size=8, off=9, frac=0.62))
+
+    # Ladders (R on the wire, C to the left)
+    for i, x in enumerate(xs):
+        for k in range(Nr):
+            y = ys[k]
+            yn = ys[k + 1] if k + 1 < Nr else yr
+            b.append(_resd(x, y, x, yn, None))
+            b.append(_t(x + 9, (y + yn) / 2 + 3, "R'" + _sub(i + 1, k + 1), size=8))
+            b.append(_l(x - 24, y, x, y) + _cap(x - 24, y, y + 30, None))
+            b.append(_t(x - 35, y + 19, "C'" + _sub(i + 1, k + 1), 'end', 8))
+            b.append(_dot(x, y, HOT if k == 0 else 'currentColor', 3.2 if k == 0 else 2.2))
+        b.append(_t(x + 6, yj + 13, names[i], size=10, col=HOT))
+        b.append(_arrow(x + 26, yj - 2, x + 5, yj - 1, HOT, 1.4) + _t(x + 29, yj + 1, "P" + _sub(i + 1), size=9,
+                                                                       col=HOT))
+    b.append(_l(xs[0] - 34, yr, xs[-1] + 30, yr, COLD, 2.2) + _t(xs[-1] + 34, yr + 4, "T_ref", size=10, col=COLD))
+    b.append(_t(x0, yr + 22, "solid: junction couplings (all pairs) · dashed: couplings through the substrate / heat "
+                             "sink (all pairs, neighbours drawn)", size=9))
+    return _svg(''.join(b), 760, int(max(yr + 34, 250)))

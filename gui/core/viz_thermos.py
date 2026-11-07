@@ -233,6 +233,28 @@ def sf_view(data, setup, key):
     show(fig, height=360, key=f"{key}|rth", info="**Steady-state thermal resistance matrix Rth.** Rth[i, k] = "
          "temperature rise of node i per watt in node k. The diagonal is the self-heating, off-diagonal values are "
          "the thermal coupling.")
+    if m.get('type') == 'net':
+        Rl, Cl, Rc = (np.asarray(m[k], dtype=float) for k in ('Rlad', 'Clad', 'Rcpl'))
+        Nr = Rl.shape[1]
+        if len(Rl) <= 4:
+            from gui.views.tools import sketch
+            sketch.show(sketch.coupled(len(Rl), min(Nr, 3), names[:len(Rl)]),
+                        "Fitted coupled Cauer network: one ladder per source, couplings at every stage.")
+        st.markdown("**Ladders** (stage 1 = junction, the last stage connects to the reference)")
+        table(pd.DataFrame(np.column_stack([Rl, Cl, np.cumsum(Rl, axis=1)[:, -1]]), index=names[:len(Rl)],
+                           columns=[f"R'{k + 1} (K/W)" for k in range(Nr)] + [f"C'{k + 1} (Ws/K)" for k in range(Nr)] +
+                                   ["Σ R' (K/W)"]))
+        rows = []
+        for k in range(Nr):
+            for i in range(len(Rl)):
+                for j in range(i + 1, len(Rl)):
+                    rows.append({'stage': k + 1, 'between': f"{names[i]} – {names[j]}", 'R_ij (K/W)': Rc[k, i, j],
+                                 'conductance (W/K)': 1 / Rc[k, i, j]})
+        st.markdown("**Coupling resistances** (large R = negligible coupling)")
+        table(pd.DataFrame(rows), hide_index=True)
+        if m.get('nAct'):
+            st.warning(f"{m['nAct']} resistances/capacitances ended at their bounds (factor {fmt(m.get('bnd'))}): "
+                       "increase Mdl › sf › bnd or change the number of stages.")
     if m.get('Rth_rc') is not None:
         Rf, tf = np.asarray(m['Rth_rc'], dtype=float), np.asarray(m['tau_rc'], dtype=float)
         st.markdown("**Foster pairs per node**")

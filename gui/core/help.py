@@ -95,8 +95,9 @@ HELP = {
     # Mdl: RC
     # ==================================================================================================================
     'Mdl.rc.K':
-        "Number of Foster RC pairs (RC) or of RC pairs per node (SF). 3–5 pairs describe chip, solder, substrate "
-        "and heat sink; more pairs fit noise and give pairs with nearly equal τ.",
+        "Number of Foster RC pairs (RC), of RC pairs per node (SF Foster) or of Cauer stages per source (SF "
+        "coupled network). 3–5 pairs describe chip, solder, substrate and heat sink; more pairs fit noise and give "
+        "pairs with nearly equal τ.",
     'Mdl.rc.bc': "Bound of the RC parameters of the MATLAB-style fit (legacy = 1). The corrected fit works on a "
                  "log scale without this bound.",
     # ==================================================================================================================
@@ -174,13 +175,40 @@ HELP = {
     'Mdl.dl.seq': "0: seq2seq (the network predicts the whole window), x > 0: seq2point (the network predicts "
                   "sample x of the window; x = W means causal, only past inputs).",
     'Mdl.dl.valPat': "Early stopping patience: validations without improvement before training stops.",
-    'Mdl.pinn.Rth': "Thermal resistance of the lumped physics model Cth·T' = (T_amb − T)/Rth + 3·Rs·Is² (K/W).",
-    'Mdl.pinn.Cth': "Thermal capacitance of the lumped physics model (Ws/K).",
-    'Mdl.pinn.Rs': "Stator resistance for the copper losses 3·Rs·Is² of the physics residual (Ω).",
+    'Mdl.pinn.Rth': "Thermal resistance of the lumped physics model Cth·dT/dt = (T_ref − T)/Rth + Pv (K/W), from "
+                    "the node to the reference temperature.",
+    'Mdl.pinn.Cth': "Thermal capacitance of the lumped physics model (Ws/K). τ = Rth·Cth is its time constant.",
+    'Mdl.pinn.Rs': "Stator resistance (Ω); available as the constant Rs in the loss equation (default 3·Rs·x4²).",
     'Mdl.pinn.alpha': "Weight α of the data loss mean((T̂ − T)²).",
     'Mdl.pinn.beta':
-        "Weight β of the physics residual mean(r²). 0 = data only (as MATLAB). Small values (1e-3–1e-1) pull the "
-        "network towards the lumped model when data are scarce; needs Ta as input 2 and Is as input 4.",
+        "Weight β of the physics residual mean(r²). 0 = data only (as MATLAB). The residual is in W, its square is "
+        "large (10⁶–10⁸ W²), so useful values are small (1e-8–1e-5): compare β·L_phys with α·L_data in the results.",
+    'Mdl.pinn.PvSrc':
+        "Where the losses Pv of the physics residual come from. 0: the equation PvEq; k > 0: input feature k is "
+        "already the loss in W (e.g. measured or simulated losses).",
+    'Mdl.pinn.PvEq':
+        "Loss equation (W) for PvSrc = 0, evaluated on every sample of the window. Symbols: x1, x2, … input "
+        "features (raw units), T predicted temperature of the residual node (°C), Rth, Cth, Rs and the constants "
+        "of 'Constants'. Operators + − * / ** and abs, sqrt, exp, log, sin, cos, tanh, minimum, maximum. "
+        "Examples: 3*Rs*x4**2 (copper losses), 3*Rs*(1+0.00393*(T-20))*x4**2 (with temperature-dependent "
+        "resistance), x1*x2 (voltage × current), k*x3**2 + p0 with const 'k=0.01; p0=50'.",
+    'Mdl.pinn.const': "Constants of the loss equation, 'name=value' separated by semicolons, e.g. 'k=0.01; p0=50'. "
+                      "Empty or 0: none.",
+    'Mdl.pinn.TrefSrc': "Reference temperature of the residual (ambient, coolant). 0: the constant Tref; k > 0: "
+                        "input feature k in °C (motor data: feature 2 = ambient).",
+    'Mdl.pinn.Tref': "Constant reference temperature for TrefSrc = 0 (°C).",
+    'Mdl.pinn.node': "Output (1 = first) whose prediction enters the residual; the other outputs are trained on the "
+                     "data only.",
+    'Mdl.gen.dev':
+        "Compute device of the neural networks (DL, PI). 1: GPU via CUDA if PyTorch was installed with CUDA "
+        "support, otherwise the CPU is used with a warning. The scikit-learn models of the ML mode always run on "
+        "the CPU.",
+    'Mdl.sf.bnd':
+        "Coupled network: every R and C may move by at most this factor from its initial value during the fit "
+        "(bounds of the optimiser). Too small → parameters stick at the bounds (warning in the log); too large → "
+        "slower fit, poorly identifiable parameters may drift.",
+    'Mdl.sf.Nmax': "Coupled network: the training data are decimated to at most Nmax samples for the fit. More "
+                   "samples = more accurate fast dynamics, longer fit.",
     # ==================================================================================================================
     # Par: pre-processing
     # ==================================================================================================================
@@ -214,7 +242,8 @@ BASIC = {
     'Mdl.dt.leaf', 'Mdl.dt.split', 'Mdl.svm.kernel', 'Mdl.svm.C', 'Mdl.gpr.kernel', 'Mdl.en.method', 'Mdl.en.cycle',
     'Mdl.nn.layer', 'Mdl.nn.nodes', 'Mdl.nn.act',
     'Mdl.dl.epoch', 'Mdl.dl.initLr', 'Mdl.dl.batch', 'Mdl.dl.W', 'Mdl.dl.seq', 'Mdl.dl.loss',
-    'Mdl.pinn.alpha', 'Mdl.pinn.beta', 'Mdl.pinn.Rth', 'Mdl.pinn.Cth',
+    'Mdl.pinn.alpha', 'Mdl.pinn.beta', 'Mdl.pinn.Rth', 'Mdl.pinn.Cth', 'Mdl.pinn.PvSrc', 'Mdl.pinn.PvEq',
+    'Mdl.pinn.const', 'Mdl.pinn.TrefSrc', 'Mdl.pinn.Tref', 'Mdl.gen.dev',
     'Par.gen.normX', 'Par.gen.normY', 'Par.loss.fw', 'Par.loss.bw',
 }
 
@@ -267,6 +296,13 @@ ACTIVE = {
     'Mdl.dl.seq': lambda c: _mode(c) == 'DL',
     'Mdl.dl.loss': lambda c: _mode(c) == 'DL',
     'Mdl.dl.valFreq': lambda c: _mode(c) == 'DL',
+    'Mdl.gen.dev': lambda c: _mode(c) in ('DL', 'PI'),
+    'Mdl.pinn.PvEq': lambda c: int(c['Mdl']['pinn'].get('PvSrc', 0) or 0) == 0,
+    'Mdl.pinn.const': lambda c: int(c['Mdl']['pinn'].get('PvSrc', 0) or 0) == 0,
+    'Mdl.pinn.Rs': lambda c: int(c['Mdl']['pinn'].get('PvSrc', 0) or 0) == 0,
+    'Mdl.pinn.Tref': lambda c: int(c['Mdl']['pinn'].get('TrefSrc', 0) or 0) == 0,
+    'Mdl.sf.bnd': lambda c: int(_run(c, 'selSF', 2) or 2) == 2,
+    'Mdl.sf.Nmax': lambda c: int(_run(c, 'selSF', 2) or 2) == 2,
     'Par.gen.err': lambda c: c['Par']['loss']['bw'] == 1,
     'Par.gen.eps': _loss,
     'Par.loss.Rslope': _loss, 'Par.loss.Rcon': _loss, 'Par.loss.Rohm': _loss, 'Par.loss.Tref': _loss,
@@ -286,12 +322,13 @@ RELEVANT = {
             'en': lambda c: _mode(c) == 'ML' and _ml(c) == 5,
             'nn': lambda c: _mode(c) == 'ML' and _ml(c) == 6,
             'dl': lambda c: _mode(c) in ('DL', 'PI'),
-            'pinn': lambda c: _mode(c) == 'PI'},
+            'pinn': lambda c: _mode(c) == 'PI',
+            'sf': lambda c: _mode(c) == 'SF'},
 }
 CATEGORY_TITLES = {'gen': 'General', 'rc': 'RC network', 'ss': 'State space', 'pod': 'POD',
                    'knn': 'K nearest neighbours', 'dt': 'Regression tree', 'svm': 'Support vector regression',
                    'gpr': 'Gaussian process', 'en': 'Ensemble', 'nn': 'Neural network (MLP)', 'dl': 'Deep learning',
-                   'pinn': 'Physics (PINN)', 'loss': 'Temperature-dependent losses'}
+                   'pinn': 'Physics (PINN)', 'loss': 'Temperature-dependent losses', 'sf': 'Coupled network (SF)'}
 
 
 #######################################################################################################################

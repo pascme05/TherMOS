@@ -32,7 +32,8 @@
       "nSub": 20,
       "opt": 0,
       "Kmax": 10,
-      "Emax": 0.9999
+      "Emax": 0.9999,
+      "dev": 0
     },
     "rc": {
       "K": 3,
@@ -102,7 +103,17 @@
       "Cth": 20800,
       "Rs": 0.0141,
       "alpha": 1,
-      "beta": 0
+      "beta": 0,
+      "PvSrc": 0,
+      "PvEq": "3*Rs*x4**2",
+      "const": 0,
+      "TrefSrc": 2,
+      "Tref": 25,
+      "node": 1
+    },
+    "sf": {
+      "bnd": 10000,
+      "Nmax": 4000
     }
   },
   "Par": {
@@ -175,7 +186,7 @@
     ],
     "selRC": 1,
     "selSS": 1,
-    "selSF": 1,
+    "selSF": 2,
     "selPO": 1,
     "selPS": 1,
     "selML": 1,

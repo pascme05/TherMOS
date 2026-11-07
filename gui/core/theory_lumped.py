@@ -266,49 +266,182 @@ def theory_ss(cfg):
 #######################################################################################################################
 # SF
 #######################################################################################################################
+@st.cache_data(show_spinner=False, max_entries=16)
+def _sf_case(Rj, Rn, Rd, Rhs, exc, K, noise):
+    """
+    Reference: four chips of a full bridge (2 x 2) on a DBC, each with a 3-stage Cauer ladder (chip, DBC, heat sink);
+    junction couplings Rn (neighbours) and Rd (diagonal), heat sink couplings Rhs. Profiles: single-chip steps or a
+    full-bridge operation (high side and low side of each leg alternate); the coupled network with K stages is fitted
+    (sfFit) to the steps or to the first 70 % of the operation and tested on the rest.
+    """
+    from src.py.model.SF.sfNet import sfNet
+    from src.py.model.SF.sfFit import _fitNet
+    M, Nr = 4, 3
+    Ts, N = 0.1, 1200
+    R = np.tile(np.array([0.25, 0.35, 0.4]) * Rj, (M, 1))
+    tau = np.array([0.05, 0.8, 12.0])
+    C = tau[None, :] / R
+    pair = [(i, j) for i in range(M) for j in range(i + 1, M)]
+    diag = {(0, 3), (1, 2)}
+    g = []
+    for k in range(Nr):
+        for i, j in pair:
+            if k == 0:
+                g.append(1 / (Rd if (i, j) in diag else Rn))
+            elif k == Nr - 1:
+                g.append(1 / Rhs)
+            else:
+                g.append(1e-9)
+    p = np.log(np.concatenate([R.ravel(), C.ravel(), np.asarray(g)]))
+    rng = np.random.default_rng(42)
+    t = np.arange(N) * Ts
+    if exc == 'single-chip steps':
+        P2 = []
+        for i in range(M):
+            P = np.zeros((N // M, M))
+            P[:, i] = 20.0
+            P2.append(P)
+    else:
+        P = np.zeros((N, M))
+        per = int(4 / Ts)
+        on = (np.arange(N) // per) % 2 == 0
+        amp = 20 * (1 + 0.5 * np.sin(2 * np.pi * t / 60))
+        P[:, 0], P[:, 3] = np.where(on, amp, 2), np.where(on, amp, 2)
+        P[:, 1], P[:, 2] = np.where(on, 2, amp * 0.8), np.where(on, 2, amp * 0.8)
+        P2 = [P[:int(0.7 * N)], P[int(0.7 * N):]]
+    T0 = [None] * len(P2)
+    Y2 = sfNet(p, M, Nr, P2[0:1], Ts)
+    if exc != 'single-chip steps':
+        [G, Cv, E] = sfNet(p, M, Nr)
+        Yall = sfNet(p, M, Nr, [P], Ts)[0]
+        Y2 = [Yall[:int(0.7 * N)], Yall[int(0.7 * N):]]
+        T0 = [None, Yall[int(0.7 * N)]]
+    else:
+        Y2 = sfNet(p, M, Nr, P2, Ts)
+    Ym = [y + noise * rng.standard_normal(y.shape) for y in Y2]
+    n = len(P2) if exc == 'single-chip steps' else 1
+    mdl = _fitNet(P2[0:n], Ym[0:n], [np.zeros_like(y) for y in Ym[0:n]], Ts, M, int(K), 400, 1e4, 1500)
+    Yf = sfNet(mdl['p'], M, int(K), P2, Ts, [None if v is None else v for v in T0])
+    [G, _, _] = sfNet(p, M, Nr)
+    Rtrue = np.linalg.inv(G)[0::Nr][:, 0::Nr]
+    return {'P2': P2, 'Y2': Y2, 'Ym': Ym, 'Yf': Yf, 'Rtrue': Rtrue, 'Rfit': mdl['Rth'], 'Ts': Ts, 'mdl': mdl,
+            'test': 1 if exc != 'single-chip steps' else None}
+
+
 def theory_sf(cfg):
-    intro("SF mode: nodal Foster model of M coupled heat sources; self-heating from Foster fits, coupling from the "
-          "steady-state resistance matrix. Experimental (see the README, F-F1).")
-    cm.question("How strongly do neighbouring heat sources heat each other, and what does the resistance matrix "
-                "tell?")
+    intro("SF mode: thermal network of M coupled heat sources (chips). Every chip has an RC ladder to the heat sink, "
+          "the chips heat each other through coupling resistances.")
+    cm.question("How strongly do neighbouring chips heat each other, and how is a coupled network found from "
+                "measured or simulated profiles?")
+    K = int(min(max(_get(cfg, 'Mdl', 'rc', 'K', default=2), 1), 3))
+    sketch.show(sketch.coupled(4, K, ['T1', 'T2', 'T3', 'T4']),
+                "Left: the four switches of a full bridge (high side HS and low side LS of the legs A and B) on one "
+                "substrate; R_ij are the coupling resistances (neighbours solid, diagonal dashed). Right: the coupled "
+                f"Cauer network of the SF mode with K = {K} stage(s) per chip (Mdl › rc › K). Stage 1 is the "
+                "junction; the couplings of deeper stages describe heat that spreads through the substrate and the "
+                "heat sink and reaches the neighbour later.")
     cm.equations([
-        ("Nodal network", r"C\,\dot T = P(t) - G\,(T - T_{ref}),\quad G = R_{th}^{-1}",
-         "One node per heat source; C from the Foster fits of the self-heating curves."),
-        ("Resistance matrix", r"R_{th,ik} = \frac{\Delta T_i(\infty)}{P_k}\Big|_{\text{only } k \text{ heated}},"
-                              r"\qquad \Delta T(\infty) = R_{th}\,P",
-         "Diagonal: self-heating, off-diagonal: cross-heating. Needs one single-source experiment per node."),
-    ], sym=[('T, P', 'node temperatures, losses', '°C, W'), ('C', 'node capacitances', 'Ws/K'),
-            ('G, R_th', 'conductance and resistance matrix', 'W/K, K/W')], expanded=True)
-    cm.section(None, "Explorer: two chips on a common heat sink")
-    c = st.columns(4)
-    R11 = num(c[0], "R_th,11 (K/W)", 0.5, 'thSF|R11', min_value=0.01)
-    R22 = num(c[1], "R_th,22 (K/W)", 0.8, 'thSF|R22', min_value=0.01)
-    k = c[2].slider("Coupling R_12/√(R_11 R_22)", 0.0, 0.9, 0.35, 0.05, key='thSF|k')
-    tau = num(c[3], "Time constant τ (s)", 5.0, 'thSF|tau', min_value=0.01)
-    R12 = k * np.sqrt(R11 * R22)
-    Rth = np.array([[R11, R12], [R12, R22]])
-    G = np.linalg.inv(Rth)
-    Cn = tau * np.diag(G)
-    t = np.linspace(0, 6 * tau, 400)
-    P = np.array([10.0, 0.0])
-    lam, V = np.linalg.eig(-G / Cn[:, None])
-    x = np.array([V @ np.diag((np.exp(lam * ti) - 1) / lam) @ np.linalg.solve(V, P / Cn) for ti in t]).real
-    cm.tiles([("Self-heating ΔT_1", f"{fmt(Rth[0, 0] * 10)} K", "P_1 = 10 W, P_2 = 0"),
-              ("Cross-heating ΔT_2", f"{fmt(Rth[1, 0] * 10)} K", f"{100 * Rth[1, 0] / Rth[0, 0]:.0f} % of ΔT_1"),
-              ("Both at 10 W: ΔT_1", f"{fmt((Rth @ [10, 10])[0])} K", "superposition R_th·P")])
+        ("Nodal network", r"C\,\dot T = E\,P(t) - G\,T,\qquad T_{j} = [T]_{\text{junctions}},\qquad "
+                          r"\Delta T_j(\infty) = R_{th}\,P,\quad R_{th} = [G^{-1}]_{jj}",
+         "C diagonal (one capacitance per node), G symmetric: ladders plus couplings. E puts the loss of chip i into "
+         "its junction node."),
+        ("Conductance matrix", r"G = \sum_{i,k} \frac{1}{R'_{ik}}\,(e_{ik}-e_{i,k+1})(e_{ik}-e_{i,k+1})^T + "
+                               r"\sum_{i<j,\,k} \frac{1}{R_{ij,k}}\,(e_{ik}-e_{jk})(e_{ik}-e_{jk})^T",
+         "Every resistor adds its conductance to the two nodes it connects (the last ladder stage connects to "
+         "T_ref). Positive R and C → G positive definite → the network is passive and stable."),
+        ("Coupled Cauer network (selSF = 2): output-error fit with bounds",
+         r"\min_{p}\sum_n \lVert T(n) - \hat T(n;p)\rVert^2,\quad p = \log[R'_{ik},\,C'_{ik},\,1/R_{ij,k}],"
+         r"\quad p_0 - \ln b \le p \le p_0 + \ln b",
+         "Works with any profiles (single-chip steps or all chips loaded). The log-parameters keep every R and C "
+         "positive; the bounds b (Mdl › sf › bnd) stop poorly excited parameters from drifting. Couplings that end "
+         "at the lower bound are negligible."),
+        ("Exact simulation (sfNet)", r"S=C^{1/2},\; S^{-1}GS^{-1}=V\Lambda V^T:\quad z_k[n+1] = e^{-\lambda_k T_s}"
+                                     r"z_k[n] + \frac{1-e^{-\lambda_k T_s}}{\lambda_k}\,b_k[n]",
+         "Decoupled modes, exact for losses that are constant within a sample (zero-order hold)."),
+        ("Nodal Foster (selSF = 1, MATLAB)", r"R_{th,ik} = \frac{\Delta T_i(\infty)}{P_k}\Big|_{\text{only } k "
+                                             r"\text{ heated}}",
+         "Needs one single-source experiment per chip; the ODE time constants differ from the fitted Foster pairs "
+         "(F-F1). With fewer experiments than chips the coupled network is used."),
+    ], sym=[('T, P', 'node temperature rises, chip losses', 'K, W'),
+            ('C, G', 'capacitance and conductance matrix', 'Ws/K, W/K'),
+            ("R'_ik, C'_ik", 'resistance / capacitance of stage k of chip i', 'K/W, Ws/K'),
+            ('R_ij,k', 'coupling resistance between stage k of chips i and j', 'K/W'),
+            ('R_th', 'steady-state resistance matrix of the junctions', 'K/W'),
+            ('b', 'bound factor (Mdl › sf › bnd)', '–')], expanded=True)
+
+    cm.section(None, "Explorer: full bridge with four chips — fit the coupled network to a known reference")
+    c = st.columns(5)
+    Rj = num(c[0], "R_th chip → heat sink (K/W)", 1.0, 'thSF|Rj', min_value=0.05)
+    Rn = num(c[1], "Coupling neighbours R_n (K/W)", 4.0, 'thSF|Rn', min_value=0.1)
+    Rd = num(c[2], "Coupling diagonal R_d (K/W)", 12.0, 'thSF|Rd', min_value=0.1)
+    Rhs = num(c[3], "Coupling via heat sink (K/W)", 2.0, 'thSF|Rhs', min_value=0.1)
+    noise = num(c[4], "Noise σ (K)", 0.02, 'thSF|n', min_value=0.0, max_value=1.0, step=0.01)
     c = st.columns([2, 1])
-    with c[0]:
-        fig = go.Figure([line(t, x[:, 0], 'ΔT_1 (heated)', 0), line(t, x[:, 1], 'ΔT_2 (cross-heating)', 1)])
+    exc = c[0].segmented_control("Training profiles", ['single-chip steps', 'full-bridge operation'],
+                                 default='full-bridge operation', key='thSF|exc') or 'full-bridge operation'
+    Kf = c[1].slider("Fitted stages K", 1, 3, 2, key='thSF|K')
+    with st.spinner("Fitting the coupled network …"):
+        r = _sf_case(float(Rj), float(Rn), float(Rd), float(Rhs), exc, int(Kf), float(noise))
+    Rt, Rf = r['Rtrue'], r['Rfit']
+    ev = r['test'] if r['test'] is not None else 0
+    Y, Yf = r['Y2'][ev], r['Yf'][ev]
+    mae = float(np.mean(np.abs(Y - Yf)))
+    cm.tiles([("Self-heating R_th,11", f"{fmt(Rt[0, 0])} K/W", f"fitted {fmt(Rf[0, 0])} K/W"),
+              ("Cross-heating R_th,21", f"{fmt(Rt[1, 0])} K/W", f"{100 * Rt[1, 0] / Rt[0, 0]:.0f} % of R_th,11 · "
+                                                                 f"fitted {fmt(Rf[1, 0])}"),
+              ("MAE " + ("test part" if r['test'] is not None else "chip 1 step"), f"{fmt(mae)} K",
+               f"network with K = {Kf} stage(s)")])
+    tabs = st.tabs(["Temperatures", "R_th matrix", "Fitted network", "Losses"])
+    names = ['T1 (HS A)', 'T2 (LS A)', 'T3 (HS B)', 'T4 (LS B)']
+    tt = np.arange(len(Y)) * r['Ts']
+    with tabs[0]:
+        fig = go.Figure()
+        for i in range(4):
+            fig.add_trace(line(tt, Y[:, i], names[i] + ' reference', i, width=2.5))
+            fig.add_trace(line(tt, Yf[:, i], names[i] + ' network', i, dash='dot', showlegend=False))
         fig.update_layout(xaxis_title='t (s)', yaxis_title='ΔT (K)')
-        show(fig, key='thSF|T')
-    with c[1]:
-        table(pd.DataFrame(Rth, index=['T_1', 'T_2'], columns=['P_1', 'P_2']).round(4))
-        st.caption("R_th (K/W): column k = temperatures when only source k is heated with 1 W.")
+        show(fig, key='thSF|T', info="**Junction temperature rises.** Solid: reference, dotted: fitted coupled "
+             "network. With single-chip steps the plot shows the step of chip 1: the other chips only heat up via "
+             "the couplings (cross-heating starts flat).")
+    with tabs[1]:
+        cc = st.columns(2)
+        with cc[0]:
+            st.caption("Reference R_th (K/W): column k = temperature rises for 1 W in chip k")
+            table(pd.DataFrame(Rt, index=names, columns=['P1', 'P2', 'P3', 'P4']).round(4))
+        with cc[1]:
+            st.caption("Fitted R_th = [G⁻¹]_jj of the coupled network (K/W)")
+            table(pd.DataFrame(Rf, index=names, columns=['P1', 'P2', 'P3', 'P4']).round(4))
+    with tabs[2]:
+        m = r['mdl']
+        table(pd.DataFrame(np.column_stack([m['Rlad'], m['Clad']]), index=names,
+                           columns=[f"R'{k + 1} (K/W)" for k in range(Kf)] + [f"C'{k + 1} (Ws/K)" for k in range(Kf)])
+              .round(4))
+        rows = []
+        for k in range(Kf):
+            for i in range(4):
+                for j in range(i + 1, 4):
+                    rows.append({'stage': k + 1, 'pair': f"{i + 1}-{j + 1}", 'R_ij (K/W)': m['Rcpl'][k, i, j]})
+        st.caption("Coupling resistances per stage (large values = negligible coupling)")
+        table(pd.DataFrame(rows).round(3), hide_index=True)
+    with tabs[3]:
+        P = r['P2'][ev]
+        fig = go.Figure([line(tt, P[:, i], names[i], i) for i in range(4)])
+        fig.update_layout(xaxis_title='t (s)', yaxis_title='P (W)')
+        show(fig, key='thSF|P')
     cm.interpret([
-        f"Heating chip 1 alone with 10 W raises chip 2 by {fmt(Rth[1, 0] * 10)} K — the coupling through the common "
-        f"heat sink. With both chips at 10 W, chip 1 sees {fmt((Rth @ [10, 10])[0])} K instead of "
-        f"{fmt(Rth[0, 0] * 10)} K.",
-        "The cross-heating curve starts flat: the heat needs time to travel to the neighbour. The SF mode reproduces "
-        "this with one Foster network per node and the coupling of G; the RC mode (single input) cannot.",
-        "Note: in the implementation the branch time constants follow from C and G, so the dynamics can differ from "
-        "the Foster fit (F-F1). The steady state R_th·P is exact."])
+        f"Heating chip 1 with 1 W raises chip 2 by {fmt(Rt[1, 0])} K ({100 * Rt[1, 0] / Rt[0, 0]:.0f} % of its "
+        f"self-heating): with all four chips loaded, chip 1 sees ΔT = Σ_k R_th,1k·P_k, i.e. "
+        f"{fmt(Rt[0].sum() / Rt[0, 0])}× the self-heating for equal losses.",
+        f"The fitted network reproduces the reference with MAE = {fmt(mae)} K. In full-bridge operation all chips are "
+        "loaded at the same time — the Foster method of the MATLAB version cannot use these data, the coupled "
+        "network can, because it fits all couplings at once (output error).",
+        ("Full-bridge operation: the diagonal switches (HS A with LS B) always carry the same loss, so the data only "
+         "show sums such as R_th,11 + R_th,14. The network predicts this operation well, but its individual R_th "
+         f"entries are not unique (fitted R_th,11 = {fmt(Rf[0, 0])} vs. {fmt(Rt[0, 0])} K/W). To identify every "
+         "coupling, add single-chip steps (one profile per chip) to the training data."
+         if exc != 'single-chip steps' else
+         "Single-chip steps excite every chip on its own: self- and cross-heating are separated and the fitted "
+         f"R_th matrix matches the reference (R_th,21 = {fmt(Rf[1, 0])} vs. {fmt(Rt[1, 0])} K/W)."),
+        "One stage (K = 1) gives a single time constant per chip; the fast chip and the slow heat sink dynamics need "
+        "K ≥ 2. Couplings at deeper stages delay the cross-heating — the reason why the curves of the neighbours "
+        "start flat."])

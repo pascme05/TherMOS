@@ -38,7 +38,7 @@ depend on MATLAB toolbox internals (n4sid/ssest weighting, fminunc iterations, t
 | F-S1, F-S2 | SS | loss iteration works (fixed point); `ss.init` respected | – |
 | F-S3 | SS | own subspace (MOESP/N4SID) + output-error fit (`numeric/fitN4sid`, `fitPem`); horizon selected by simulation error; no noise model | – |
 | F-F2 | SF | offset removed only once | MATLAB double offset |
-| F-F1 | SF | **open**: ODE time constants differ from the fitted Foster pairs, the model is experimental | same |
+| F-F1 | SF | ODE time constants of the nodal Foster method (selSF = 1) differ from the fitted Foster pairs; the coupled Cauer network (selSF = 2, output-error fit with bounded log-parameters) fits any profiles and is the default | same |
 | F-P1 | PO/PS | POD energy with σ² | σ, one mode more |
 | F-P2, F-P3 | PO | C = ∫ρc·φφ, G = ∫k·∇φ∇φ, q = ∫Q·φ (no Jacobian heuristic, no boundary terms at interior Gauss nodes F-P4) | MATLAB weak form incl. Jgrid and boundary terms |
 | F-P5 | PO | exact matrix-exponential solution (first-order hold) | same ODE |
