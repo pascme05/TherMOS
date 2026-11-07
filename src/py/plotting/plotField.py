@@ -74,7 +74,8 @@ def _img(ax, fig, F, x, y, title, unit, cmap='jet', lim=None, node=None):
     ax.set_title(title)
     ax.set_xlabel('x (mm)')
     ax.set_ylabel('y (mm)')
-    ax.set_aspect('equal')
+    r = (y[-1] - y[0]) / max(x[-1] - x[0], 1e-12)
+    ax.set_aspect('equal' if 0.2 < r < 5 else 'auto')  # thin layers (e.g. 50 x 2 mm) are stretched
     fig.colorbar(im, ax=ax, label=unit)
 
 

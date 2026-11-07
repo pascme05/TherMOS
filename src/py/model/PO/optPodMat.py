@@ -5,7 +5,7 @@
 # File:         optPodMat
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.0
+# Version:      V.1.1
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -24,9 +24,10 @@ coordinates a(t), their time derivative da/dt (central differences) and the proj
 
 All problems are linear least squares problems and are solved in closed form per row (mode). The row weights √λ_i of
 the MATLAB version do not change the per-row solutions and are not used. Protocol 5 is underdetermined for modes with
-almost no energy; as the quasi-Newton solver of MATLAB started at the projected matrices, the minimum-norm correction
-of the projected matrices is used (truncated SVD). If the calibrated model is singular or unstable the projected
-matrices are kept. If ids are given, the derivatives are calculated per profile (no differences across profiles).
+almost no energy and for step responses (the regressors da/dt and a span only the exponentials of the response, so C
+and G cannot be separated); as the quasi-Newton solver of MATLAB started at the projected matrices, the minimum-norm
+correction of the projected matrices is used. Singular values of [da/dt, a] below rcond = 1e-3 of the largest one
+are truncated, so the fit does not follow round-off in the unidentifiable directions. If the calibrated model is singular or unstable the projected matrices are kept. If ids are given, the derivatives are calculated per profile (no differences across profiles).
 Inputs:     1) a:           modal coordinates (Nt x K)
             2) q:           projected heat generation (Nt x K)
             3) Ts:          sampling time (sec)
@@ -37,6 +38,10 @@ Inputs:     1) a:           modal coordinates (Nt x K)
 Outputs:    1) C:           calibrated capacitance matrix
             2) G:           calibrated conductance matrix
             3) alpha:       load correction vector (K)
+
+V1.1: 07.11.2026, Pascal Schirmer
+- Protocol 5 with rcond = 1e-3: with rcond = 1e-8 the step response of journal_Sec_IV_B_1sec gave
+  cond(C) = 1e13 and a test error depending on round-off (MAE 2.8 K corrected vs. 0.3 K legacy), now 0.11 K in both
 """
 
 #######################################################################################################################
@@ -81,6 +86,7 @@ def optPodMat(a, q, Ts, C, G, protocol, ids=None):
     K = a.shape[1]
     alpha = np.ones(K)
     lam = 1e-3
+    rcond = 1e-3
 
     ###################################################################################################################
     # Pre-Processing
@@ -98,7 +104,7 @@ def optPodMat(a, q, Ts, C, G, protocol, ids=None):
     X = X0
     if protocol == 5:
         print("INFO: Optimizing Cth and Gth unbounded")
-        X = X0 + np.linalg.lstsq(Phi, q - Phi @ X0, rcond=1e-8)[0]
+        X = X0 + np.linalg.lstsq(Phi, q - Phi @ X0, rcond=rcond)[0]
     elif protocol == 6:
         print("INFO: Optimizing Cth and Gth with priors")
         A = Phi.T @ Phi + lam * np.eye(2 * K)

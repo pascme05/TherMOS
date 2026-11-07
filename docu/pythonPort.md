@@ -42,7 +42,7 @@ depend on MATLAB toolbox internals (n4sid/ssest weighting, fminunc iterations, t
 | F-P1 | PO/PS | POD energy with σ² | σ, one mode more |
 | F-P2, F-P3 | PO | C = ∫ρc·φφ, G = ∫k·∇φ∇φ, q = ∫Q·φ (no Jacobian heuristic, no boundary terms at interior Gauss nodes F-P4) | MATLAB weak form incl. Jgrid and boundary terms |
 | F-P5 | PO | exact matrix-exponential solution (first-order hold) | same ODE |
-| F-P6 | PO | protocols 4–6 solved in closed form; protocol 5 uses the minimum-norm correction of the projected matrices and falls back to them if the result is unstable (F-P15) | – |
+| F-P6 | PO | protocols 4–6 solved in closed form; protocol 5 uses the minimum-norm correction of the projected matrices (truncated SVD, rcond = 1e-3) and falls back to them if the result is unstable (F-P15) | – |
 | F-P7 | PO | `Mdl.pod.protocol` selects the protocol (default 5) | – |
 | F-P9 | PS | projected losses passed as Nt × K | – |
 | F-P14 | PO/PS | modal coordinates, derivatives and simulations per profile | concatenated |
@@ -52,7 +52,8 @@ depend on MATLAB toolbox internals (n4sid/ssest weighting, fminunc iterations, t
 | F-G1 | calcFeat | EWMA/EWMS restart per profile; standard EW variance | MATLAB recursion |
 | F-G2 | calcGrad | \|∇T\| and \|q\| = k·\|∇T\| with correct spacings | MATLAB sum of components |
 | F-E1, F-E2 | performance | MATLAB "NRMSE" is reported as FIT (%), a real NRMSE is added; transient split with \|dT\| | signed dT |
-| F-PL1 … F-PL7 | plotting | units on all axes, legends, common colour limits, symmetric error colour map, correct titles | – |
+| F-PL1 … F-PL7 | plotting | units on all axes, legends, common colour limits, symmetric error colour map, correct titles; thin domains plotted with free aspect ratio | – |
+| – | plotting | figures are not opened but saved as `results/<name>/fig_<nn>_<title>.png` | – |
 
 ## New findings during the port
 
@@ -60,14 +61,16 @@ depend on MATLAB toolbox internals (n4sid/ssest weighting, fminunc iterations, t
 |---|---|---|
 | F-M8 | `main.m` | `idData` (used by SS) is created in `loadData` before normalisation and padding, so SS is fitted on un-normalised data while it is tested on normalised data. |
 | F-P14 | `poFit.m`, `psFit.m` | With several training profiles, `theta − g0` uses the first profile's initial state for all profiles and `gradient` differentiates across profile borders. |
-| F-P15 | `optCthGthUB.m` | The unbounded C/G fit (protocol 5) is underdetermined for modes with almost no energy; the closed-form solution is unstable on `exp11`. The MATLAB result depends on where fminunc stops. |
+| F-P15 | `optCthGthUB.m` | The unbounded C/G fit (protocol 5) is underdetermined for modes with almost no energy; the closed-form solution is unstable on `exp11`. The MATLAB result depends on where fminunc stops. For a single step response (`journal_Sec_IV_B_1sec`) the regressors [da/dt, a] only span the K exponentials plus a constant, so C and G cannot be separated at all; with a tight cut-off (rcond = 1e-8) the fit followed round-off (cond(C) ≈ 1e13, test MAE 2.8 K corrected vs. 0.3 K legacy). With rcond = 1e-3 both modes give 0.11 K. |
+| F-P16 | `gen/FEM/Journal/*.m` | The only heat sink of the FEM model is the convection boundary (hc = 1000 W/m²K, edge 1), but the data are saved with `hc = hc * zeros(...)`. The boundary term ∫h·φφ can therefore not be projected and the pure Galerkin model (protocols 2/3) has no heat sink (test MAE 96 K); only the calibrated protocols 5/6 are usable on these data. |
 
 ## Verification
 
 | Case | Python (legacy = 0) | Remark |
 |---|---|---|
 | `start.py` (SS, default) | T1: MAE 0.00 K, FIT 98.7 % | MATLAB: MAE 0.00 K, FIT ≈ 98.5 % |
-| `start2D.py` (PO, exp11) | avg MAE 0.21 K | 20–426 °C field |
+| `start2D.py` (PO, exp11) | avg MAE 0.20 K | 20–426 °C field |
+| `journal_Sec_IV_B_1sec.py` (PO, 5 W → 20 W) | avg MAE 0.11 K | legacy = 1: 0.11 K (before the fix: 2.8 K / 0.31 K) |
 | `start3D.py` (PS3D, FR4 5 W → 10 W) | avg MAE 0.11 K | |
 | `tests/test_numeric.py` | 7 passed | exact references (analytic ODE, recursion, known system) |
 

@@ -243,5 +243,7 @@ Further defaults (unless you object):
 WP0–WP7 are implemented in `src/py` (all models, pipeline, plotting, Python twins of all start/setup scripts,
 `tests/test_numeric.py`). The list of deviations from MATLAB and the verification results are in
 `docu/pythonPort.md`. New findings during the port: F-M8 (SS fitted on un-normalised `idData`), F-P14 (POD modal
-coordinates across profile borders), F-P15 (protocol 5 C/G fit underdetermined and unstable on `exp11`).
+coordinates across profile borders), F-P15 (protocol 5 C/G fit underdetermined and unstable on `exp11`; on a single step response it followed round-off,
+fixed with rcond = 1e-3), F-P16 (journal FEM data saved with hc = 0, the convection sink cannot be projected).
+Figures are saved as PNG in `results/<name>/` instead of being opened.
 Open: F-F1 (nodal Foster dynamics), full-length DL/PINN tutorial runs (only 2-epoch smoke tests on CPU so far).

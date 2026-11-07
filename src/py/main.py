@@ -5,7 +5,7 @@
 # File:         main
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.0
+# Version:      V.1.1
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -25,6 +25,9 @@ V1.0: 07.11.2026, Pascal Schirmer
 - Python port of main.m; several models can be selected at the same time, the identification data are rebuilt
   after normalisation and padding (legacy: MATLAB used the un-normalised data, F-M8), all selected models are kept
   (F-M2), setup['legacy'] selects the corrected (0) or the MATLAB (1) behaviour
+
+V1.1: 07.11.2026, Pascal Schirmer
+- Figures are not opened anymore but saved as PNG files in results/<setup['name']>/ (non-interactive backend)
 """
 
 #######################################################################################################################
@@ -53,11 +56,15 @@ from src.py.plotting.plotMdl import plotMdl
 from src.py.plotting.plotResults1D import plotResults1D
 from src.py.plotting.plotResults2D import plotResults2D
 from src.py.plotting.plotResults3D import plotResults3D
+from src.py.plotting.saveFigs import saveFigs
 
 # ==============================================================================
 # External
 # ==============================================================================
 import sys
+import matplotlib
+
+matplotlib.use('Agg')
 
 
 #######################################################################################################################
@@ -265,6 +272,7 @@ def main(setup, path):
             plotResults2D(data, pred, grt, results, setup, para)
         else:
             plotResults3D(data, pred, grt, results, setup, para)
+    saveFigs(setup, path)
 
     ###################################################################################################################
     # MSG Out
