@@ -42,7 +42,7 @@ import streamlit as st
 from gui.core import config as conf
 from gui.core import forms
 from gui.core import tutorials as tut
-from gui.views import project, inputs, mode, results, docs, tutorials
+from gui.views import project, inputs, mode, results, docs, tutorials, study
 from gui.views.registry import PAGES
 
 #######################################################################################################################
@@ -142,7 +142,8 @@ for _url, (_mod, _title, _icon) in A.TOOLS.items():
 pages = {
     'Project': [st.Page(project.page, title='Setup', icon=':material/settings:', default=True),
                 st.Page(inputs.page, title='Input data', icon=':material/table_chart:', url_path='data')],
-    'Operating modes' if multi else 'Simulation': [PAGES[m] for m in A.MODES],
+    'Operating modes' if multi else 'Simulation': [PAGES[m] for m in A.MODES] +
+        [st.Page(study.page, title='Study', icon=':material/tune:', url_path='study')],
     'Theory & Tools': list(TOOLS.values()),
     'Results': [PAGES['results']],
     'Help': ([st.Page(tutorials.page, title='Tutorials', icon=':material/school:', url_path='tutorials')]

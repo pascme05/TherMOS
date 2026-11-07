@@ -177,6 +177,7 @@ TOOLS = {
     'tools-board': ('board', 'Board designer', ':material/developer_board:'),
 }
 TEST_PAGES = {u: f"from gui.views.tools import {m}; {m}.page()" for u, (m, _, _) in TOOLS.items()}
+TEST_PAGES['study'] = "from gui.views import study; study.page()"
 
 #######################################################################################################################
 # Files
@@ -190,7 +191,7 @@ RESULT_PROJECTS = True                                                # results/
 
 
 def _safe(name):
-    return ''.join('_' if c in '<>:"/\|?*' else c for c in str(name).strip()) or 'default'
+    return ''.join('_' if c in '<>:"/\\|?*' else c for c in str(name).strip()) or 'default'
 
 
 def results_root(cfg):
