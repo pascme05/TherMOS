@@ -107,7 +107,7 @@ def plotField(pred, grt, setup, para, tag):
     for a, (k, t, u) in zip(ax, (('k', 'Thermal Conductivity k', 'W/mK'), ('Cp', 'Specific Heat Capacity Cp', 'J/kgK'),
                                  ('rho', 'Mass Density ρ', 'kg/m³'))):
         [F, x, y] = _grid(np.asarray(D[k], dtype=float).ravel(), D, d, z0)
-        _img(a, fig, F[0], x, y, t, u)
+        _img(a, fig, F[0], x, y, t, u, 'viridis')
     fig.tight_layout()
 
     # ==============================================================================
@@ -120,8 +120,8 @@ def plotField(pred, grt, setup, para, tag):
     gN = np.asarray(D['geo'], dtype=float)[node] - np.asarray(D['geo'], dtype=float).min(axis=0)
     fig, ax = plt.subplots(1, 3, figsize=(15, 4.5))
     fig.suptitle('Temperature at t = %.0f sec, %s model%s' % (tt[-1], tag.upper(), sub))
-    _img(ax[0], fig, F[0], x, y, 'Measured', 'Temperature (°C)', lim=lim, node=gN)
-    _img(ax[1], fig, F[1], x, y, 'Predicted', 'Temperature (°C)', lim=lim, node=gN)
+    _img(ax[0], fig, F[0], x, y, 'Measured', 'Temperature (°C)', 'RdBu_r', lim, gN)
+    _img(ax[1], fig, F[1], x, y, 'Predicted', 'Temperature (°C)', 'RdBu_r', lim, gN)
     _img(ax[2], fig, E, x, y, 'Error T - T̂', 'Error (K)', 'RdBu_r', [-eMax, eMax], gN)
     fig.tight_layout()
 

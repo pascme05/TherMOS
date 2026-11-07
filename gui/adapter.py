@@ -45,7 +45,7 @@ TAGLINE = "Set up the data here, then open a model in the sidebar. Every model o
           "Theory & Tools section has the loss and thermal stack calculators, the MOR principles and the board " \
           "designer. Parameters are stored as JSON config (sidebar), the data are read from data/."
 SRC_PATHS = ['']                                                      # added to sys.path (relative to ROOT)
-LOGO = None                                                           # e.g. 'docu/logo.png' (optional)
+LOGO = 'gui/assets/logo.png'                                          # sidebar logo, logo_icon.png = browser tab
 DOC = 'docu/GUI.md'                                                   # user guide shown on the Documentation page
 
 #######################################################################################################################

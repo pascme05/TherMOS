@@ -26,7 +26,7 @@ the Setup page as they are stored in data/ (before resampling and normalisation)
 #######################################################################################################################
 from gui import adapter as A
 from gui.core import dataset
-from gui.core.style import show, line, fmt, table, color, SEQ
+from gui.core.style import show, line, fmt, table, color, SEQ, TEMP
 from gui.core.viz_thermos import _grid, heat
 
 import numpy as np
@@ -148,7 +148,7 @@ def view_field(cfg, key):
             show(heat(F[0], x, yy, f"Heat input q · t = {t[it] if it < len(t) else it * Ts:.0f} s", 'W/m³', SEQ),
                  height=340, key=f"{key}|q", info="**Volumetric heat generation** (losses of the devices).")
         with cols[1]:
-            show(heat(F[1], x, yy, f"Temperature · t = {t[it] if it < len(t) else it * Ts:.0f} s", '°C', 'Turbo'),
+            show(heat(F[1], x, yy, f"Temperature · t = {t[it] if it < len(t) else it * Ts:.0f} s", '°C', TEMP),
                  height=340, key=f"{key}|T", info="**Temperature field** of the data set at this time step.")
     with tab[2]:
         dV = float(D.get('dx', 1)) * float(D.get('dy', 1)) * (float(D.get('dz', 1)) if d3 else 1.0)

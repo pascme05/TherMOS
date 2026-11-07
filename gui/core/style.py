@@ -36,6 +36,7 @@ import streamlit as st
 SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948']
 SEQ = [[0.0, '#cde2fb'], [0.25, '#86b6ef'], [0.5, '#3987e5'], [0.75, '#1c5cab'], [1.0, '#0d366b']]
 DIV = [[0.0, '#1c5cab'], [0.25, '#86b6ef'], [0.5, '#f0efec'], [0.75, '#ec8a85'], [1.0, '#b32d2d']]
+TEMP = 'RdBu_r'                                                         # every temperature field: blue cold, red hot
 STATUS = {'good': '#0ca30c', 'warning': '#fab219', 'serious': '#ec835a', 'critical': '#d03b3b'}
 INK, INK2, MUTED, GRID, AXIS, SURFACE = '#0b0b0b', '#52514e', '#898781', '#e1e0d9', '#c3c2b7', '#fcfcfb'
 SYS_COLOR = INK2                                                       # the system total is drawn neutral

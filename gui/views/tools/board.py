@@ -33,7 +33,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from gui.core.style import table, SERIES, SEQ, INK2, MUTED, show, line, fmt
+from gui.core.style import table, SERIES, SEQ, TEMP, INK2, MUTED, show, line, fmt
 from gui.views.tools import _common as cm
 from src.py.board.boardLib import BOARDS, CHIPS, COOL, H_TOP, LAYER_MATS, VIA_FILL, layerProps, viaK
 from src.py.board.genBoard import genBoard
@@ -170,7 +170,7 @@ def _tj(D, T, P):
     return out
 
 
-def _heat(F, x, y, unit, title, equal=True, zlim=None, scale=SEQ):
+def _heat(F, x, y, unit, title, equal=True, zlim=None, scale=TEMP):
     fig = go.Figure(go.Heatmap(z=F, x=x * 1e3, y=y * 1e3, colorscale=scale, zmin=None if zlim is None else zlim[0],
                                zmax=None if zlim is None else zlim[1], colorbar=dict(title=unit, len=0.9),
                                hovertemplate='x %{x:.1f} mm<br>%{y:.2f} mm<br>%{z:.3g} ' + unit + '<extra></extra>'))
@@ -535,7 +535,7 @@ def results(res):
                "die (cross-section). Margin = T_j,max − T_j max of the run; OK > 25 K, tight 0–25 K.")
     tabs = st.tabs(["Steady state", "Transient field", "Junction temperatures", "Losses"])
     with tabs[0]:
-        show(_heat(Tss.reshape(ny, nx), D['x'], D['y'], '°C', 'Steady-state temperature', equal=xy),
+        show(_heat(Tss.reshape(ny, nx), D['x'], D['y'], '°C', 'Steady-state temperature', equal=xy, scale=TEMP),
              height=430 if xy else 330, key=f"{K}|ss")
     with tabs[1]:
         i = st.slider("Time step", 0, len(t) - 1, len(t) - 1, key=f"{K}|tsl")

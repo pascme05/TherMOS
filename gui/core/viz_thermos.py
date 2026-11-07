@@ -28,7 +28,7 @@ The data come from adapter.compact (metrics, thinned predictions, model data wit
 #######################################################################################################################
 # Import libs
 #######################################################################################################################
-from gui.core.style import show, line, fmt, table, color, SEQ, DIV, INK2, MUTED
+from gui.core.style import show, line, fmt, table, color, SEQ, DIV, TEMP, INK2, MUTED
 
 import numpy as np
 import pandas as pd
@@ -326,8 +326,8 @@ def pod_view(data, setup, key):
     E = F[0] - F[1]
     e = float(np.nanmax(np.abs(E))) or 1e-9
     c = st.columns(3)
-    for col, (Fi, ttl, u, sc, l, md) in zip(c, ((F[0], 'Measured', '°C', 'Turbo', lim, None),
-                                                (F[1], 'Predicted', '°C', 'Turbo', lim, None),
+    for col, (Fi, ttl, u, sc, l, md) in zip(c, ((F[0], 'Measured', '°C', TEMP, lim, None),
+                                                (F[1], 'Predicted', '°C', TEMP, lim, None),
                                                 (E, 'Error T − T̂', 'K', DIV, [-e, e], 0))):
         with col:
             show(heat(Fi, x, y, f"{ttl} · t = {it * Ts:.0f} s", u, sc, l, md), height=340, key=f"{key}|f{ttl[0]}",
