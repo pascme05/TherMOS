@@ -1,0 +1,9 @@
+segment,duration [s],ramp [s],scale [-],T1 [W],D1 [W],M1 [W]
+standstill,20,0,0.05,,,
+start-up (high current at low speed),15,2,1.2,,,
+acceleration,30,5,1.0,,,
+cruise,60,10,0.4,,,
+overtaking,15,3,1.1,,,
+cruise,40,5,0.4,,,
+recuperative braking (diode loaded),20,3,0.3,,35,
+standstill,20,2,0.05,,,

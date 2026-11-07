@@ -41,6 +41,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 #######################################################################################################################
 NAME = 'TherMOS'                                                      # short name (page title, JSON meta)
 TITLE = 'Thermal Model Order Reduction and Simulation'                # full name (Setup page)
+COPYRIGHT = '© 2024–2026 Dr. Pascal A. Schirmer · MIT License'     # footer of the sidebar and every page
 TAGLINE = "Set up the data here, then open a model in the sidebar. Every model order reduction is one mode; the " \
           "Theory & Tools section has the loss and thermal stack calculators, the MOR principles and the board " \
           "designer. Parameters are stored as JSON config (sidebar), the data are read from data/."

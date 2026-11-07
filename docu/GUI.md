@@ -77,7 +77,7 @@ Every page has the views below:
 - The physics weight β (`Mdl › pinn › beta`) is 0 by default, as in MATLAB. The network then trains on the data
   only.
 - DL and PI training on the CPU takes minutes to hours. `Mdl › gen › dev = 1` trains on the GPU (CUDA). This needs
-  a CUDA build of PyTorch, e.g. `pip install torch --index-url https://download.pytorch.org/whl/cu126`; otherwise a
+  a CUDA build of PyTorch, e.g. `pip install torch==2.15.0 --index-url https://download.pytorch.org/whl/cu132`; otherwise a
   warning is printed and the CPU is used. The ML models (scikit-learn) always run on the CPU.
 
 - PO/PS results and the 2D/3D data viewer have a z slider (3D), line profiles T(x), T(y) through any point and
@@ -136,27 +136,36 @@ The board designer builds a finite-volume model of a board with chips. The model
 - A preset (none, gap filler 2 mm + Al heat sink 5 mm, gap pad + Al housing, grease + Al heat sink, insulating foil
   + Cu cold plate) fills an editable table (top → bottom): layer, material, thickness in mm, optional k.
 - The cooling h then acts on the bottom of the last layer.
-- Top view: the layers form a second plane (heat sink temperature T₂), coupled to the board through the stack-up and
-  the interface layers (R₁₂) and cooled through R₂ₐ = t/(2k) + 1/h. Cross-section: every layer is resolved.
-- The results show the heat sink plane in its own tab; the export uses the board plane with the equivalent sink.
+- The layers are resolved in the simulation like the board layers (select them as *Layer of the top view*). The
+  lumped export model treats them as a second plane (heat sink T₂) coupled through R₁₂ and cooled through
+  R₂ₐ = t/(2k) + 1/h.
 
 **Thermal vias (averaged)**
 - Region: none, under the chips plus a margin, or the whole board.
 - Array: drill, plating, pitch, fill.
 - The FR4 layers in the via region get `k_z,eff = φ_Cu·k_Cu + φ_hole·k_fill + (1 − φ_Cu − φ_hole)·k_z,FR4`, where φ
   are the area fractions of the copper barrels and the holes. The in-plane conductivity is not changed.
-- In the top view, this lowers the local through-plane resistance and raises h_eff under the chips. In the
-  cross-section, it raises k_z of the FR4 cells in the via columns.
+- The simulation raises k_z of the FR4 cells in the via region; the lumped export model lowers the local
+  through-plane resistance instead.
 
 **Chips**
 - *Add a chip* (technology, position, loss) or edit the table directly: position, size, loss, profile (step, pulse,
   sine, random), period.
+- **Load:** *Chip profiles* (profile column of the table) or *Mission profile*: a sequence of operating segments
+  (`segment, duration [s], ramp [s], scale [-], <chip> [W] …`). The loss of a chip in a segment is its own column in
+  W, or scale × P of the chip table if that column is empty; ramps are linear. The sequence can be repeated, edited
+  and saved. Template and example (inverter drive cycle):
+  `data/board/mission/template_mission.csv`, `data/board/mission/example_driveCycle.csv`.
 - Own chip technologies are defined in *Chip technologies › Own technologies* (die, thickness, size, die attach,
   T_j,max). They can be saved to the library.
 
 **Simulation**
-- **Top view (x-y):** the board is lumped over its thickness, and all chips are included.
-- **Cross-section (x-z) at y = y_cut:** every layer is resolved, and only the chips cut by y_cut are included.
+- One **layer-resolved 3D finite-volume model** of the whole board: the x-y grid in every row of the stack (layers
+  below, board layers, die attach and die over the chip footprints), h on the bottom of the lowest row, h_top on top.
+- **Top view (x-y)** and **cross-section (x-z) at y = y_cut** are two views of this one result: the top view shows a
+  selectable layer (dies, top copper, inner layers, heat sink), the cross-section the slice through all rows.
+- The former 2D cross-section (no spreading along y) over-estimated T_j several times under thick interface
+  layers; the lumped top view under-estimates multilayer FR4 boards (inner planes assumed perfectly coupled).
 - Results:
   - junction temperatures with their margin to T_j,max;
   - steady-state and transient fields;
@@ -166,11 +175,13 @@ The board designer builds a finite-volume model of a board with chips. The model
 **Export to TherMOS**
 1. *Export* writes:
    - `data/board/<name>_train.mat` (random loss levels);
-   - `data/board/<name>_test.mat` (the designed profiles);
+   - `data/board/<name>_test.mat` (the designed profiles or the mission profile);
    - the layout `<name>.json`, including the stack-up, vias and own chips;
    - `config/gui/board_<name>.json`, a PO config with protocol 2.
 2. *Load config* makes that config the active one. Train the PO (or PS) mode on it.
 3. The data contain the distributed heat sink h_v and the anisotropy k_y. The PO projection uses both (legacy = 0).
+4. The PO mode needs one temperature per node of a plane, so the export uses the lumped top-view model; the page
+   shows how far its junction temperatures are from the layer-resolved model.
 
 ## 7. Tutorials
 

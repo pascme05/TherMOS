@@ -5,7 +5,7 @@
 # File:         genBoard
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.2
+# Version:      V.1.3
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -28,11 +28,11 @@ available:
    so that (ρc)_eff·∂T/∂t = ∇·(k_eff∇T) − h_v·(T − T_a) + Q with Q = P_chip/(A_chip·t_b) under every chip. T is the
    temperature of the top copper; the die and the die attach add their heat capacity under the chip and the
    junction temperature follows from T_j = T + P·R_jb with R_jb = (t_die/k_die + t_att/k_att)/A_chip.
-2) Cross-section (x-z) at y = yCut: every layer of the stack-up, the die attach and the die are resolved (layers get
-   at least one cell, dz is chosen from the thinnest layer), the space above the board is air. The coolant acts on
-   the bottom row (h_v = 2h/dz, half cells), natural convection on the top row (2h_top/dz). The conductivity is anisotropic
-   (k: x direction, ky: z direction). Only chips cut by y = yCut are included; their heat Q = P/(w·t_die·l) assumes
-   no spreading along y (2D cross-section).
+2) Layer-resolved model ('xz'): a 3D finite-volume model of the whole board. The x-y grid of the top view is
+   repeated in every row of the stack (layers below, board layers with 1-4 rows each, die attach and die over the
+   chip footprints). The coolant h acts below the lowest row, natural convection h_top on the top of every column.
+   All chips are included; T_j is the hottest die cell. The matrices are returned in D['mat'] (calcBoardMat), the
+   display grid is the x-z slice at y = yCut (D['sel'], -1 = air), D['idx'] maps every row to its nodes.
 
 Layers below the board (layout['below'], top → bottom, e.g. a gap filler and an aluminium heat sink) are placed
 between the board and the cooling h, which then acts on the bottom of the last layer:
@@ -47,7 +47,7 @@ between the board and the cooling h, which then acts on the bottom of the last l
    metre of board thickness (k2 = Σ k_i·t_i / t_b, rc2, h12 = 1/(R_12·t_b), h2 = 1/(R_2a·t_b)) so that calcBoardMat
    assembles both planes with the same control volumes. For the export (PO mode, one temperature per node) the
    equivalent distributed sink of the series path hvEq = h_eff/t_b with h_eff = 1/(R_12 + R_2a) + h_top is stored.
-2) Cross-section: the layers below are resolved like the board layers.
+2) Layer-resolved model: the layers below are resolved like the board layers.
 
 Thermal vias (layout['vias'], averaged, boardLib.viaK) raise the through-plane conductivity of all FR4 layers in
 the via region (under every chip plus a margin, or the whole board): in the top view through a smaller local
@@ -71,6 +71,10 @@ V1.1: 07.11.2026, Pascal Schirmer
 V1.2: 07.11.2026, Pascal Schirmer
 - Layers below the board (interface material, heat sink): second plane in the top view, resolved rows in the
   cross-section
+
+V1.3: 07.11.2026, Pascal Schirmer
+- The cross-section is a layer-resolved 3D model of the whole board (the former 2D slice without spreading
+  along y over-estimated T_j several times under thick interface layers)
 """
 
 #######################################################################################################################
@@ -124,6 +128,134 @@ def _viaMask(X, Y, chips, vias):
             m |= (np.abs(X - c['x'] * 1e-3) <= c['w'] * 5e-4 + g + 1e-9) & \
                  (np.abs(Y - c['y'] * 1e-3) <= c['l'] * 5e-4 + g + 1e-9)
     return m
+
+
+def _rows(stack, dzMax):
+    """Rows of the layer-resolved model, bottom → top: (layer, material, dz, k_xy, k_z, ρc, FR4) per row."""
+    out = []
+    for l in stack:
+        t = l[2] * 1e-3
+        n = int(min(max(np.ceil(t / dzMax - 1e-9), 1), 4))
+        out += [(l[0], l[1], t / n, l[3], l[4], l[5] * l[6], l[1] == 'FR4')] * n
+    return out
+
+
+def _model3D(layout, layers, below, chips, vias, isFR4, W, L, dx, h, hTop):
+    """
+    Layer-resolved 3D finite-volume model of the whole board: vertex-centred in x and y (as the top view), one to four
+    cell rows per layer in z, die attach and die over every chip footprint. Returns the matrices and the x-z slice at
+    y = yCut for the display.
+    """
+    import scipy.sparse as sp
+
+    # Grid
+    nx, ny = max(int(round(W / dx)), 1) + 1, max(int(round(L / dx)), 1) + 1
+    x, y = np.arange(nx) * dx, np.arange(ny) * dx
+    wx, wy = _w(nx), _w(ny)
+    A = np.outer(wy, wx) * dx * dx
+    X, Y = np.meshgrid(x, y)
+    full = np.ones((ny, nx), dtype=bool)
+
+    # Rows: layers below, board (bottom → top)
+    rws = _rows(list(reversed(below)) + list(reversed(layers)), 0.5e-3)
+    via = _viaMask(X, Y, chips, vias) if isFR4.any() else np.zeros((ny, nx), dtype=bool)
+    R = []
+    for (nm, mat, dz, kxy, kz, rc, fr4) in rws:
+        KZ = np.full((ny, nx), kz)
+        if fr4 and via.any():
+            KZ[via] = viaK(vias, kz)
+        R.append({'m': full, 'dz': np.full((ny, nx), dz), 'kx': np.full((ny, nx), kxy), 'kz': KZ,
+                  'rc': np.full((ny, nx), rc), 'name': nm or mat})
+    nBoard = len(rws)
+    nBelow = len(_rows(list(reversed(below)), 0.5e-3)) if below else 0
+
+    # Rows: die attach and die over the chip footprints
+    ra = {'m': np.zeros((ny, nx), dtype=bool), 'dz': np.ones((ny, nx)), 'kx': np.ones((ny, nx)),
+          'kz': np.ones((ny, nx)), 'rc': np.ones((ny, nx)), 'name': 'die attach'}
+    rd = {'m': np.zeros((ny, nx), dtype=bool), 'dz': np.ones((ny, nx)), 'kx': np.ones((ny, nx)),
+          'kz': np.ones((ny, nx)), 'rc': np.ones((ny, nx)), 'name': 'die'}
+    masks = []
+    for c in chips:
+        m = (np.abs(X - c['x'] * 1e-3) <= c['w'] * 5e-4 + 1e-9) & (np.abs(Y - c['y'] * 1e-3) <= c['l'] * 5e-4 + 1e-9)
+        if not m.any():
+            m = np.zeros_like(m)
+            m[int(np.argmin(np.abs(y - c['y'] * 1e-3))), int(np.argmin(np.abs(x - c['x'] * 1e-3)))] = True
+        m = m & ~rd['m']                                                       # overlapping chips: first one wins
+        kA, rA, cA = _mat(c['attach'])
+        kD, rD, cD = _mat(c['mat'])
+        for r, k, rc, t in ((ra, kA, rA * cA, c['t_att']), (rd, kD, rD * cD, c['t'])):
+            r['m'] = r['m'] | m
+            r['kx'][m], r['kz'][m], r['rc'][m], r['dz'][m] = k, k, rc, t * 1e-3
+        masks.append(m)
+    if chips:
+        R += [ra, rd]
+    nr = len(R)
+
+    # Node numbering
+    idx = -np.ones((nr, ny, nx), dtype=int)
+    n = 0
+    for r, row in enumerate(R):
+        k = int(row['m'].sum())
+        idx[r][row['m']] = np.arange(n, n + k)
+        n += k
+    N = n
+    I, J, G = [], [], []
+    gOut = np.zeros(N)
+    C = np.zeros(N)
+
+    # Assembly
+    for r, row in enumerate(R):
+        m, dz, kx, kz = row['m'], row['dz'], row['kx'], row['kz']
+        C[idx[r][m]] = (row['rc'] * A * dz)[m]
+        for (sa, sb, wl) in (((slice(None), slice(0, -1)), (slice(None), slice(1, None)), (wy * dx)[:, None]),
+                             ((slice(0, -1), slice(None)), (slice(1, None), slice(None)), (wx * dx)[None, :])):
+            both = m[sa] & m[sb]
+            if not both.any():
+                continue
+            wb = np.broadcast_to(wl, m.shape)[sa]
+            g = wb * 0.5 * (dz[sa] + dz[sb]) / (dx / (2 * kx[sa]) + dx / (2 * kx[sb]))
+            I.append(idx[r][sa][both])
+            J.append(idx[r][sb][both])
+            G.append(g[both])
+        if r + 1 < nr:
+            up = R[r + 1]
+            both = m & up['m']
+            g = A / (dz / (2 * kz) + up['dz'] / (2 * up['kz']))
+            I.append(idx[r][both])
+            J.append(idx[r + 1][both])
+            G.append(g[both])
+            top = m & ~up['m']
+        else:
+            top = m
+        if hTop > 0:
+            gOut[idx[r][top]] += (A / (dz / (2 * kz) + 1.0 / hTop))[top]
+        if r == 0:
+            gOut[idx[r][m]] += (A / (dz / (2 * kz) + 1.0 / max(h, 1e-9)))[m]
+    I, J, G = np.concatenate(I), np.concatenate(J), np.concatenate(G)
+    Goff = sp.coo_matrix((np.concatenate([-G, -G]), (np.concatenate([I, J]), np.concatenate([J, I]))), shape=(N, N))
+    Gm = (Goff + sp.diags(-np.asarray(Goff.sum(axis=1)).ravel() + gOut)).tocsc()
+
+    # Losses (die rows) and junction nodes
+    Bp = np.zeros((N, len(chips)))
+    B3 = np.zeros((N, len(chips)))
+    for i, m in enumerate(masks):
+        ii = idx[nr - 1][m]
+        V = (A * rd['dz'])[m]
+        Bp[ii, i] = V / V.sum()
+        B3[ii, i] = 1.0
+
+    # Display: x-z slice at y = yCut (rows bottom → top, empty cells = air)
+    yCut = float(layout.get('yCut', layout['L'] / 2)) * 1e-3
+    jc = int(np.argmin(np.abs(y - yCut)))
+    dzr = np.array([float(np.max(row['dz'][row['m']])) if row['m'].any() else 0.0 for row in R])
+    zc = np.cumsum(dzr) - dzr / 2
+    Xs, Zs = np.meshgrid(x, zc)
+    tb = float(np.sum([l[2] for l in layers]) * 1e-3)
+    return [{'mat': [C, Gm, Bp], 'B3': B3, 'gOut': gOut, 'sel': idx[:, jc, :], 'top': idx[nBoard - 1], 'idx': idx,
+             'rowName': [row['name'] for row in R], 'nBoard': nBoard, 'nBelow': nBelow, 'tb': tb, 'yCut': y[jc],
+             'geo': np.column_stack([Xs.ravel(), Zs.ravel()]), 'dx': dx, 'dy': float(np.min(dzr[dzr > 0])),
+             'Lx': x[-1], 'Ly': zc[-1], 'x': x, 'y': zc, 'shape': (nr, nx), 'xg': x, 'yg': y, 'N3': N,
+             'via': via.ravel(), 'A': A}, x, zc, A]
 
 
 #######################################################################################################################
@@ -220,83 +352,25 @@ def genBoard(layout):
                   'via': via.ravel()})
 
     # ==============================================================================
-    # Cross-Section
+    # Cross-Section (layer-resolved 3D model)
     # ==============================================================================
     else:
-        yCut = float(layout.get('yCut', layout['L'] / 2)) * 1e-3
-        used = [c for c in chips if abs(c['y'] * 1e-3 - yCut) <= c['l'] * 5e-4]
-        stack = list(reversed(below)) + list(reversed(layers))                                   # bottom → top
-        tMin = min([l[2] for l in stack] + [c['t'] for c in used] + [c['t_att'] for c in used]) * 1e-3
-        tTot = sum(l[2] for l in stack) * 1e-3 + max([(c['t'] + c['t_att']) * 1e-3 for c in used] + [0.0])
-        dz = max(tMin, tTot / 150.0)
-        nx = max(int(round(W / dx)), 1) + 1
-        x = np.arange(nx) * dx
-
-        # Rows of the board
-        rows, fr4 = [], []
-        for l in stack:
-            n = max(1, int(round(l[2] * 1e-3 / dz)))
-            rows += [(l[3], l[4], l[5] * l[6], l[5])] * n
-            fr4 += [l[1] == 'FR4'] * n
-        nb = len(rows)
-        nTop = max([max(1, int(round(c['t_att'] * 1e-3 / dz))) + max(1, int(round(c['t'] * 1e-3 / dz)))
-                    for c in used] + [0]) + 1
-        nz = nb + nTop
-        wA = np.outer(_w(nz), _w(nx))
-        ka, ra, ca = _mat('Air')
-        Kx = np.full((nz, nx), ka)
-        Kz = np.full((nz, nx), ka)
-        RC = np.full((nz, nx), ra * ca)
-        RHO = np.full((nz, nx), ra)
-        for j, (kxy, kz, rc, rho) in enumerate(rows):
-            Kx[j], Kz[j], RC[j], RHO[j] = kxy, kz, rc, rho
-
-        # Vias (columns of the via region at y = yCut)
-        via = _viaMask(x[None, :], np.full((1, nx), yCut), chips, vias)[0]
-        if via.any():
-            for j in np.where(fr4)[0]:
-                Kz[j, via] = viaK(vias, rows[j][1])
-
-        # Chips
-        B, Rjb = [], []
-        for c in used:
-            cols = np.abs(x - c['x'] * 1e-3) <= c['w'] * 5e-4 + 1e-9
-            if not cols.any():
-                cols[int(np.argmin(np.abs(x - c['x'] * 1e-3)))] = True
-            na, nd = max(1, int(round(c['t_att'] * 1e-3 / dz))), max(1, int(round(c['t'] * 1e-3 / dz)))
-            kA, rA, cA = _mat(c['attach'])
-            kD, rD, cD = _mat(c['mat'])
-            for j in range(nb, nb + na):
-                Kx[j, cols], Kz[j, cols], RC[j, cols], RHO[j, cols] = kA, kA, rA * cA, rA
-            b = np.zeros((nz, nx))
-            for j in range(nb + na, nb + na + nd):
-                Kx[j, cols], Kz[j, cols], RC[j, cols], RHO[j, cols] = kD, kD, rD * cD, rD
-                b[j, cols] = 1.0
-            b = b / ((b * wA).sum() * dx * dz * c['l'] * 1e-3)
-            B.append(b.ravel())
-            Rjb.append(0.0)                                                     # the die is resolved: T_j = max(T_die)
-
-        # Sinks
-        HV = np.zeros((nz, nx))
-        HV[0] = 2 * h / dz
-        HV[-1] = 2 * hTop / dz
-        y = np.arange(nz) * dz
-        ny, dyv = nz, dz
-        D.update({'k': Kx.ravel(), 'ky': Kz.ravel(), 'rho': RHO.ravel(), 'Cp': (RC / RHO).ravel(), 'hv': HV.ravel(),
-                  'tb': nb * dz, 'nBoard': nb, 'nBelow': sum(max(1, int(round(l[2] * 1e-3 / dz))) for l in below),
-                  'via': np.tile(via, (nz, 1)).ravel() & np.repeat(
-                      np.r_[np.array(fr4, dtype=bool), np.zeros(nz - nb, dtype=bool)], nx)})
+        [D3, x, y, wA] = _model3D(layout, layers, below, chips, vias, isFR4, W, L, dx, h, hTop)
+        D.update(D3)
+        used = chips
 
     ###################################################################################################################
     # Post-Processing
     ###################################################################################################################
-    dy = dx if view == 'xy' else dyv
-    X, Y = np.meshgrid(x, y)
-    N = X.size
-    D.update({'geo': np.column_stack([X.ravel(), Y.ravel()]), 'dx': dx, 'dy': dy, 'Lx': x[-1], 'Ly': y[-1],
-              'x': x, 'y': y, 'wA': wA.ravel(),
-              'shape': (len(y), len(x)), 'hc': np.zeros(N), 'Ta': np.full(N, Ta), 'fl': np.zeros(N),
-              'B': np.column_stack(B) if B else np.zeros((N, 0)), 'Rjb': np.asarray(Rjb), 'chips': used})
+    if view == 'xy':
+        X, Y = np.meshgrid(x, y)
+        N = X.size
+        D.update({'geo': np.column_stack([X.ravel(), Y.ravel()]), 'dx': dx, 'dy': dx, 'Lx': x[-1], 'Ly': y[-1],
+                  'x': x, 'y': y, 'wA': wA.ravel(),
+                  'shape': (len(y), len(x)), 'hc': np.zeros(N), 'Ta': np.full(N, Ta), 'fl': np.zeros(N),
+                  'B': np.column_stack(B) if B else np.zeros((N, 0)), 'Rjb': np.asarray(Rjb), 'chips': used})
+    else:
+        D.update({'Rjb': np.zeros(len(used)), 'chips': used, 'B': D['B3']})
 
     ###################################################################################################################
     # Return

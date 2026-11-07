@@ -123,6 +123,8 @@ with st.sidebar:
         for m, r in sorted(runs.items()):
             icon = ':material/error:' if r.get('error') else ':material/check_circle:'
             st.caption(f"{icon} {conf.MODE_TITLES[m]} · {r['time'][11:]} · {r['duration']:.0f} s")
+    st.divider()
+    st.caption(f"**{A.NAME}** · {A.TITLE}  \n{getattr(A, 'COPYRIGHT', '')}")
 
 
 #######################################################################################################################
@@ -152,3 +154,6 @@ pages = {
             [st.Page(docs.page, title='Documentation', icon=':material/menu_book:', url_path='docs')],
 }
 st.navigation(pages, expanded=True).run()
+st.markdown(f"<div style='margin-top:3rem;padding-top:.6rem;border-top:1px solid rgba(128,128,128,.25);"
+            f"font-size:.78rem;opacity:.65;text-align:center'>{A.NAME} — {A.TITLE} · "
+            f"{getattr(A, 'COPYRIGHT', '')}</div>", unsafe_allow_html=True)

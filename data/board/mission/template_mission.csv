@@ -1,0 +1,3 @@
+segment,duration [s],ramp [s],scale [-],T1 [W],D1 [W],M1 [W]
+segment 1,60,0,1.0,,,
+segment 2,60,5,0.5,,,

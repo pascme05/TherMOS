@@ -40,6 +40,7 @@ from src.py.board.genBoard import genBoard
 from src.py.board.calcBoardMat import calcBoardMat
 from src.py.board.simBoard import simBoard
 from src.py.board.genProfile import genProfile
+from src.py.board.genMission import genMission
 from src.py.board.romBoard import romBoard, simRom
 from src.py.board.saveBoard import saveBoard
 
@@ -150,8 +151,11 @@ def _has_fr4(lay):
     return any(l['mat'] == 'FR4' for l in lay['layers'])
 
 
-def _profiles(lay, D, t, kind=None, seed=0):
-    """Loss profiles (Nt x nChips) of the chips used in D (designed profiles, or random ones for training)."""
+def _profiles(lay, D, t, kind=None, seed=0, mission=None):
+    """Loss profiles (Nt x nChips) of the chips used in D (designed profiles, a mission profile, or random ones for
+    training)."""
+    if mission is not None and kind is None:
+        return genMission(mission['seq'], D['chips'], t, mission.get('repeat', 1))[0]
     P = []
     for i, c in enumerate(D['chips']):
         k = kind or c.get('profile', 'step')
@@ -167,8 +171,23 @@ def _tj(D, T, P):
     out = np.zeros((T.shape[0], len(D['chips'])))
     for i in range(len(D['chips'])):
         m = np.asarray(D['B'])[:, i] > 0
-        out[:, i] = T[:, m].max(axis=1) + (np.atleast_2d(P)[:, i] * D['Rjb'][i] if D['view'] == 'xy' else 0.0)
+        out[:, i] = T[:, :m.size][:, m].max(axis=1) + (np.atleast_2d(P)[:, i] * D['Rjb'][i]
+                                                      if D['view'] == 'xy' else 0.0)
     return out
+
+
+def _disp(D, Tv, view, row=None):
+    """
+    Display of the state of the layer-resolved model: top view (x-y field of one row of the stack, NaN outside the
+    footprint of partial rows such as the dies) or cross-section (x-z slice at y_cut, NaN = air).
+    Returns [F (nt x a x b), x, y, geo of the cells (m)].
+    """
+    Tv = np.atleast_2d(Tv)
+    ix = D['idx'][D['nBoard'] - 1 if row is None else row] if view == 'xy' else D['sel']
+    F = np.where(ix[None] >= 0, Tv[:, np.maximum(ix, 0)], np.nan)
+    x, y = (D['xg'], D['yg']) if view == 'xy' else (D['x'], D['y'])
+    X, Y = np.meshgrid(x, y)
+    return [F, x, y, np.column_stack([X.ravel(), Y.ravel()])]
 
 
 def _heat(F, x, y, unit, title, equal=True, zlim=None, scale=TEMP):
@@ -216,7 +235,7 @@ def _cut_fig(lay):
     tMin = 0.04 * sum(float(l['t']) for l in layers)                    # thin layers drawn with a minimum height
     below = [l for l in lay.get('below') or [] if float(l['t']) > 0]
     zb = 0.0
-    for l in reversed(below):                                           # below the board, drawn at reduced scale
+    for l in below:                                                     # top → bottom: TIM, then the carrier
         th = max(min(float(l['t']), 4 * sum(float(m['t']) for m in layers)) * 0.35, tMin)
         k = layerProps(l)[1]
         zb -= th
@@ -470,6 +489,7 @@ def chip_inputs():
         'P [W]': st.column_config.NumberColumn(format='%.1f', help="Loss of the chip (peak of the profile)."),
         'period [s]': st.column_config.NumberColumn(format='%.0f', help="Period of pulse/sine, 4× hold of random.")})
     st.session_state[f"{K}|chips_df"] = df
+    mission_inputs(df)
     with st.expander("Chip technologies", icon=':material/memory:'):
         st.markdown("**Built-in**")
         table(pd.DataFrame([{'technology': n, 'die': c['mat'], 't die (mm)': c['t'], 'w × l (mm)': f"{c['w']} × "
@@ -477,6 +497,76 @@ def chip_inputs():
                              'T_j,max (°C)': c['Tjmax'], 'note': c['note']} for n, c in CHIPS.items()]),
               hide_index=True)
         chip_lib_editor()
+
+
+MIS_DIR = os.path.join('data', 'board', 'mission')
+MIS_COLS = ['segment', 'duration [s]', 'ramp [s]', 'scale [-]']
+
+
+def mission_inputs(chips):
+    """Load of the chips: the profiles of the chip table or a mission profile (sequence of operating segments)."""
+    s = st.session_state
+    with st.container(border=True):
+        c = st.columns([2, 3])
+        mode = c[0].segmented_control("Load", ['Chip profiles', 'Mission profile'], default='Chip profiles',
+                                      key=f"{K}|loadMode", help="Chip profiles: profile and period of the chip table. "
+                                      "Mission profile: a sequence of operating segments (e.g. a drive cycle) "
+                                      "for all chips.") or 'Chip profiles'
+        if mode != 'Mission profile':
+            c[1].caption("The losses follow the profile column of the chip table.")
+            return
+        c[1].caption("Sequence of segments: duration, ramp to the new level, scale × P of the chip table, or the loss "
+                     "of a chip in W in its own column '<name> [W]' (empty = scale × P). Template and example: "
+                     f"`{MIS_DIR.replace(os.sep, '/')}`.")
+        os.makedirs(MIS_DIR, exist_ok=True)
+        files = sorted(f[:-4] for f in os.listdir(MIS_DIR) if f.endswith('.csv'))
+        c = st.columns([2, 2, 1], vertical_alignment='bottom')
+        name = c[0].selectbox("Sequence file", files, index=files.index('example_driveCycle') if
+                              'example_driveCycle' in files else 0, key=f"{K}|misfile")
+        up = c[1].file_uploader("or upload a CSV", type=['csv'], key=f"{K}|misup")
+        rept = cm.num(c[2], "Repeat", 1, 'board|misrep', format='%d', min_value=1, max_value=100)
+        try:
+            df0 = pd.read_csv(up) if up is not None else pd.read_csv(os.path.join(MIS_DIR, f"{name}.csv"))
+        except Exception as e:
+            st.error(f"Sequence could not be read: {e}", icon=':material/error:')
+            return
+        names = [str(n) for n in chips['name'] if not _nan(n)]
+        for n in names:                                                  # one optional column per chip
+            if f"{n} [W]" not in df0.columns:
+                df0[f"{n} [W]"] = np.nan
+        for col in MIS_COLS:
+            if col not in df0.columns:
+                df0[col] = {'segment': '', 'duration [s]': 10.0, 'ramp [s]': 0.0, 'scale [-]': 1.0}[col]
+        df0 = df0[MIS_COLS + [k for k in df0.columns if k not in MIS_COLS]]
+        df = st.data_editor(df0, key=f"{K}|mis|{name}|{getattr(up, 'name', '')}", num_rows='dynamic',
+                            hide_index=True, width='stretch', column_config={
+                                'duration [s]': st.column_config.NumberColumn(min_value=0.0, format='%g'),
+                                'ramp [s]': st.column_config.NumberColumn(min_value=0.0, format='%g', help="Linear "
+                                                                          "transition from the previous level."),
+                                'scale [-]': st.column_config.NumberColumn(format='%g', help="Loss = scale × P of the "
+                                                                           "chip table (if the chip column is empty)."),
+                                **{f"{n} [W]": st.column_config.NumberColumn(format='%g', help=f"Loss of {n} in this "
+                                   "segment (overrides the scale).") for n in names}})
+        seq = df.to_dict('records')
+        Pn = [{'name': str(r['name']), 'P': 0.0 if _nan(r['P [W]']) else float(r['P [W]'])} for _, r in
+              chips.iterrows() if not _nan(r['name'])]
+        tEnd = float(df['duration [s]'].fillna(0).clip(lower=0).sum()) * int(rept)
+        if tEnd <= 0:
+            st.warning("The sequence has no segment with a duration > 0.", icon=':material/warning:')
+            return
+        t = np.linspace(0.0, tEnd, 1201)
+        P, _ = genMission(seq, Pn, t, rept)
+        fig = go.Figure([line(t, P[:, i], c['name'], i) for i, c in enumerate(Pn)])
+        fig.update_layout(xaxis_title='t (s)', yaxis_title='P (W)')
+        show(fig, height=260, key=f"{K}|misfig", info="**Mission profile** of the chips: the simulation runs over "
+             "the whole (repeated) sequence.")
+        c = st.columns([2, 1], vertical_alignment='bottom')
+        nm = c[0].text_input("Save the sequence as", name if up is None else up.name[:-4], key=f"{K}|misname")
+        if c[1].button("Save", icon=':material/save:', key=f"{K}|missave", width='stretch') and nm.strip():
+            df.to_csv(os.path.join(MIS_DIR, f"{nm.strip().replace(' ', '_')}.csv"), index=False)
+            st.toast(f"Saved {MIS_DIR}/{nm.strip()}.csv", icon=':material/check:')
+        s[f"{K}|mission"] = {'seq': seq, 'repeat': int(rept), 't': np.array([0.0, tEnd]),
+                             'sig': json.dumps([seq, int(rept)], default=str)}
 
 
 def chip_lib_editor():
@@ -524,36 +614,39 @@ def chip_lib_editor():
 
 
 def simulation():
-    cm.section(3, "Simulation", "Finite-volume model of the board, transient run with the loss profiles of the chips "
-                                "and steady state for the last losses.")
+    cm.section(3, "Simulation", "Layer-resolved finite-volume model of the whole board (x, y and every layer in z, die "
+                                "attach and die on top), transient run with the loss profiles of the chips and steady "
+                                "state for the last losses. Top view and cross-section are two views of this one "
+                                "result.")
     c = st.columns(4)
-    view = c[0].segmented_control("View", ['Top view (x-y)', 'Cross-section (x-z)'], default='Top view (x-y)',
-                                  key=f"{K}|view", help="Top view: board lumped over its thickness, all chips. "
-                                  "Cross-section: every layer resolved, only the chips cut by y = y_cut.") \
-        or 'Top view (x-y)'
-    cm.num(c[1], "Duration t_end (s)", 200.0, 'board|tEnd', min_value=1.0, max_value=1e5)
-    cm.num(c[2], "Sampling time T_s (s)", 1.0, 'board|Ts', min_value=1e-3, max_value=100.0)
-    cm.num(c[3], "Sub-steps per T_s", 2, 'board|nSub', format='%d', min_value=1, max_value=50,
-           help="Implicit Euler steps per sampling period (accuracy of fast transients).")
-    v = 'xy' if view.startswith('Top') else 'xz'
-    lay = _layout(v)
     s = st.session_state
+    mis = s.get(f"{K}|mission") if s.get(f"{K}|loadMode") == 'Mission profile' else None
+    cm.num(c[0], "Duration t_end (s)", 200.0, 'board|tEnd', min_value=1.0, max_value=1e5,
+           disabled=mis is not None, help="With a mission profile the duration is the length of the sequence.")
+    cm.num(c[1], "Sampling time T_s (s)", 1.0, 'board|Ts', min_value=1e-3, max_value=100.0)
+    cm.num(c[2], "Sub-steps per T_s", 2, 'board|nSub', format='%d', min_value=1, max_value=50,
+           help="Implicit Euler steps per sampling period (accuracy of fast transients).")
+    c[3].toggle("Re-run on changes", key=f"{K}|auto", help="Simulate again whenever an input changes.")
+    lay = _layout('xz')
     tEnd, Ts, nSub = s[f"{cm.KEY}|board|tEnd"], s[f"{cm.KEY}|board|Ts"], s[f"{cm.KEY}|board|nSub"]
+    if mis is not None:
+        tEnd = float(mis['t'][-1])
     try:
         D = genBoard(lay)
+        D2 = genBoard(_layout('xy'))
     except Exception as e:
         st.error(f"Board could not be built: {e}", icon=':material/error:')
         return None
-    st.caption(f"Grid {D['shape'][1]} × {D['shape'][0]} = {D['geo'].shape[0]} nodes, dx = {fmt(D['dx'] * 1e3)} mm, "
-               f"{'dz' if v == 'xz' else 'dy'} = {fmt(D['dy'] * 1e3)} mm, {len(D['chips'])} chips"
-               + (", z exaggerated in the plots" if v == 'xz' else ""))
+    st.caption(f"{D['N3']:,} nodes: {len(D['xg'])} × {len(D['yg'])} in x-y (dx = {fmt(D['dx'] * 1e3)} mm) × "
+               f"{len(D['rowName'])} rows in z ({D['nBelow']} below the board, {D['nBoard'] - D['nBelow']} board, "
+               f"{len(D['rowName']) - D['nBoard']} die attach + die), {len(D['chips'])} chips")
     if not D['chips']:
-        st.info("No chip in this view (cross-section: move the cut through a chip).", icon=':material/info:')
+        st.info("Place at least one chip.", icon=':material/info:')
         return None
-    if D['geo'].shape[0] > 60000:
-        st.warning("More than 60 000 nodes: increase dx.", icon=':material/warning:')
+    if D['N3'] > 150000:
+        st.warning("More than 150 000 nodes: increase dx.", icon=':material/warning:')
         return None
-    sig = json.dumps([lay, tEnd, Ts, nSub], sort_keys=True, default=str)
+    sig = json.dumps([lay, tEnd, Ts, nSub, None if mis is None else mis['sig']], sort_keys=True, default=str)
     res = s.get(f"{K}|res")
     if st.button("Simulate", icon=':material/play_arrow:', type='primary', key=f"{K}|run") or \
             (res is not None and res['sig'] != sig and s.get(f"{K}|auto", False)):
@@ -561,13 +654,10 @@ def simulation():
             t0 = time.perf_counter()
             C, G, Bp = calcBoardMat(D)
             t = np.arange(0.0, tEnd + Ts * 1e-9, Ts)
-            P = _profiles(lay, D, t)
+            P = _profiles(lay, D, t, mission=mis)
             Tf, Tssf = simBoard(C, G, Bp, P, Ts, lay['Ta'], nSub)
-            N = D['geo'].shape[0]
-            s[f"{K}|res"] = res = {'sig': sig, 'lay': lay, 'D': D, 't': t, 'P': P, 'T': Tf[:, :N], 'Tss': Tssf[:N],
-                                   'T2': Tf[:, N:] if Tf.shape[1] > N else None,
-                                   'Tss2': Tssf[N:] if len(Tssf) > N else None, 'Tf': Tf, 'C': C, 'G': G,
-                                   'Bp': Bp, 'nSub': nSub, 'time': time.perf_counter() - t0}
+            s[f"{K}|res"] = res = {'sig': sig, 'lay': lay, 'D': D, 'D2': D2, 't': t, 'P': P, 'T': Tf, 'Tss': Tssf,
+                                   'C': C, 'G': G, 'Bp': Bp, 'nSub': nSub, 'time': time.perf_counter() - t0}
     if res is None:
         st.info("Press *Simulate* to run the board model.", icon=':material/info:')
         return None
@@ -576,70 +666,75 @@ def simulation():
     return res
 
 
+def _view_inputs(D, key):
+    """View (top / cross-section) and the row of the top view; returns [view, row]."""
+    c = st.columns([2, 2, 3])
+    v = c[0].segmented_control("View", ['Top view (x-y)', 'Cross-section (x-z)'], default='Top view (x-y)',
+                               key=f"{K}|view", help="Two views of the same 3D result.") or 'Top view (x-y)'
+    view = 'xy' if v.startswith('Top') else 'xz'
+    names = D['rowName']
+    opts = list(range(len(names)))[::-1]
+    lab = {r: (f"{names[r]} (chip)" if r >= D['nBoard'] else
+               f"{names[r]} ({'below the board' if r < D['nBelow'] else 'board'})") for r in opts}
+    row = c[1].selectbox("Layer of the top view", opts, index=opts.index(D['nBoard'] - 1), key=f"{K}|row",
+                         format_func=lambda r: lab[r], disabled=view != 'xy',
+                         help="Row of the stack shown in the top view: the dies (only under the chips), the top "
+                              "copper, any inner layer, or the layers below the board (e.g. the heat sink).")
+    c[2].caption(f"Cross-section at y = {fmt(D['yCut'] * 1e3)} mm (Layout › cut). z not to scale: every layer "
+                 f"gets its own rows.")
+    return [view, row]
+
+
 def results(res):
     D, t, P, T, Tss, lay = res['D'], res['t'], res['P'], res['T'], res['Tss'], res['lay']
-    ny, nx = D['shape']
-    xy = D['view'] == 'xy'
     Tj = _tj(D, T, P)
     Tjs = _tj(D, Tss[None, :], P[-1:])[0]
     names = [c['name'] for c in D['chips']]
     cm.section(None, "Result")
-    cm.tiles([("T_max board (steady)", f"{fmt(Tss.max())} °C", "Hottest node of the steady state for the last "
-               "losses."), ("T_j,max (transient)", f"{fmt(Tj.max())} °C", "Highest junction temperature of the run."),
+    cm.tiles([("T_max board (steady)", f"{fmt(Tss[D['idx'][D['nBoard'] - 1].ravel()].max())} °C",
+               "Hottest node of the top board layer, steady state for the last losses."),
+              ("T_j,max (transient)", f"{fmt(Tj.max())} °C", "Highest junction temperature of the run (hottest die "
+                                                             "cell)."),
               ("Total loss (last)", f"{fmt(P[-1].sum())} W", None),
-              ("Simulation time", f"{fmt(res['time'])} s", f"{D['geo'].shape[0]} nodes × {len(t)} steps")])
+              ("Simulation time", f"{fmt(res['time'])} s", f"{D['N3']:,} nodes × {len(t)} steps")])
     rows = []
     for i, c in enumerate(D['chips']):
         m = c['Tjmax'] - Tj[:, i].max()
         lvl = 'good' if m > 25 else ('warning' if m > 0 else 'critical')
         rows.append({'chip': c['name'], 'technology': c['tech'], 'P last (W)': P[-1, i],
                      'T_j steady (°C)': Tjs[i], 'T_j max run (°C)': Tj[:, i].max(), 'T_j,max (°C)': c['Tjmax'],
-                     'margin (K)': m, 'R_jb (K/W)': D['Rjb'][i] if xy else np.nan,
-                     'status': {'good': 'OK', 'warning': 'tight', 'critical': 'too hot'}[lvl]})
+                     'margin (K)': m, 'status': {'good': 'OK', 'warning': 'tight', 'critical': 'too hot'}[lvl]})
     table(pd.DataFrame(rows), hide_index=True)
-    st.caption("T_j: hottest board node under the chip + P·R_jb (die and die attach, top view) or hottest node of the "
-               "die (cross-section). Margin = T_j,max − T_j max of the run; OK > 25 K, tight 0–25 K.")
-    T2 = res.get('T2')
-    tabs = st.tabs(["Steady state", "Transient field", "Profiles & probes", "Junction temperatures", "Losses"] +
-                   (["Heat sink plane"] if T2 is not None else []))
+    st.caption("T_j: hottest cell of the resolved die. Margin = T_j,max − T_j max of the run; OK > 25 K, tight 0–25 K.")
+    [view, row] = _view_inputs(D, 'res')
+    xy = view == 'xy'
+    [Fs, x, y, geo] = _disp(D, Tss, view, row)
+    [F, _, _, _] = _disp(D, T, view, row)
+    lim = [lay['Ta'], max(float(np.nanmax(T)), lay['Ta'] + 1e-6)]
+    tabs = st.tabs(["Steady state", "Transient field", "Profiles & probes", "Junction temperatures", "Losses"])
     with tabs[0]:
-        show(_heat(Tss.reshape(ny, nx), D['x'], D['y'], '°C', 'Steady-state temperature', equal=xy, scale=TEMP),
+        show(_heat(Fs[0], x, y, '°C', 'Steady-state temperature', equal=xy, scale=TEMP),
              height=430 if xy else 330, key=f"{K}|ss")
     with tabs[1]:
         i = st.slider("Time step", 0, len(t) - 1, len(t) - 1, key=f"{K}|tsl")
         st.caption(f"t = {fmt(t[i])} s")
-        show(_heat(T[i].reshape(ny, nx), D['x'], D['y'], '°C', f"Temperature at t = {fmt(t[i])} s", equal=xy,
-                   zlim=[lay['Ta'], max(T.max(), lay['Ta'] + 1e-6)]), height=430 if xy else 330, key=f"{K}|tr")
+        show(_heat(F[i], x, y, '°C', f"Temperature at t = {fmt(t[i])} s", equal=xy, zlim=lim),
+             height=430 if xy else 330, key=f"{K}|tr")
     with tabs[2]:
         from gui.core.field_explore import profiles, probes
         i = st.session_state.get(f"{K}|tsl", len(t) - 1)
         lab = ('x (mm)', 'y (mm)') if xy else ('x (mm)', 'z (mm)')
-        fl = [(f"board at t = {fmt(t[i])} s", T[i].reshape(ny, nx), False), ('steady state', Tss.reshape(ny, nx), True)]
-        if T2 is not None:
-            fl.append(('heat sink at t', T2[i].reshape(ny, nx), True))
-        profiles(fl, D['x'], D['y'], f"{K}|prof", vlabel=lab)
+        profiles([(f"t = {fmt(t[i])} s", F[i], False), ('steady state', Fs[0], True)], x, y, f"{K}|prof", vlabel=lab)
         st.caption("Time step from the slider of the tab *Transient field*.")
-        ser = [('board', T, False)] + ([('heat sink', T2, True)] if T2 is not None else [])
-        probes(D['geo'] if xy else D['geo'][:, :2], ser, t, f"{K}|probe", mark=t[i])
+        probes(geo, [('T', F.reshape(len(t), -1), False)], t, f"{K}|probe", mark=t[i])
     with tabs[3]:
-        fig = go.Figure([line(t, Tj[:, i], n, i) for i, n in enumerate(names)])
+        fig = go.Figure([line(t, Tj[:, k], n, k) for k, n in enumerate(names)])
         fig.update_layout(xaxis_title='t (s)', yaxis_title='T_j (°C)')
         show(fig, key=f"{K}|tj")
     with tabs[4]:
-        fig = go.Figure([line(t, P[:, i], n, i) for i, n in enumerate(names)])
+        fig = go.Figure([line(t, P[:, k], n, k) for k, n in enumerate(names)])
         fig.update_layout(xaxis_title='t (s)', yaxis_title='P (W)')
         show(fig, key=f"{K}|p")
-    if T2 is not None:
-        with tabs[5]:
-            Ts2 = res['Tss2']
-            c = st.columns(3)
-            c[0].metric("T_max heat sink (steady)", f"{fmt(Ts2.max())} °C")
-            c[1].metric("ΔT board → heat sink (hot spot)", f"{fmt(Tss.max() - Ts2.max())} K")
-            c[2].metric("ΔT heat sink → coolant", f"{fmt(Ts2.max() - lay['Ta'])} K")
-            show(_heat(Ts2.reshape(ny, nx), D['x'], D['y'], '°C', 'Heat sink plane, steady state', scale=TEMP),
-                 height=430, key=f"{K}|ss2", info="**Temperature of the layers below the board** (heat sink plane "
-                 "T₂). A uniform field = the heat sink spreads well and the interface dominates; hot spots under the "
-                 "chips = the heat sink is too thin or the coolant h is the bottleneck.")
     return Tj
 
 
@@ -647,19 +742,18 @@ def pod(res):
     cm.section(4, "POD reduced model", "Proper orthogonal decomposition of the simulated field and Galerkin "
                                        "projection of the finite-volume model onto the first K modes.")
     D, t, T, lay = res['D'], res['t'], res['T'], res['lay']
-    ny, nx = D['shape']
     Kmax = int(min(30, len(t)))
     c = st.columns([1, 3])
     Kr = c[0].slider("Modes K", 1, Kmax, min(5, Kmax), key=f"{K}|K")
-    rom = romBoard(res['C'], res['G'], res['Bp'], res.get('Tf', T), lay['Ta'], Kr)
+    rom = romBoard(res['C'], res['G'], res['Bp'], T, lay['Ta'], Kr)
     t0 = time.perf_counter()
-    Tr = simRom(rom, res['P'], t[1] - t[0] if len(t) > 1 else 1.0, lay['Ta'], res['nSub'])[:, :T.shape[1]]
+    Tr = simRom(rom, res['P'], t[1] - t[0] if len(t) > 1 else 1.0, lay['Ta'], res['nSub'])
     tr = time.perf_counter() - t0
     err = np.abs(Tr - T)
     rise = max(T.max() - lay['Ta'], 1e-9)
     c[0].metric("Captured energy E_K", f"{100 * rom['E'][Kr - 1]:.4f} %")
     c[0].metric("Max. error", f"{fmt(err.max())} K", f"{100 * err.max() / rise:.2f} % of the rise", delta_color='off')
-    c[0].metric("Unknowns", f"{Kr} instead of {D['geo'].shape[0]}", f"{fmt(res['time'] / max(tr, 1e-9))}× faster",
+    c[0].metric("Unknowns", f"{Kr} instead of {D['N3']:,}", f"{fmt(res['time'] / max(tr, 1e-9))}× faster",
                 delta_color='off')
     with c[1]:
         tabs = st.tabs(["Energy", "Mode shapes", "Error over time"])
@@ -674,8 +768,12 @@ def pod(res):
             show(fig, key=f"{K}|en")
         with tabs[1]:
             k = st.slider("Mode", 1, Kr, 1, key=f"{K}|mode")
-            show(_heat(rom['Phi'][:ny * nx, k - 1].reshape(ny, nx), D['x'], D['y'], '–', f"POD mode {k}",
-                       equal=D['view'] == 'xy', scale='RdBu_r'), height=380, key=f"{K}|ph")
+            view, row = ('xy' if (st.session_state.get(f"{K}|view") or 'Top').startswith('Top') else 'xz'), \
+                st.session_state.get(f"{K}|row")
+            [Fm, x, y, _] = _disp(D, rom['Phi'][:, k - 1], view, row)
+            a = float(np.nanmax(np.abs(Fm))) or 1.0
+            show(_heat(Fm[0], x, y, '–', f"POD mode {k} ({'top view' if view == 'xy' else 'cross-section'})",
+                       equal=view == 'xy', zlim=[-a, a], scale='RdBu_r'), height=380, key=f"{K}|ph")
         with tabs[2]:
             fig = go.Figure([line(t, err.max(axis=1), 'max |T_ROM − T_FV|', 0),
                              line(t, err.mean(axis=1), 'mean |T_ROM − T_FV|', 1)])
@@ -708,14 +806,16 @@ def export(res):
         from gui.core import config as conf
         from gui.core import forms
         from gui import adapter as A
-        D, lay = res['D'], res['lay']
+        D, lay = res['D2'], res['lay']
+        C2, G2, B2 = calcBoardMat(D)
         Ts = float(res['t'][1] - res['t'][0]) if len(res['t']) > 1 else 1.0
         tTr = np.arange(0.0, st.session_state[f"{cm.KEY}|board|tTrain"] + Ts * 1e-9, Ts)
         Ptr = _profiles(lay, D, tTr, kind='random', seed=7)
-        Ttr, _ = simBoard(res['C'], res['G'], res['Bp'], Ptr, Ts, lay['Ta'], res['nSub'])
+        Ttr, _ = simBoard(C2, G2, B2, Ptr, Ts, lay['Ta'], res['nSub'])
+        Tte, _ = simBoard(C2, G2, B2, res['P'], Ts, lay['Ta'], res['nSub'])
         folder = os.path.join(A.ROOT, 'data', 'board')
         saveBoard(D, tTr, Ptr, Ttr, os.path.join(folder, f"{name}_train.mat"))
-        saveBoard(D, res['t'], res['P'], res['T'], os.path.join(folder, f"{name}_test.mat"))
+        saveBoard(D, res['t'], res['P'], Tte, os.path.join(folder, f"{name}_test.mat"))
         with open(os.path.join(folder, f"{name}.json"), 'w', encoding='utf-8') as f:
             json.dump(lay, f, indent=2)
         cfg = conf.read_config('tutorial_PO')
@@ -736,43 +836,49 @@ def export(res):
             from gui.core import forms
             forms.set_config(conf.read_config(done), done)
             st.toast(f"Config '{done}' loaded — open Modes › PO to train the model", icon=':material/check:')
-    st.caption("The data store the distributed heat sink h_v and the anisotropic conductivity k_y of the board, so "
-               "that the Galerkin projection of the PO mode includes the cooling (protocol 2/3, corrected version). "
-               "Loading the config replaces the current GUI configuration.")
+    D2 = res['D2']
+    C2, G2, B2 = calcBoardMat(D2)
+    _, Ts2 = simBoard(C2, G2, B2, res['P'][-1:], 1.0, res['lay']['Ta'], 1)
+    Tj2 = _tj(D2, Ts2[None, :D2['geo'].shape[0]], res['P'][-1:])[0]
+    Tj3 = _tj(res['D'], res['Tss'][None, :], res['P'][-1:])[0]
+    cmp = ', '.join(f"{c['name']}: {fmt(a)} vs. {fmt(b)} °C" for c, a, b in zip(D2['chips'], Tj2, Tj3))
+    st.caption(f"The PO mode needs one temperature per node of a plane, so the export uses the lumped top-view model "
+               f"(board lumped over its thickness, layers below as an equivalent sink). Its steady junction "
+               f"temperatures differ from the layer-resolved model by {fmt(float(np.max(np.abs(Tj2 - Tj3))))} K at "
+               f"most (lumped vs. resolved: {cmp}). "
+               "The data store the distributed heat sink h_v and the anisotropic conductivity k_y, so that the "
+               "Galerkin projection of the PO mode includes the cooling (protocol 2/3, corrected version). Loading "
+               "the config replaces the current GUI configuration.")
 
 
 def interpretation(res, Tj, rom, err):
-    D, lay = res['D'], res['lay']
+    D, D2, lay = res['D'], res['D2'], res['lay']
     i = int(np.argmax(Tj.max(axis=0) - np.array([c['Tjmax'] for c in D['chips']])))
     c = D['chips'][i]
     m = c['Tjmax'] - Tj[:, i].max()
+    Tss = res['Tss']
     p = [f"The hottest chip relative to its limit is **{c['name']}** ({c['tech']}): T_j reaches "
          f"**{fmt(Tj[:, i].max())} °C**, {'a margin of ' + fmt(m) + ' K' if m >= 0 else fmt(-m) + ' K above'} its "
          f"maximum junction temperature of {fmt(c['Tjmax'])} °C."]
-    if D['view'] == 'xy':
-        p.append(f"The board conducts heat sideways with k_eff = {fmt(D['kEff'])} W/(m K) over its {fmt(D['tb'] * 1e3)}"
-                 f" mm thickness and removes it through the bottom with h_eff = {fmt(D['hEff'])} W/(m² K) (stack-up "
-                 f"resistance {fmt(D['Rz'] * 1e6)} K mm²/W in series with the cooling). A thicker copper layer or a "
-                 f"better ceramic spreads the heat (larger k_eff); better cooling raises h_eff. The spreading length "
-                 f"√(k_eff t_b / h_eff) = {fmt(np.sqrt(D['kEff'] * D['tb'] / D['hEff']) * 1e3)} mm tells how far the "
-                 f"heat of a chip spreads — chips closer than about twice this length heat each other.")
-        if res.get('Tss2') is not None:
-            p.append(f"Below the board the heat passes the interface layers and the heat sink: board → heat sink "
-                     f"{fmt(D['R12'] * 1e6)} K mm²/W, heat sink → coolant {fmt(D['R2a'] * 1e6)} K mm²/W. The heat "
-                     f"sink "
-                     f"reaches {fmt(res['Tss2'].max())} °C at its hottest point (steady state) and spreads the heat "
-                     f"sideways with k·t = {fmt(D['ktBelow'])} W/K; the temperature drop from the board to the heat "
-                     f"sink ({fmt(res['Tss'].max() - res['Tss2'].max())} K at the hot spot) is set by the board "
-                     f"stack-up and the interface material — a thinner or better gap filler lowers it directly.")
-        if D['via'].any():
-            p.append(f"The thermal vias lower the through-plane resistance of the board from {fmt(D['Rz'] * 1e6)} to "
-                     f"{fmt(D['RzVia'] * 1e6)} K mm²/W in the via region, i.e. h_eff rises from {fmt(D['hEff'])} to "
-                     f"{fmt(D['hEffVia'])} W/(m² K) under the chips — compare the junction temperatures with "
-                     f"'No vias' to see the benefit.")
-    else:
-        p.append("The cross-section resolves every layer, so the temperature drop across the die attach, the "
-                 "ceramic and the cooling interface is visible directly. It neglects the spreading along y, so it "
-                 "over-estimates T_j of small chips (use the top view for the spreading).")
+    p.append(f"The board conducts heat sideways with k_eff = {fmt(D2['kEff'])} W/(m K) over its {fmt(D2['tb'] * 1e3)}"
+             f" mm thickness; the stack-up resistance is {fmt(D2['Rz'] * 1e6)} K mm²/W through the board. The spreading "
+             f"length √(k_eff t_b / h_eff) = {fmt(np.sqrt(D2['kEff'] * D2['tb'] / D2['hEff']) * 1e3)} mm tells how far "
+             f"the heat of a chip spreads — chips closer than about twice this length heat each other.")
+    Ttop = Tss[D['idx'][D['nBoard'] - 1].ravel()]
+    if D['nBelow']:
+        Tsink = Tss[D['idx'][D['nBelow'] - 1].ravel()]
+        p.append(f"Below the board the heat passes the interface material and the carrier/heat sink: the top of the "
+                 f"layers below reaches {fmt(Tsink.max())} °C at its hottest point, "
+                 f"{fmt(Ttop.max() - Tsink.max())} K below the hottest point of the board (steady state). This drop "
+                 f"is set by the board stack-up and the interface material — a thinner or better gap filler lowers "
+                 f"it directly; select the layers in *Layer of the top view* to follow the heat downwards.")
+    if D2['via'].any():
+        p.append(f"The thermal vias lower the through-plane resistance of the board from {fmt(D2['Rz'] * 1e6)} to "
+                 f"{fmt(D2['RzVia'] * 1e6)} K mm²/W in the via region — compare the junction temperatures with "
+                 f"'No vias' to see the benefit.")
+    p.append("Top view and cross-section show the same layer-resolved result: the cross-section makes the "
+             "temperature drop across the die attach, the board and the layers below visible, the top view the "
+             "spreading and the coupling of the chips.")
     p.append(f"The POD model with K = {rom['K']} modes reproduces the full model with a maximum error of "
              f"{fmt(err.max())} K. Export the data to train the PO/PS modes of TherMOS on this board.")
     cm.interpret(p)
@@ -796,12 +902,18 @@ def page():
     rom, err = pod(res)
     export(res)
     cm.equations([
-        ("Top view: lumped board", [r"k_{eff} = \frac{\sum_l k_{xy,l} t_l}{t_b},\quad (\rho c)_{eff} = "
+        ("Layer-resolved model (simulation, both views)",
+         [r"C_i\,\dot T_i = \sum_j G_{ij}(T_j - T_i) + g_{out,i}(T_a - T_i) + B_i P,\quad "
+          r"G_{ij}^{z} = \frac{A_i}{\Delta z_i/2k_{z,i} + \Delta z_j/2k_{z,j}},\quad "
+          r"G_{ij}^{x} = \frac{\Delta y\,\bar{\Delta z}}{\Delta x/2k_{x,i} + \Delta x/2k_{x,j}}"],
+         "Nodes on the x-y grid in every row of the stack (layers below, board layers, die attach and die over the "
+         "chip footprints); h on the bottom of the lowest row, h_top on the top of every column."),
+        ("Lumped board (export to the PO mode)", [r"k_{eff} = \frac{\sum_l k_{xy,l} t_l}{t_b},\quad (\rho c)_{eff} = "
                                     r"\frac{\sum_l \rho_l c_l t_l}{t_b},\quad h_{eff} = \frac{1}{\sum_l t_l/k_{z,l} + "
                                     r"1/h} + h_{top}"], "Stack-up of thickness t_b lumped into one plane."),
         ("Heat equation", [r"(\rho c)\,\partial_t T = \nabla\cdot(k\nabla T) - h_v (T - T_a) + Q,\quad "
                            r"h_v = h_{eff}/t_b,\quad Q = \frac{P}{A_{chip} t_b}"], None),
-        ("Layers below the board (top view): heat sink plane T₂",
+        ("Layers below the board (lumped export model): heat sink plane T₂",
          [r"(\rho c t)_2\,\partial_t T_2 = \nabla\cdot((k t)_2\nabla T_2) + \frac{T - T_2}{R_{12}} - "
           r"\frac{T_2 - T_a}{R_{2a}}",
           r"R_{12} = \sum_{board}\frac{t_l}{k_{z,l}} + \sum_{i<last}\frac{t_i}{k_i} + \frac{t_{last}}{2k_{last}},\quad "
@@ -815,8 +927,8 @@ def page():
                                       r"\varphi_h k_{fill} + (1-\varphi_{Cu}-\varphi_h)\,k_{FR4,z}"],
          "Patterned Cu layer with coverage c; FR4 in the via region with the area fractions of the barrels φ_Cu = "
          "π(r² − (r − t_pl)²)/p² and of the holes φ_h."),
-        ("Junction temperature", [r"T_j = \max_{chip} T + P\,R_{jb},\quad R_{jb} = \frac{t_{die}/k_{die} + "
-                                  r"t_{att}/k_{att}}{w\,l}"], "Top view; the cross-section resolves the die."),
+        ("Junction temperature", [r"T_j = \max_{die\ cells} T"], "The die and the die attach are resolved (the "
+                                                                   "lumped export model uses T + P·R_jb)."),
     ], sym=[('k_xy, k_z', 'in-plane and through-plane conductivity of layer l', 'W/(m K)'),
             ('t_l, t_b', 'layer and board thickness', 'm'), ('h, h_top', 'heat transfer coefficient bottom, top',
                                                              'W/(m² K)'),

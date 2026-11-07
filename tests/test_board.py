@@ -54,14 +54,40 @@ def test_uniform_analytic():
 
 
 def test_energy_balance():
-    for view, depth in (('xy', None), ('xz', 1)):
+    for view in ('xy', 'xz'):
         D = genBoard(dict(LAY, view=view))
         C, G, Bp = calcBoardMat(D)
         P = np.array([[30.0, 15.0][0:len(D['chips'])]] * 2)
         _, Tss = simBoard(C, G, Bp, P, 1.0, 25)
-        d = D['tb'] if view == 'xy' else D['chips'][0]['l'] * 1e-3
-        Qout = np.sum(D['wA'] * D['hv'] * (Tss - 25)) * D['dx'] * D['dy'] * d
+        if view == 'xy':
+            Qout = np.sum(D['wA'] * D['hv'] * (Tss - 25)) * D['dx'] * D['dy'] * D['tb']
+        else:
+            Qout = np.sum(D['gOut'] * (Tss - 25))                         # layer-resolved model, all chips
         assert np.isclose(Qout, P[-1].sum(), rtol=1e-8)
+
+
+def test_layer_resolved_uniform():
+    # uniform heating of a board-sized die: the 3D model reduces to the 1D series path through all rows
+    from src.py.board.boardLib import BELOW
+    lay = dict(LAY, chips=[{'tech': 'Si MOSFET', 'x': 20, 'y': 15, 'w': 50, 'l': 40, 'P': 2.0}], hTop=0.0,
+               below=BELOW['Gap filler 2 mm + Al heat sink 5 mm'], view='xz')
+    D = genBoard(lay)
+    C, G, Bp = calcBoardMat(D)
+    _, Tss = simBoard(C, G, Bp, np.full((2, 1), 2.0), 1.0, 25)
+    Tb = Tss[D['idx'][0].ravel()]                                           # bottom row of the heat sink
+    k = BELOW['Gap filler 2 mm + Al heat sink 5 mm'][-1]
+    from src.py.board.boardLib import layerProps
+    dz0 = float(k['t']) * 1e-3 / int(min(max(np.ceil(float(k['t']) / 0.5 - 1e-9), 1), 4))
+    assert np.allclose(Tb - 25, 2.0 / 1.2e-3 * (dz0 / (2 * layerProps(k)[1]) + 1 / 1500), rtol=1e-6)
+
+
+def test_mission():
+    from src.py.board.genMission import genMission
+    seq = [{'segment': 'a', 'duration [s]': 10, 'ramp [s]': 0, 'scale [-]': 1.0},
+           {'segment': 'b', 'duration [s]': 10, 'ramp [s]': 5, 'scale [-]': 0.5, 'T1 [W]': 40}]
+    P, tEnd = genMission(seq, [{'name': 'T1', 'P': 20}, {'name': 'D1', 'P': 10}], np.arange(0, 21.0), 1)
+    assert tEnd == 20 and np.allclose(P[5], [20, 10]) and np.allclose(P[15], [40, 5])
+    assert np.allclose(P[12], [20 + 20 * 2 / 5, 10 - 5 * 2 / 5])
 
 
 def test_transient_and_rom():
@@ -95,15 +121,18 @@ def test_vias():
     for view in ('xy', 'xz'):
         D0 = genBoard(dict(base, view=view))
         D1 = genBoard(dict(base, view=view, vias=dict(vias, mode='none', pitch=1.0)))
-        assert np.array_equal(D0['hv'], D1['hv']) and np.array_equal(D0['ky'], D1['ky'])
+        if view == 'xy':
+            assert np.array_equal(D0['hv'], D1['hv']) and np.array_equal(D0['ky'], D1['ky'])
+        else:
+            assert (calcBoardMat(D0)[1] != calcBoardMat(D1)[1]).nnz == 0
         tj = []
         for pitch in (3.0, 1.5, 1.0, 0.7):
             D = genBoard(dict(base, view=view, vias=dict(vias, pitch=pitch)))
             C, G, Bp = calcBoardMat(D)
             P = np.array([[30.0, 15.0][0:len(D['chips'])]] * 2)
             _, Tss = simBoard(C, G, Bp, P, 1.0, 25)
-            d = D['tb'] if view == 'xy' else D['chips'][0]['l'] * 1e-3
-            assert np.isclose(np.sum(D['wA'] * D['hv'] * (Tss - 25)) * D['dx'] * D['dy'] * d, P[-1].sum(), rtol=1e-8)
+            Q = np.sum(D['wA'] * D['hv'] * (Tss - 25)) * D['dx'] * D['dy'] * D['tb'] if view == 'xy' else                 np.sum(D['gOut'] * (Tss - 25))
+            assert np.isclose(Q, P[-1].sum(), rtol=1e-8)
             tj.append(Tss.max())
         assert np.all(np.diff(tj) < 0)
 
@@ -139,4 +168,4 @@ def test_layers_below():
 
     # cross-section: the layers below are resolved
     D = genBoard(dict(LAY, view='xz', below=BELOW['Gap filler 2 mm + Al heat sink 5 mm']))
-    assert D['nBelow'] > 0 and D['Ly'] > 7e-3
+    assert D['nBelow'] > 0 and D['Ly'] > 7e-3 and D['rowName'][D['nBelow'] - 1].startswith('Gap')

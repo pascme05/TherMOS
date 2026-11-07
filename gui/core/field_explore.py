@@ -112,27 +112,31 @@ def probes(geo, series, t, key, z=None, mark=None, unit='°C'):
     g = np.asarray(geo, dtype=float)
     g = g - g.min(axis=0)
     Y0 = np.asarray(series[0][1], dtype=float)
+    ok = np.isfinite(Y0).all(axis=0)                                    # cells with a temperature (no air)
+    Yhi = np.where(ok, np.nan_to_num(Y0).max(axis=0), -np.inf)
+    Ylo = np.where(ok, np.nan_to_num(Y0).min(axis=0), np.inf)
     opts = ["Hot spot (max over the run)", "Coolest node", "Mean of all nodes", "Point x/y"]
     c = st.columns([3, 1, 1])
     sel = c[0].multiselect("Probes", opts, default=opts[:1] + opts[2:3], key=f"{key}|pr",
                            help="Hot spot / coolest node: node with the highest / lowest temperature of the first "
                                 "series over the whole run. Point: the node next to the given position.")
-    px = c[1].number_input("x (mm)", 0.0, float(g[:, 0].max() * 1e3), float(g[np.argmax(Y0.max(axis=0)), 0] * 1e3),
+    px = c[1].number_input("x (mm)", 0.0, float(g[:, 0].max() * 1e3), float(g[np.argmax(Yhi), 0] * 1e3),
                            key=f"{key}|prx", disabled="Point x/y" not in sel)
-    py = c[2].number_input("y (mm)", 0.0, float(g[:, 1].max() * 1e3), float(g[np.argmax(Y0.max(axis=0)), 1] * 1e3),
+    py = c[2].number_input("y (mm)", 0.0, float(g[:, 1].max() * 1e3), float(g[np.argmax(Yhi), 1] * 1e3),
                            key=f"{key}|pry", disabled="Point x/y" not in sel)
     idx = []
     for s in sel:
         if s.startswith("Hot"):
-            idx.append((s.split(' (')[0], int(np.argmax(Y0.max(axis=0)))))
+            idx.append((s.split(' (')[0], int(np.argmax(Yhi))))
         elif s.startswith("Cool"):
-            idx.append((s, int(np.argmin(Y0.min(axis=0)))))
+            idx.append((s, int(np.argmin(Ylo))))
         elif s.startswith("Mean"):
             idx.append((s, None))
         else:
             p = np.array([px, py] + ([z * 1e3] if g.shape[1] == 3 and z is not None else
                                      [0.0] * (g.shape[1] - 2))) * 1e-3
-            idx.append((f"x={px:.3g}, y={py:.3g} mm", int(np.argmin(np.sum((g - p) ** 2, axis=1)))))
+            d2 = np.where(ok, np.sum((g - p) ** 2, axis=1), np.inf)
+            idx.append((f"x={px:.3g}, y={py:.3g} mm", int(np.argmin(d2))))
     if not idx:
         st.caption("Select at least one probe.")
         return
@@ -141,13 +145,13 @@ def probes(geo, series, t, key, z=None, mark=None, unit='°C'):
     for k, (nm, n) in enumerate(idx):
         for j, (lab, Y, d) in enumerate(series):
             Y = np.asarray(Y, dtype=float)
-            v = Y.mean(axis=1) if n is None else Y[:, n]
+            v = np.nanmean(Y[:, ok], axis=1) if n is None else Y[:, n]
             fig.add_trace(go.Scatter(x=t[:len(v)], y=v, mode='lines', name=f"{nm} · {lab}", legendgroup=nm,
                                      line=dict(color=color(k), dash='dash' if d else None, width=2)))
         if len(series) > 1:
             a = np.asarray(series[0][1], dtype=float)
             b = np.asarray(series[1][1], dtype=float)
-            e = (a.mean(axis=1) - b.mean(axis=1)) if n is None else (a[:, n] - b[:, n])
+            e = (np.nanmean(a[:, ok], axis=1) - np.nanmean(b[:, ok], axis=1)) if n is None else (a[:, n] - b[:, n])
             errs.append({'probe': nm, 'node': '–' if n is None else n,
                          'MAE (K)': float(np.mean(np.abs(e))), 'max |e| (K)': float(np.max(np.abs(e)))})
     if mark is not None:
