@@ -179,6 +179,10 @@ The board designer builds a finite-volume model of a board with chips. The model
   tab *Losses* shows the nominal and the effective losses.
 
 **Thermal characterisation**
+- **Junction temperature:** *die average* (virtual junction temperature T_vj, default) or *hottest cell*. The die
+  average is linear in the losses, so the R_th matrix and the network superpose exactly. The hot spot moves with
+  the load distribution (max of a sum ≠ sum of the maxima), so superposing it over-estimates T_j when several
+  chips are loaded. In the drive-cycle/highway example this gives up to 13 K too much on the diode.
 - **R_th matrix** (exact steady state of the 3D model): R_th,ij = rise of T_j of chip i per W in chip j, so
   T_j = T_a + Σ_j R_th,ij·P_j. Diagonal = self-heating R_th,ja, off-diagonal = coupling between the chips. The table
   adds the coupling factor R_th,ij/R_th,ii and the heat split to the coolant below and to the top.
@@ -187,12 +191,29 @@ The board designer builds a finite-volume model of a board with chips. The model
 - **R/C network of the chips:** the coupled Cauer network of the SF mode (1–4 RC stages per chip from the junction
   to the cooling, couplings between the chips at every stage) fitted to all step responses: R and C per stage
   (C_th), coupling resistances per stage, fit error. Usable as a compact model in a circuit simulator.
+- **Matrix form:** C_th·dT/dt = E·P − G_th·T with the conductance matrix G_th (heatmap, W/K), the diagonal
+  capacitance matrix C_th (Ws/K) and the input matrix E. The table adds the conductance of every node to the
+  cooling. The R_th matrix of the network, G_th⁻¹ at the junctions, is compared with the exact one. *Download
+  G_th, C_th, E (CSV)* exports the network.
 
 **POD reduced model**
 - *Training snapshots*: **step responses** (train on the 1 W steps, test on the loads of this run, e.g. the mission
   profile — a real test of the reduced model) or **this run** (train and test on the same data). The electro-thermal
   coupling is applied in the reduced model as well. Example (gap filler + Al heat sink, drive cycle, K = 20): max.
   error 0.1 K.
+
+**Prediction with the reduced models**
+- Runs the POD model (section 5) and/or the Cauer network (section 4) on another mission profile, chosen from
+  `data/board/mission` or uploaded, with its own repeat count and T_s. The finite-volume model is not run, so there
+  is no reference: check the errors of the reduced models in sections 4 and 5 first.
+- The electro-thermal coupling follows the switch in section 3. In the network the coupling uses the die average,
+  like the board model.
+- Output: T_j(t) of every chip per model, the losses, a table of T_j,max (time, mean, swing, margin to the limit),
+  run times and a CSV download.
+- Example: trained on the step responses, predicting `example_highway` with coupling on (K = 10, 3 stages, die
+  average). The error against the finite-volume model, which is not shown in the GUI, is 0.05 K for POD and 2.8 K
+  for the network, on a rise of 128 K. The finite-volume model would take about 18 s; the POD model takes 0.08 s
+  and the network 0.01 s.
 
 **Export to TherMOS**
 1. *Export* writes:

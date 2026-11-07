@@ -24,6 +24,7 @@ Toolkit functions: src/py/board/{genBoard, calcBoardMat, simBoard, genProfile, r
 #######################################################################################################################
 # Import libs
 #######################################################################################################################
+import io
 import json
 import os
 import time
@@ -824,7 +825,7 @@ def _nodal(Zt, t, Rth, Nr):
     sol = least_squares(lambda p: ((_stepNet(p, M, Nr, t) - Zt) / sc).ravel(), p0, method='trf',
                         bounds=(p0 - np.log(1e4), p0 + np.log(1e4)), max_nfev=300)
     p = sol.x
-    return {'p': p, 'Zn': _stepNet(p, M, Nr, t), 'R': np.exp(p[0:M * Nr]).reshape(M, Nr),
+    return {'p': p, 'Nr': Nr, 'Zn': _stepNet(p, M, Nr, t), 'R': np.exp(p[0:M * Nr]).reshape(M, Nr),
             'C': np.exp(p[M * Nr:2 * M * Nr]).reshape(M, Nr), 'g': np.exp(p[2 * M * Nr:]).reshape(Nr, -1),
             'tau': np.array([t[int(np.argmax(Zt[:, i, i] >= 0.632 * Zt[-1, i, i]))] for i in range(M)])}
 
@@ -865,14 +866,22 @@ def characterisation(res):
     # Rth matrix (exact steady state, 1 W per chip)
     luG = spl.splu(G.tocsc())
     TH = np.column_stack([luG.solve(Bp[:, j]) for j in range(M)])          # N x M, θ per W
-    Rth = np.array([[TH[B[:, i], j].max() for j in range(M)] for i in range(M)])
+    Rhot = np.array([[TH[B[:, i], j].max() for j in range(M)] for i in range(M)])
+    Ravg = Bp.T @ TH                                                     # die average (Bp: weights, Σ = 1)
+    tjdef = st.segmented_control("Junction temperature", ['Die average', 'Hottest cell'], default='Die average',
+                                 key=f"{K}|tjdef", help="Die average (virtual junction temperature T_vj, as in "
+                                 "datasheets): linear in the losses, so R_th matrix and Cauer network superpose "
+                                 "exactly. Hottest cell: the hot spot of the die; it moves with the load distribution "
+                                 "(max of a sum ≠ sum of the maxima), so superposition over-estimates it when "
+                                 "several chips are loaded.") or 'Die average'
+    Rth = Ravg if tjdef == 'Die average' else Rhot
     bot = np.array([float(D['gBot'] @ TH[:, j]) for j in range(M)])        # share of 1 W leaving through the bottom
     c = st.columns([3, 2])
     with c[0]:
         fig = go.Figure(go.Heatmap(z=Rth, x=names, y=names, colorscale='Reds', text=np.vectorize(fmt)(Rth),
                                    texttemplate='%{text}', colorbar=dict(title='K/W'),
                                    hovertemplate='ΔT_j of %{y} per W in %{x}: %{z:.3g} K/W<extra></extra>'))
-        fig.update_layout(xaxis_title='heated chip j (1 W)', yaxis_title='junction of chip i',
+        fig.update_layout(xaxis_title='heated chip j (1 W)', yaxis_title=f"junction of chip i ({tjdef.lower()})",
                           yaxis=dict(autorange='reversed'))
         show(fig, height=330, key=f"{K}|rth", info="**Thermal resistance matrix R_th,ij** = rise of the junction "
              "temperature of chip i per W in chip j (steady state, to the coolant/ambient). Diagonal: self-heating "
@@ -917,19 +926,24 @@ def characterisation(res):
             prog = _eta(bar, t0, f"Step response {j + 1}/{M} ({names[j]})")
             ts, Tj_ = _logSteps(C, G, Bp, j, tStep, lambda x, j=j, p=prog: p((j + x) / M))
             Z = np.zeros((len(ts), M, M)) if Z is None else Z
+            Za = np.zeros((len(ts), M, M)) if j == 0 else Za
             Z[:, :, j] = np.column_stack([Tj_[:, B[:, i]].max(axis=1) for i in range(M)])
+            Za[:, :, j] = Tj_ @ Bp
             snap.append(Tj_[::6])
         bar.empty()
-        st.session_state[f"{K}|step"] = stp = {'sig': gsig, 't': ts, 'Z': Z, 'snap': np.vstack(snap),
+        st.session_state[f"{K}|step"] = stp = {'sig': gsig, 't': ts, 'Z': Z, 'Za': Za, 'snap': np.vstack(snap),
                                                'time': time.perf_counter() - t0}
         st.session_state[f"{K}|podsrc"] = 'Step responses'
     if stp is None or stp['sig'] != gsig:
         st.info("Press *Run step responses* for Z_th(t), the nodal R/C network of the chips and the POD training on "
                 "step responses.", icon=':material/info:')
-        return None
-    ts, Z = stp['t'], stp['Z']
+        return [None, None]
+    if 'Za' not in stp:
+        st.info("Run the step responses again (the stored ones are from an older version).", icon=':material/info:')
+        return [None, None]
+    ts, Z = stp['t'], (stp['Za'] if tjdef == 'Die average' else stp['Z'])
     try:
-        net = _nodal_cached(Z[1:], ts[1:], Rth, Nr, gsig)
+        net = _nodal_cached(Z[1:], ts[1:], Rth, Nr, gsig + tjdef)
         Zn = net['Zn']
     except Exception as e:
         st.warning(f"Network could not be fitted: {e}", icon=':material/warning:')
@@ -976,7 +990,192 @@ def characterisation(res):
                        f"model within {100 * err:.1f} % of the largest Z_th (grey dashed in the first tab). τ63 "
                        f"(self-heating): {', '.join(f'{n}: {fmt(v)} s' for n, v in zip(names, net['tau']))}. Use it "
                        f"as a compact R/C model of the board in a circuit simulator.")
-    return stp
+            _netMatrices(net, names, Rth)
+    if net is not None:
+        net['sig'] = gsig
+        net['tjdef'] = tjdef
+        net['Kavg'] = Ravg @ np.linalg.inv(Rth)                          # network rise → die average (coupling)
+    return [stp, net]
+
+
+def _netMatrices(net, names, Rth):
+    """Conductance matrix G_th, capacitance matrix C_th and input matrix E of the fitted network (nodal form)."""
+    from src.py.model.SF.sfNet import sfNet
+    M, Nr = len(names), net['Nr']
+    [Gm, Cm, E] = sfNet(net['p'], M, Nr)
+    lab = [f"{n}·{k + 1}" if Nr > 1 else n for n in names for k in range(Nr)]
+    rows = np.arange(0, M) * Nr
+    Rn = np.linalg.inv(Gm)[rows][:, rows]
+    st.markdown("**Matrix form of the network** — C_th·dT/dt = E·P − G_th·T (T: rise over the coolant/ambient at the "
+                f"{M * Nr} nodes; node 'chip·k' is stage k of the chip, ·1 = junction)")
+    c = st.columns(2)
+    with c[0]:
+        a = float(np.max(np.abs(Gm)))
+        fig = go.Figure(go.Heatmap(z=Gm, x=lab, y=lab, colorscale='RdBu_r', zmin=-a, zmax=a,
+                                   text=np.vectorize(fmt)(Gm), texttemplate='%{text}' if M * Nr <= 12 else None,
+                                   colorbar=dict(title='W/K'),
+                                   hovertemplate='G_th[%{y}, %{x}] = %{z:.4g} W/K<extra></extra>'))
+        fig.update_layout(yaxis=dict(autorange='reversed'), title='G_th (W/K)')
+        show(fig, height=360, key=f"{K}|Gth", info="**Thermal conductance matrix G_th** of the network: off-diagonal "
+             "−1/R between two connected nodes (ladder stage to stage, coupling between the chips), diagonal: sum of "
+             "all conductances at the node incl. the one to the cooling. Symmetric, positive definite.")
+    with c[1]:
+        gc = Gm.sum(axis=1)
+        gc[np.abs(gc) < 1e-9 * np.max(np.abs(Gm))] = 0.0
+        table(pd.DataFrame({'node': lab, 'C_th (Ws/K)': Cm, 'Σ_j G_th,ij to the cooling (W/K)': gc}),
+              hide_index=True)
+        st.caption("C_th is diagonal (one capacitance per node to the reference). The row sum of G_th is the "
+                   "conductance of the node to the cooling: only the last stage of each ladder is connected to it.")
+    c = st.columns([3, 2], vertical_alignment='bottom')
+    with c[0]:
+        table(pd.DataFrame(Rn, index=names, columns=names).reset_index(names='R_th of the network (K/W)'),
+              hide_index=True)
+        st.caption(f"Steady-state R_th matrix of the network, (G_th⁻¹) at the junction nodes; it deviates from the "
+                   f"exact matrix of the board model above by {fmt(100 * np.max(np.abs(Rn - Rth)) / Rth.max())} % of "
+                   f"the largest entry.")
+    with c[1]:
+        buf = io.StringIO()
+        buf.write("# Coupled Cauer network of the board: C_th*dT/dt = E*P - G_th*T, T_j = T[junction nodes]\n")
+        pd.DataFrame(Gm, index=lab, columns=lab).to_csv(buf, index_label='G_th (W/K)')
+        buf.write("\n")
+        pd.DataFrame({'C_th (Ws/K)': Cm}, index=lab).to_csv(buf, index_label='node')
+        buf.write("\n")
+        pd.DataFrame(E, index=lab, columns=names).to_csv(buf, index_label='E (-)')
+        st.download_button("Download G_th, C_th, E (CSV)", buf.getvalue(), file_name='board_cauer_network.csv',
+                           mime='text/csv', icon=':material/download:', key=f"{K}|netcsv", width='stretch')
+
+
+def _simNet(net, M, P, Ts, Ta, nSub=4, cpl=None):
+    """
+    Junction temperatures (Nt x M) (°C) of the fitted network for the losses P (Nt x M): exact modal solution per
+    sub-step (zero-order hold); with electro-thermal coupling the junction temperature of the previous sub-step sets
+    the losses (as in simBoard). The network gives the hottest die cell; the coupling uses the die average like the
+    board model, mapped with the exact steady-state matrices (Kavg = R_avg·R_th⁻¹).
+    """
+    from src.py.model.SF.sfNet import sfNet
+    Nr = net['Nr']
+    [Gm, Cm, E] = sfNet(net['p'], M, Nr)
+    S = np.sqrt(Cm)
+    lam, V = np.linalg.eigh(Gm / S[:, None] / S[None, :])
+    h = Ts / max(int(nSub), 1)
+    a = np.exp(-lam * h)
+    gain = -np.expm1(-lam * h) / lam
+    Bz = V.T @ (E / S[:, None])                                         # modes x M
+    Oz = (V / S[:, None])[np.arange(0, M) * Nr]                          # M x modes (junction nodes)
+    Oa = net.get('Kavg', np.eye(M)) @ Oz                                 # die-average rise
+    z = np.zeros(len(lam))
+    Tj = np.zeros((P.shape[0], M))
+    for k in range(1, P.shape[0]):
+        for _ in range(0, max(int(nSub), 1)):
+            p = P[k] if cpl is None else P[k] * np.maximum(1 + cpl['alpha'] * (Oa @ z + Ta - cpl['Tref']), 0)
+            z = a * z + gain * (Bz @ p)
+        Tj[k] = Oz @ z
+    return Tj + Ta
+
+
+def predict(res, rom, net):
+    cm.section(6, "Prediction with the reduced models", "Run the POD model and/or the Cauer network on another load "
+                                                        "(e.g. a different mission profile) without the finite-volume "
+                                                        "model — there is no reference, so check their errors on the "
+                                                        "loads of the simulation first (sections 4 and 5).")
+    s = st.session_state
+    D, lay = res['D'], res['lay']
+    names = [c['name'] for c in D['chips']]
+    M = len(names)
+    os.makedirs(MIS_DIR, exist_ok=True)
+    files = sorted(f[:-4] for f in os.listdir(MIS_DIR) if f.endswith('.csv'))
+    c = st.columns([2, 2, 1, 1], vertical_alignment='bottom')
+    name = c[0].selectbox("Mission profile", files, key=f"{K}|prfile", help="Sequence file of data/board/mission "
+                          "(create or edit sequences under *Load › Mission profile* in section 2).")
+    up = c[1].file_uploader("or upload a CSV", type=['csv'], key=f"{K}|prup")
+    rept = cm.num(c[2], "Repeat", 1, 'board|prrep', format='%d', min_value=1, max_value=1000)
+    Ts0 = float(res['t'][1] - res['t'][0]) if len(res['t']) > 1 else 1.0
+    Ts = cm.num(c[3], "T_s (s)", Ts0, 'board|prTs', min_value=1e-3, max_value=100.0)
+    opts = ['POD model'] + (['Cauer network'] if net is not None else [])
+    c = st.columns([2, 3], vertical_alignment='center')
+    mdl = c[0].segmented_control("Models", opts, default=opts, selection_mode='multi',
+                                 key=f"{K}|prmdl|{len(opts)}") or []
+    c[1].caption(f"POD: K = {rom['K']} modes (section 5) · Cauer: "
+                 + (f"{net['Nr']} stage(s) per chip (section 4)" if net is not None else "run the step responses in "
+                 "section 4 first") + " · electro-thermal coupling: " + ("on" if res.get('cpl') is not None else "off")
+                 + " (switch in section 3).")
+    if not files and up is None:
+        st.info("No mission profile in data/board/mission.", icon=':material/info:')
+        return
+    try:
+        seq = (pd.read_csv(up) if up is not None else pd.read_csv(os.path.join(MIS_DIR, f"{name}.csv"))
+               ).to_dict('records')
+        tEnd = genMission(seq, D['chips'], np.array([0.0, 1.0]), rept)[1]
+        t = np.arange(0.0, tEnd + Ts * 1e-9, Ts)
+        P = genMission(seq, D['chips'], t, rept)[0]
+    except Exception as e:
+        st.error(f"Mission profile could not be read: {e}", icon=':material/error:')
+        return
+    nT = len(t)
+    st.caption(f"{fmt(tEnd)} s with T_s = {fmt(Ts)} s → {nT:,} steps. Chips without their own column in the sequence "
+               f"use scale × P of the chip table.")
+    tjdef = s.get(f"{K}|tjdef") or 'Die average'
+    sig = json.dumps([seq, rept, Ts, rom['K'], rom['E'][-1], None if net is None else list(net['p']), mdl,
+                      res['sig'], tjdef], default=str)
+    out = s.get(f"{K}|pred")
+    if st.button("Run prediction", icon=':material/play_arrow:', type='primary', key=f"{K}|prrun",
+                 disabled=not mdl):
+        out = {'sig': sig, 't': t, 'P': P, 'Tj': {}, 'time': {}, 'file': up.name[:-4] if up is not None else name}
+        cpl = res.get('cpl')
+        if 'POD model' in mdl:
+            t0 = time.perf_counter()
+            bar = st.progress(0.0, text="POD model …")
+            Tr = simRom(rom, P, Ts, lay['Ta'], res['nSub'], cpl=cpl, prog=_eta(bar, t0, "POD model"))
+            bar.empty()
+            out['Tj']['POD model'] = (Tr - lay['Ta']) @ res['Bp'] + lay['Ta'] if tjdef == 'Die average' else \
+                _tj(D, Tr, P)
+            out['time']['POD model'] = time.perf_counter() - t0
+        if 'Cauer network' in mdl and net is not None:
+            t0 = time.perf_counter()
+            out['Tj']['Cauer network'] = _simNet(net, M, P, Ts, lay['Ta'], res['nSub'], cpl=cpl)
+            out['time']['Cauer network'] = time.perf_counter() - t0
+        s[f"{K}|pred"] = out
+    if out is None or not out['Tj']:
+        st.info("Press *Run prediction*.", icon=':material/info:')
+        return
+    if out['sig'] != sig:
+        st.caption(":material/history: The prediction belongs to the previous inputs — press *Run prediction*.")
+    t, P = out['t'], out['P']
+    rate = s.get(f"{K}|rate")
+    rows = []
+    for m, Tj in out['Tj'].items():
+        for i in range(M):
+            rows.append({'model': m, 'chip': names[i], 'T_j,max (°C)': Tj[:, i].max(),
+                         't at T_j,max (s)': t[int(np.argmax(Tj[:, i]))], 'T_j,mean (°C)': Tj[:, i].mean(),
+                         'ΔT_j swing (K)': Tj[:, i].max() - Tj[:, i].min(),
+                         'margin to T_j,max (K)': D['chips'][i]['Tjmax'] - Tj[:, i].max()})
+    c = st.columns([3, 2])
+    with c[0]:
+        fig = go.Figure()
+        for n, (m, Tj) in enumerate(out['Tj'].items()):
+            for i in range(M):
+                fig.add_trace(go.Scatter(x=t, y=Tj[:, i], mode='lines', name=f"{names[i]} ({m})",
+                                         line=dict(color=SERIES[i % len(SERIES)], dash=None if n == 0 else 'dash')))
+        fig.update_layout(xaxis_title='t (s)', yaxis_title='T_j (°C)')
+        show(fig, height=380, key=f"{K}|prfig", info="**Predicted junction temperatures** for the mission profile "
+             "(solid: POD model, dashed: Cauer network; colour = chip), defined as in section 4 (die average or "
+             "hottest cell).")
+    with c[1]:
+        fig = go.Figure([line(t, P[:, i], names[i], i) for i in range(M)])
+        fig.update_layout(xaxis_title='t (s)', yaxis_title='P₀ (W)')
+        show(fig, height=380, key=f"{K}|prP", info="**Nominal losses** of the mission profile (with electro-thermal "
+             "coupling the models raise them with T_j).")
+    table(pd.DataFrame(rows), hide_index=True)
+    tFV = rate * D['N3'] * len(t) * res['nSub'] if rate else None
+    st.caption(f"Mission '{out['file']}': run time " + ", ".join(f"{m} {fmt(v)} s" for m, v in out['time'].items())
+               + (f" — the finite-volume model would need about {fmt(tFV)} s." if tFV else ".")
+               + (f" Largest difference between the two models: "
+                  f"{fmt(float(np.max(np.abs(out['Tj']['POD model'] - out['Tj']['Cauer network']))))} K."
+                  if len(out['Tj']) == 2 else ""))
+    df = pd.DataFrame({'t (s)': t, **{f"P {n} (W)": P[:, i] for i, n in enumerate(names)},
+                       **{f"T_j {n} {m} (°C)": Tj[:, i] for m, Tj in out['Tj'].items() for i, n in enumerate(names)}})
+    st.download_button("Download the prediction (CSV)", df.to_csv(index=False), file_name=f"prediction_"
+                       f"{out['file']}.csv", mime='text/csv', icon=':material/download:', key=f"{K}|prcsv")
 
 
 def pod(res, stp=None):
@@ -1048,7 +1247,7 @@ def pod(res, stp=None):
 
 
 def export(res):
-    cm.section(6, "Export to TherMOS", "Training data (random loss levels of all chips, independent excitation) and "
+    cm.section(7, "Export to TherMOS", "Training data (random loss levels of all chips, independent excitation) and "
                                        "test data (the designed profiles) in the 2D format of TherMOS, plus a ready-"
                                        "made config for the PO mode (pure Galerkin projection, protocol 2).")
     c = st.columns([2, 1, 1, 1], vertical_alignment='bottom')
@@ -1154,8 +1353,9 @@ def page():
     if res is None:
         return
     Tj = results(res)
-    stp = characterisation(res)
+    [stp, net] = characterisation(res)
     rom, err = pod(res, stp)
+    predict(res, rom, net)
     export(res)
     cm.equations([
         ("Layer-resolved model (simulation, both views)",
