@@ -105,14 +105,14 @@ RUN_FIELDS = [
     ('name', 'text', "Simulation name", "Name of the simulation; figures and models are stored under results/<name>/ "
                                         "and mdl/mdl_<model>_<name>.pkl."),
     ('user', 'text', "User", "Name of the user (only printed)."),
-    ('train', 'toggle', "Train the model", "Off: the model mdl/mdl_<model>_<name>.pkl of an earlier run is loaded."),
-    ('test', 'toggle', "Test the model", "Predict the testing data and calculate the error metrics."),
-    ('save', 'toggle', "Save output data", "Write result_*.pkl into results/<name>/."),
-    ('plotMdl', 'toggle', "Plot model structure", "Figures of the model itself (modes, poles, Foster pairs, ...)."),
     ('plotOut', 'select:0|1|2', "Plot model output", "0: no output figures, 1: all outputs in one figure, "
                                                      "2: one figure per output."),
     ('legacy', 'select:0|1', "Numerics", "0: corrected numerics of the Python port (default), 1: behaviour of the "
                                          "MATLAB version (see docu/pythonPort.md)."),
+    ('save', 'toggle', "Save output data", "Write result_*.pkl into results/<name>/."),
+    ('plotMdl', 'toggle', "Plot model structure", "Figures of the model itself (modes, poles, Foster pairs, ...)."),
+    ('train', 'toggle', "Train the model", "Off: the model mdl/mdl_<model>_<name>.pkl of an earlier run is loaded."),
+    ('test', 'toggle', "Test the model", "Predict the testing data and calculate the error metrics."),
     ('featRank', 'expert:toggle', "Feature ranking", "Box plot, correlation and mutual information of the inputs."),
     ('featRoll', 'expert:toggle', "Rolling features (ML/DL)", "Adds EWMA/EWMS features of the inputs (ML, DL)."),
 ]
