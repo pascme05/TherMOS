@@ -4,3 +4,5 @@ __pycache__/
 config/gui/_gui_run.xlsx
 results/**/gui_*/
 .idea/
+data/board/
+config/gui/board_*.json

@@ -5,7 +5,7 @@
 # File:         calcPodProj
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.0
+# Version:      V.1.1
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -24,6 +24,10 @@ This function calculates the Galerkin projection of the heat equation onto the P
 
     C·da/dt = -G·a + q
 
+With a distributed heat sink h_v (W/m³K, board data: −h_v·(T − T_a) in the heat equation, initial state T_a) the
+conductance gets the term G_ij += ∫ h_v·φ_i·φ_j dΩ, with an anisotropic conductivity (k_y) the gradient in y is
+weighted with k_y (corrected version only).
+
 The modes are zero on Dirichlet boundaries (mean centred snapshots with fixed boundary temperature), so no boundary
 term appears in the weak form. Legacy version (legacy=1, MATLAB): diffusivity form C_ij = ∫ J·φ_i·φ_j, G_ij =
 ∫ J·α·∇φ_i·∇φ_j + boundary terms of φ_j·∂φ_i/∂n without normal direction, q_i = ∫ J·(α/k)·Q·φ_i (F-P2, F-P3, F-P8).
@@ -31,6 +35,9 @@ Inputs:     1) quad:    quadrature data (calcPodQuad)
             2) rPhi:    POD modes at the nodes (N x K)
             3) legacy:  (0): corrected behaviour, (1): MATLAB behaviour
 Outputs:    1) proj:    dictionary with C, G (K x K), phiQ (Nq x K) and sPhi (grid modes, shape + (K,))
+
+V1.1: 07.11.2026, Pascal Schirmer
+- Distributed heat sink h_v and anisotropic conductivity k_y (board designer data)
 """
 
 #######################################################################################################################
@@ -106,7 +113,10 @@ def calcPodProj(quad, rPhi, legacy=0):
         G = G + Gx + Gy
     else:
         C = phiQ.T @ ((W * quad['rhoCp'])[:, None] * phiQ)
-        G = sum(dq.T @ ((W * quad['k'])[:, None] * dq) for dq in dPhiQ)
+        kDir = quad.get('kDir') or [quad['k']] * len(dPhiQ)
+        G = sum(dq.T @ ((W * kq)[:, None] * dq) for dq, kq in zip(dPhiQ, kDir))
+        if quad.get('hv') is not None:                                                     # distributed heat sink
+            G = G + phiQ.T @ ((W * quad['hv'])[:, None] * phiQ)
 
     ###################################################################################################################
     # Return

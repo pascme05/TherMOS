@@ -5,7 +5,7 @@
 # File:         DataLoader
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.0
+# Version:      V.1.1
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -24,6 +24,9 @@ V1.0: 07.11.2026, Pascal Schirmer
 - Python port of DataLoader.m
 - Time vector of ID based data always starts at 0 (F-D10), reference matrix sized by the references (F-D11)
 - Ratio split without overlap and with validation data taken out of the training data (F-D9, legacy: MATLAB split)
+
+V1.1: 07.11.2026, Pascal Schirmer
+- 2D/3D Matlab data: optional anisotropic conductivity ky and distributed heat sink hv (board designer)
 """
 
 #######################################################################################################################
@@ -236,7 +239,8 @@ class DataLoader:
     # Matlab 2D/3D Data
     # ==============================================================================
     def _loadMat2D(self, fileName):
-        keys = ['X', 'y', 'r', 't', 'Ts', 'geo', 'dx', 'dy', 'dz', 'Lx', 'Ly', 'Lz', 'k', 'rho', 'Cp', 'hc', 'fl', 'Ta']
+        keys = ['X', 'y', 'r', 't', 'Ts', 'geo', 'dx', 'dy', 'dz', 'Lx', 'Ly', 'Lz', 'k', 'ky', 'rho', 'Cp', 'hc', 'hv', 'fl',
+                'Ta']
         try:
             raw = sio.loadmat(self._findFile(fileName, 'mat'), variable_names=keys)
             print('INFO: ' + str(self.Dim) + 'D Matlab data successfully loaded (' + str(fileName) + ')')

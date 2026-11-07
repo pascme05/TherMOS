@@ -5,7 +5,7 @@
 # File:         calcPodQuad
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.0
+# Version:      V.1.1
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -29,6 +29,10 @@ Inputs:     1) Data:    geometry and material data (geo, dx, dy, (dz), Lx, Ly, (
             4) th:      threshold of the relative element size around one (legacy only)
 Outputs:    1) quad:    dictionary with axes, shape, Mg, Rq, W, J, k, rhoCp, alpha (at the quadrature points),
                         alphaGrid, kGrid (on the grid) and d (dimension)
+
+V1.1: 07.11.2026, Pascal Schirmer
+- Optional anisotropic conductivity ky (y direction) and distributed heat sink hv (W/m³K) at the quadrature points
+  for the corrected version (board designer data)
 """
 
 #######################################################################################################################
@@ -117,12 +121,22 @@ def calcPodQuad(Data, legacy=0, protocol=5, th=0.001):
     if 'hc' in Data and np.any(np.asarray(Data['hc']) > 0):
         print("WARN: Convective boundary conditions (hc > 0) are not included in the POD projection")
 
+    # ==============================================================================
+    # Anisotropy and Heat Sink (corrected version only)
+    # ==============================================================================
+    kDir, hv = None, None
+    if legacy == 0 and 'ky' in Data:
+        ky = np.asarray(Data['ky'], dtype=float).ravel()
+        kDir = [Rq @ (Mg @ ky), Rq @ kGrid] + ([Rq @ kGrid] if d == 3 else [])            # order of the axes y, x, z
+    if legacy == 0 and 'hv' in Data:
+        hv = Rq @ (Mg @ np.asarray(Data['hv'], dtype=float).ravel())
+
     ###################################################################################################################
     # Return
     ###################################################################################################################
     return {'d': d, 'axes': axes, 'shape': shape, 'Mg': Mg, 'Rq': Rq, 'W': W, 'J': J,
             'k': Rq @ kGrid, 'rhoCp': Rq @ (Mg @ rhoCp), 'alpha': Rq @ alphaGrid,
-            'kGrid': kGrid, 'alphaGrid': alphaGrid}
+            'kGrid': kGrid, 'alphaGrid': alphaGrid, 'kDir': kDir, 'hv': hv}
 
 
 #######################################################################################################################
