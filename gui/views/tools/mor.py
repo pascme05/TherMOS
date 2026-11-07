@@ -29,6 +29,7 @@ import streamlit as st
 
 from gui.core.style import table, SERIES, show, line, fmt
 from gui.views.tools import _common as cm
+from gui.views.tools import sketch
 from gui.views.tools.numerics import rod
 from src.py.tools.toolData import MATERIALS
 
@@ -86,6 +87,9 @@ def page():
     test = c[3].selectbox("Test load", ['pulse train', 'step', 'random', 'fast pulses'], key=f"{K}|te")
     k, rho, cp = MATERIALS[mat][0:3]
     L = 0.02
+    sketch.show(sketch.rod(N, L * 1e3, mat, 5000.0, 10.0))
+    sketch.show(sketch.mor(N, 3, train), "The full rod model is simulated once with the training load; its snapshots "
+                "θ(x, t_j) are decomposed by an SVD, the first K singular vectors (POD modes) span the reduced model.")
     C, G, b, x = rod(N, L, k, rho * cp, 5000.0)
     Ci = 1 / np.sqrt(C)
     lam, V = np.linalg.eigh(Ci[:, None] * G * Ci[None, :])

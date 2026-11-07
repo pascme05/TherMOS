@@ -30,6 +30,7 @@ import streamlit as st
 
 from gui.core.style import table, show, line, fmt
 from gui.views.tools import _common as cm
+from gui.views.tools import sketch
 from src.py.tools.toolData import MATERIALS
 
 #######################################################################################################################
@@ -104,6 +105,9 @@ def page():
     P = cm.num(c[3], "Power P (W)", 10.0, 'num|P', min_value=0.0)
     N = cm.num(c[4], "Nodes N", 21, 'num|N', format='%d', min_value=3, max_value=201)
     k, rho, cp = MATERIALS[mat][0:3]
+    sketch.show(sketch.rod(N, L * 1e3, mat, h, P), "The heat equation ρc·∂T/∂t = k·∂²T/∂x² is discretised "
+                "with finite volumes: every node i owns the volume around it (shaded half volumes at the ends), which "
+                "stores heat (C_i) and exchanges it with its neighbours through the conductance G.")
     C, G, b, x = rod(N, L, k, rho * cp, h)
     lamMax = float(np.max(np.linalg.eigvalsh((1 / np.sqrt(C))[:, None] * G * (1 / np.sqrt(C))[None, :])))
     hCrit = 2 / lamMax

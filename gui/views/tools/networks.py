@@ -29,6 +29,7 @@ import streamlit as st
 
 from gui.core.style import table, SERIES, show, line, fmt
 from gui.views.tools import _common as cm
+from gui.views.tools import sketch
 from src.py.tools.thermStack import zth, foster_to_cauer
 from src.py.model.RC.rcSim import rcSim
 
@@ -73,6 +74,8 @@ def page():
     o = np.argsort(tau)
     R, tau = R[o], tau[o]
     Rc, Cc = foster_to_cauer(R, tau)
+    sketch.show(sketch.heat_path(len(R)), "Both networks describe the same thermal impedance between the "
+                "junction and the ambient. Only the Cauer ladder can be mapped onto the layers of the package.")
     Rth = R.sum()
 
     # ------------------------------------------
