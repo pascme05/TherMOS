@@ -28,7 +28,7 @@ python start_gui.py                      # opens http://localhost:8501
 | **Project › Setup** | Ready-made setups (tutorials, journal, lecture), project settings (name, output, numerics, train/test switches), data (format, dimension, split, files, channels) |
 | **Project › Input data** | 1D time series and 2D/3D fields of the data sets, read with the toolkit loader (`DataLoader`) |
 | **Operating modes** | One page per model family (RC, SS, SF, PO, PS, ML, DL, PI) plus the **Study** page |
-| **Theory & Tools** | Power losses, Thermal stack, Thermal networks, MOR & POD, Numerics, Board designer |
+| **Theory & Tools** | Power losses, Thermal stack, Hand calculator, Thermal networks, MOR & POD, Numerics, Board designer |
 | **Results** | Browser of all results folders, including runs started from the start scripts |
 | **Help** | Tutorials and this guide |
 
@@ -109,6 +109,7 @@ Self-contained calculators. They do not change the configuration.
 |---|---|
 | Power losses | Conduction and switching losses of power semiconductors (from OPTELIA) |
 | Thermal stack | Junction-to-coolant stack with spreading, Foster/Cauer networks (from OPTELIA) |
+| Hand calculator | Closed-form estimates, one tab per question: layer stack with contact resistances → effective h (R'' per element, temperature profile, unit converter); contact resistance of rough metal joints over the pressure (Mikic/Yovanovich, gap gas/fill) vs. a TIM, measured values; spreading resistance (Lee et al.) with the optimum plate thickness; convection h (forced plate, natural convection + radiation, liquid channels with Δp — can be handed to the layer stack); radiation → equivalent h_rad (small body, parallel plates, view factor; h_tot = h_conv + h_rad, can be handed to the layer stack); plate-fin heat sink (fin efficiency, R_sa over the fin count); thermal vias (k_eff, R_pad); coolant energy balance; short pulses (semi-infinite chip, diffusion time), pulse trains on a Foster network (exact peak per pulse, periodic peak/valley, datasheet approximation) and lumped τ = R·C; skin & eddy currents (skin depth, R_ac/R_dc of round wires (Bessel) and bars, Dowell proximity, self-heating with ρ(T); eddy loss induced in an IMS/baseplate below a trace with or without adjacent return). Every tab has a sketch driven by its inputs (`gui/views/tools/hand_art.py`). Calculations in `src/py/tools/handCalc.py` |
 | Thermal networks | Sketch of a heat path next to its Foster and Cauer networks; Foster → Cauer conversion, Z_th, structure function, pulse response (rcSim) |
 | MOR & POD | Sketch of the POD pipeline; POD-Galerkin vs. modal truncation on a 1D rod |
 | Numerics | Sketch of the rod with control volumes and its RC ladder; explicit/implicit/Crank-Nicolson, stability, stiffness, grid convergence; quadrature weights W, relative element size J (legacy) and the calibration of C_th/G_th (rcond, prior λ, SF bounds) with explorers |

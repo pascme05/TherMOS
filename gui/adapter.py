@@ -173,6 +173,7 @@ MODES = {
 TOOLS = {
     'tools-losses': ('losses', 'Power losses', ':material/bolt:'),
     'tools-thermal': ('thermal', 'Thermal stack', ':material/thermostat:'),
+    'tools-hand': ('handcalc', 'Hand calculator', ':material/calculate:'),
     'tools-networks': ('networks', 'Thermal networks', ':material/account_tree:'),
     'tools-mor': ('mor', 'MOR & POD', ':material/compress:'),
     'tools-numerics': ('numerics', 'Numerics', ':material/functions:'),

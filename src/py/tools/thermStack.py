@@ -54,8 +54,9 @@ def lee(A_s, A_p, t, k, h):
     by h on the opposite face (Lee et al. 1995, equivalent circular geometry, mean source temperature):
         eps = a/b, tau = t/b, Bi = h b/k, lambda_c = pi + 1/(sqrt(pi) eps)
         Phi_c = (tanh(lambda_c tau) + lambda_c/Bi) / (1 + lambda_c/Bi tanh(lambda_c tau))
-        psi = eps tau/sqrt(pi) + 1/2 (1 - eps)^(3/2) Phi_c,  R_sp = psi / (sqrt(pi) k a)
-        R = R_sp + t/(k A_p) + 1/(h A_p)
+        psi = eps tau/sqrt(pi) + 1/2 (1 - eps)^(3/2) Phi_c,  R_cond = psi / (sqrt(pi) k a)
+        R = R_cond + 1/(h A_p)
+    The first term of psi is the 1D conduction t/(k A_p), so R_cond contains it (R_cond = t/(k A_p) for eps = 1).
     Returns (R_conduction incl. spreading, R_convection).
     """
     a, b = np.sqrt(A_s / np.pi), np.sqrt(A_p / np.pi)
@@ -69,7 +70,7 @@ def lee(A_s, A_p, t, k, h):
     th = np.tanh(lc * tau)
     Phi = (th + lc / Bi) / (1 + lc / Bi * th)
     psi = eps * tau / np.sqrt(np.pi) + 0.5 * (1 - eps) ** 1.5 * Phi
-    return float(psi / (np.sqrt(np.pi) * k * a) + t / (k * A_p)), float(R_conv)
+    return float(psi / (np.sqrt(np.pi) * k * a)), float(R_conv)
 
 
 def _layer(lay, w_in, l_in, rho, cp, angle=None):

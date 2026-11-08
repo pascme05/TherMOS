@@ -94,6 +94,9 @@ python start_gui.py                      # opens http://localhost:8501
 - **Study:** grid search, optimisation (built-in or Optuna) and forward feature selection on the validation data.
 - **Theory & Tools:**
   - power losses and thermal stack;
+  - the **hand calculator**: effective h of a layer stack with contact resistances, contact resistance over the
+    pressure, spreading, convection h, radiation as an equivalent h, fins, thermal vias, coolant flow, short pulses
+    and pulse trains (Foster network), skin and eddy current losses of wires, bars and metal substrates;
   - thermal networks (Foster/Cauer, structure function);
   - MOR & POD;
   - numerics (time integration, quadrature weights, calibration of the reduced matrices);
