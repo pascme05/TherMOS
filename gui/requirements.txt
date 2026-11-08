@@ -2,5 +2,5 @@
 streamlit>=1.50
 plotly>=6.0
 openpyxl>=3.1
-# optional: Optuna (TPE) for the Study page, the built-in optimiser works without it
-# optuna>=3.6
+# Optuna (TPE) for the Study page (optional, the built-in optimiser works without it)
+optuna>=3.6

@@ -82,7 +82,7 @@ def concatData(data, setup, para):
     # ==============================================================================
     # Variables
     # ==============================================================================
-    out = {k: v for k, v in data.items() if k not in ('X', 'y', 'r', 't')}
+    out = {k: v for k, v in data.items() if k not in ('X', 'y', 'r', 't', 'sid')}
 
     ###################################################################################################################
     # Calculation
@@ -104,6 +104,8 @@ def concatData(data, setup, para):
     out['Nt'] = [len(t) for t in data['t']]
     out['id'] = np.concatenate([(i + 1) * np.ones(out['Nt'][i], dtype=int) for i in range(0, N)])
     out['t'] = np.arange(sum(out['Nt'])) * Ts
+    if data.get('sid') is not None and len(data['sid']) == N:              # session (e.g. motor ID) per sample
+        out['sid'] = np.concatenate([np.asarray(s, dtype=float) + 1e6 * (i + 1) for i, s in enumerate(data['sid'])])
 
     ###################################################################################################################
     # Post-Processing

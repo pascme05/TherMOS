@@ -59,11 +59,13 @@ Inputs:     1) layout:  board layout {'view', 'W', 'L' (mm), 'board' (preset), '
                         (mm), 'chips': [{'name', 'tech', 'x', 'y', 'w', 'l' (mm), ...}], 'chipLib' (custom chip
                         technologies, optional), 'vias': {'mode': 'none' | 'chips' | 'all', 'd' (mm), 'tpl' (µm),
                         'pitch' (mm), 'fill', 'margin' (mm)} (optional), 'below': layers below the board (top →
-                        bottom, optional)}
+                        bottom, optional), 'pcb': additional losses in the board (optional) [{'name', 'layer'
+                        (index in the stack-up, 0 = top), 'x', 'y', 'w', 'l' (mm, w or l ≤ 0: whole board), 'P' (W)}]}
 Outputs:    1) D:       field data (TherMOS format, SI units): geo, k, ky, rho, Cp, hv, hc, Ta, fl, dx, dy, Lx, Ly,
                         B (N x nChips, W/m³ per W of every chip), Rjb (K/W per chip), shape (ny, nx), wA (N, control
                         volume per cell volume: 1, 1/2 on edges, 1/4 in corners), chips (used), via (via mask);
-                        with layers below in the top view also k2, rc2, h12, h2 (plane 2) and hvEq
+                        with layers below in the top view also k2, rc2, h12, h2 (plane 2) and hvEq; q (N, W per
+                        node): constant additional losses in the board (traces, shunts, passives)
 
 V1.1: 07.11.2026, Pascal Schirmer
 - Stack-up from the layout (layers with copper coverage), custom chip technologies, averaged thermal vias
@@ -75,6 +77,11 @@ V1.2: 07.11.2026, Pascal Schirmer
 V1.3: 07.11.2026, Pascal Schirmer
 - The cross-section is a layer-resolved 3D model of the whole board (the former 2D slice without spreading
   along y over-estimated T_j several times under thick interface layers)
+
+V1.4: 08.11.2026, Pascal Schirmer
+- Additional losses in the board (rectangular regions on a selected layer or the whole board, constant): q = P of
+  the region distributed over its control volumes (layer-resolved model: over the rows of the layer; top view: over
+  the lumped plane)
 """
 
 #######################################################################################################################
@@ -130,12 +137,29 @@ def _viaMask(X, Y, chips, vias):
     return m
 
 
+def _pcbMask(X, Y, r, W, L):
+    """Nodes of an additional loss region of the board (w or l <= 0: whole board)."""
+    w, l = float(r.get('w') or 0.0), float(r.get('l') or 0.0)
+    if w <= 0 or l <= 0:
+        return np.ones(X.shape, dtype=bool)
+    m = (np.abs(X - float(r.get('x', W * 5e2)) * 1e-3) <= w * 5e-4 + 1e-9) &         (np.abs(Y - float(r.get('y', L * 5e2)) * 1e-3) <= l * 5e-4 + 1e-9)
+    if not m.any():
+        m = np.zeros(X.shape, dtype=bool)
+        m[int(np.argmin(np.abs(Y[:, 0] - float(r['y']) * 1e-3))), int(np.argmin(np.abs(X[0] - float(r['x']) * 1e-3)))] = True
+    return m
+
+
+def _nRows(t, dzMax):
+    """Number of rows of a layer of thickness t (mm) in the layer-resolved model."""
+    return int(min(max(np.ceil(t * 1e-3 / dzMax - 1e-9), 1), 4))
+
+
 def _rows(stack, dzMax):
     """Rows of the layer-resolved model, bottom → top: (layer, material, dz, k_xy, k_z, ρc, FR4) per row."""
     out = []
     for l in stack:
         t = l[2] * 1e-3
-        n = int(min(max(np.ceil(t / dzMax - 1e-9), 1), 4))
+        n = _nRows(l[2], dzMax)
         out += [(l[0], l[1], t / n, l[3], l[4], l[5] * l[6], l[1] == 'FR4')] * n
     return out
 
@@ -246,6 +270,19 @@ def _model3D(layout, layers, below, chips, vias, isFR4, W, L, dx, h, hTop):
         Bp[ii, i] = V / V.sum()
         B3[ii, i] = 1.0
 
+    # Additional losses in the board (row → layer index of the stack-up, 0 = top)
+    q = np.zeros(N)
+    lid = [None] * nBelow + [li for li in reversed(range(len(layers))) for _ in range(_nRows(layers[li][2], 0.5e-3))]
+    for p in layout.get('pcb') or []:
+        if float(p.get('P') or 0.0) == 0.0:
+            continue
+        m = _pcbMask(X, Y, p, W, L)
+        li = int(p.get('layer', 0) or 0)
+        rr = [r for r in range(nBelow, nBoard) if lid[r] == li] or [nBoard - 1]
+        ii = np.concatenate([idx[r][m] for r in rr])
+        V = np.concatenate([(A * R[r]['dz'])[m] for r in rr])
+        q[ii] += float(p['P']) * V / V.sum()
+
     # Display: x-z slice at y = yCut (rows bottom → top, empty cells = air)
     yCut = float(layout.get('yCut', layout['L'] / 2)) * 1e-3
     jc = int(np.argmin(np.abs(y - yCut)))
@@ -257,7 +294,7 @@ def _model3D(layout, layers, below, chips, vias, isFR4, W, L, dx, h, hTop):
              'rowName': [row['name'] for row in R], 'nBoard': nBoard, 'nBelow': nBelow, 'tb': tb, 'yCut': y[jc],
              'geo': np.column_stack([Xs.ravel(), Zs.ravel()]), 'dx': dx, 'dy': float(np.min(dzr[dzr > 0])),
              'Lx': x[-1], 'Ly': zc[-1], 'x': x, 'y': zc, 'shape': (nr, nx), 'xg': x, 'yg': y, 'N3': N,
-             'via': via.ravel(), 'A': A, 'gBot': gBot}, x, zc, A]
+             'via': via.ravel(), 'A': A, 'gBot': gBot, 'q': q}, x, zc, A]
 
 
 #######################################################################################################################
@@ -349,6 +386,13 @@ def genBoard(layout):
             B.append(b.ravel())
             Rjb.append((c['t'] * 1e-3 / kd + c['t_att'] * 1e-3 / ka) / (c['w'] * c['l'] * 1e-6))
             used.append(c)
+        # Additional losses in the board (lumped plane, W per node)
+        q = np.zeros((ny, nx))
+        for p in layout.get('pcb') or []:
+            if float(p.get('P') or 0.0) != 0.0:
+                m = _pcbMask(X, Y, p, W, L)
+                q[m] += float(p['P']) * wA[m] / wA[m].sum()
+        D['q'] = q.ravel()
         D.update({'k': K.ravel(), 'ky': K.ravel(), 'rho': np.full(nx * ny, rho), 'Cp': RC.ravel() / rho,
                   'hv': HV.ravel(), 'tb': tb, 'kEff': kxy, 'hEff': hEff, 'Rz': Rz, 'hEffVia': hEffV, 'RzVia': RzV,
                   'via': via.ravel()})

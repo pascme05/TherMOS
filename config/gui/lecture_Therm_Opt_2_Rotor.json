@@ -194,6 +194,9 @@
       5,
       50
     ],
-    "legacy": 0
+    "legacy": 0,
+    "archDL": null,
+    "archPI": null,
+    "physPI": null
   }
 }

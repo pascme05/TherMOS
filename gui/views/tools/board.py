@@ -62,6 +62,7 @@ SEMI = ['Si', 'SiC (4H)', 'GaN']
 ATTACH = ['SAC305 solder', 'SnPb solder', 'High-Pb solder', 'Sintered Ag']
 VIA_MODES = {'none': 'No vias', 'chips': 'Under the chips', 'all': 'Whole board'}
 STAR = '★ '
+PCB_COLS = ['name', 'layer', 'x [mm]', 'y [mm]', 'w [mm]', 'l [mm]', 'P [W]']
 
 
 #######################################################################################################################
@@ -134,7 +135,8 @@ def _layout(view):
             'layers': s.get(f"{K}|layers") or _presets().get(board, BOARDS['DBC Al₂O₃ (0.38 mm)']),
             'h': s.get(f"{K}|h", 5000.0), 'hTop': s.get(f"{K}|hTop", H_TOP), 'Ta': s.get(f"{K}|Ta", 25.0),
             'dx': s.get(f"{K}|dx", 1.0), 'yCut': s.get(f"{K}|yCut", 15.0), 'chips': chips, 'chipLib': custom,
-            'vias': vias, 'below': s.get(f"{K}|below") or []}
+            'vias': vias, 'below': s.get(f"{K}|below") or [],
+            'pcb': (s.get(f"{K}|pcb") or []) if s.get(f"{K}|pcbOn", False) else []}
 
 
 def _via_regions(lay):
@@ -238,6 +240,15 @@ def _top_fig(lay):
         if _via_regions(lay):
             fig.add_trace(go.Scatter(x=[None], y=[None], mode='markers', name='thermal vias (averaged)',
                                      marker=dict(symbol='square', size=12, color='rgba(184,115,51,0.4)')))
+    for j, p in enumerate(lay.get('pcb') or []):
+        x0, x1, y0, y1 = _pcb_rect(p, lay)
+        fig.add_shape(type='rect', x0=x0, x1=x1, y0=y0, y1=y1, line=dict(color='#c0392b', width=1.5, dash='dash'),
+                      fillcolor='rgba(192,57,43,0.10)')
+        fig.add_annotation(x=x0, y=y1, text=f"{p['name']} {fmt(p['P'])} W", showarrow=False, xanchor='left',
+                           yanchor='top', font=dict(size=10, color='#c0392b'))
+    if lay.get('pcb'):
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode='markers', name='board losses',
+                                 marker=dict(symbol='square-open', size=12, color='#c0392b')))
     for i, c in enumerate(lay['chips']):
         col = SERIES[i % len(SERIES)]
         fig.add_shape(type='rect', x0=c['x'] - c['w'] / 2, x1=c['x'] + c['w'] / 2, y0=c['y'] - c['l'] / 2,
@@ -248,8 +259,27 @@ def _top_fig(lay):
                              line=dict(color=MUTED, dash='dash')))
     fig.update_xaxes(range=[-2, lay['W'] + 2], title='x (mm)')
     fig.update_yaxes(range=[-2, lay['L'] + 2], title='y (mm)', scaleanchor='x', scaleratio=1)
-    fig.update_layout(title='Top view (x-y)', showlegend=True)
+    fig.update_layout(title='Top view (x-y)', showlegend=True, margin=dict(t=50, b=40),
+                      legend=dict(orientation='h', yanchor='top', y=-0.18, x=0))
     return fig
+
+
+def _pcb_rect(p, lay):
+    """Rectangle (x0, x1, y0, y1 in mm) of an additional loss region (w or l <= 0: whole board)."""
+    w, l = float(p.get('w') or 0.0), float(p.get('l') or 0.0)
+    if w <= 0 or l <= 0:
+        return 0.0, lay['W'], 0.0, lay['L']
+    return (max(p['x'] - w / 2, 0), min(p['x'] + w / 2, lay['W']), max(p['y'] - l / 2, 0),
+            min(p['y'] + l / 2, lay['L']))
+
+
+def _q(D, N=None):
+    """Constant additional losses of the board in W per node (padded to N for the heat sink plane), None if none."""
+    q = D.get('q')
+    if q is None or not np.any(q):
+        return None
+    q = np.asarray(q, dtype=float)
+    return q if N is None or N == q.size else np.concatenate([q, np.zeros(N - q.size)])
 
 
 def _cut_fig(lay):
@@ -279,6 +309,12 @@ def _cut_fig(lay):
             for x0, x1 in vr:
                 fig.add_shape(type='rect', x0=x0, x1=x1, y0=z, y1=z + th, line=dict(width=0),
                               fillcolor='rgba(184,115,51,0.45)')
+        li = len(layers) - 1 - i                                       # index in the stack-up (0 = top)
+        for p in lay.get('pcb') or []:
+            x0, x1, y0, y1 = _pcb_rect(p, lay)
+            if int(p.get('layer', 0)) == li and y0 <= lay['yCut'] <= y1:
+                fig.add_shape(type='rect', x0=x0, x1=x1, y0=z, y1=z + th, line=dict(color='#c0392b', width=1.5,
+                              dash='dash'), fillcolor='rgba(192,57,43,0.15)')
         fig.add_annotation(x=lay['W'] * 1.01, y=z + th / 2, text=f"{l.get('layer', '')} · {fmt(float(l['t']) * 1e3)} µm"
                            f" · k_z={fmt(kz)}", showarrow=False, xanchor='left', font=dict(size=10))
         z += th
@@ -295,7 +331,8 @@ def _cut_fig(lay):
     fig.add_annotation(x=lay['W'] / 2, y=zb - 0.08 * z, text=f"coolant h = {fmt(lay['h'])} W/m²K", showarrow=False)
     fig.update_xaxes(range=[-2, lay['W'] * 1.45], title='x (mm)')
     fig.update_yaxes(range=[zb - 0.2 * z, z * 1.6 + 0.3], title='z (mm)')
-    fig.update_layout(title=f"Cross-section (x-z) at y = {fmt(lay['yCut'])} mm (z not to scale)")
+    fig.update_layout(title=f"Cross-section (x-z) at y = {fmt(lay['yCut'])} mm (z not to scale)",
+                      margin=dict(t=50, b=40))
     return fig
 
 
@@ -328,6 +365,7 @@ def board_inputs():
     stack_inputs(tech, pre[tech])
     below_inputs()
     via_inputs()
+    pcb_inputs()
 
 
 def stack_inputs(tech, preset):
@@ -480,6 +518,77 @@ def via_inputs():
                            f"conductivity is not changed.")
 
 
+def pcb_inputs():
+    """Additional losses in the board (traces, shunts, passives): rectangular regions on a layer, constant."""
+    s = st.session_state
+    layers = s.get(f"{K}|layers") or []
+    opts = [f"{i}: {l.get('layer') or l['mat']}" for i, l in enumerate(layers)] or ['0: top']
+    with st.container(border=True):
+        c = st.columns([2, 3], vertical_alignment='center')
+        on = c[0].toggle("**:material/bolt: Additional losses in the board**", key=f"{K}|pcbOn",
+                         help="Losses that are not in the chips: conduction losses of the copper traces and planes "
+                              "(I²R), shunts, gate drivers, passives. They heat the board directly.")
+        c[1].caption("One row per region: layer of the stack-up, centre x, y, size w × l (empty or 0 = whole board) "
+                     "and loss P. The loss is constant over the run and spread uniformly over the volume of the "
+                     "region in that layer." if on else "Off: only the chips are heat sources.")
+        if not on:
+            return
+        df0 = s.get(f"{K}|pcb_base")
+        if df0 is None:
+            W, L = s_get('board|W', 60.0), s_get('board|L', 40.0)
+            df0 = pd.DataFrame([['traces', opts[0], W / 2, L / 2, None, None, 5.0]], columns=PCB_COLS)
+            s[f"{K}|pcb_base"] = df0
+        df0 = df0.copy()
+        df0['layer'] = [v if v in opts else opts[0] for v in df0['layer']]
+        df = st.data_editor(df0, key=f"{K}|pcbed|{'|'.join(opts)}", num_rows='dynamic', hide_index=True,
+                            width='stretch', column_config={
+            'layer': st.column_config.SelectboxColumn('layer', options=opts, required=True, help="Layer of the "
+                                                      "stack-up (index 0 = top) that carries the loss."),
+            'x [mm]': st.column_config.NumberColumn(format='%.1f', help="Centre of the region."),
+            'y [mm]': st.column_config.NumberColumn(format='%.1f'),
+            'w [mm]': st.column_config.NumberColumn(min_value=0.0, format='%.1f', help="Width; empty = whole board."),
+            'l [mm]': st.column_config.NumberColumn(min_value=0.0, format='%.1f', help="Length; empty = whole board."),
+            'P [W]': st.column_config.NumberColumn(format='%g', help="Loss of the region (constant).")})
+        rows = []
+        for _, r in df.iterrows():
+            if _nan(r['P [W]']):
+                continue
+            rows.append({'name': '' if _nan(r['name']) else str(r['name']),
+                         'layer': int(str(r['layer']).split(':')[0]) if not _nan(r['layer']) else 0,
+                         'x': 0.0 if _nan(r['x [mm]']) else float(r['x [mm]']),
+                         'y': 0.0 if _nan(r['y [mm]']) else float(r['y [mm]']),
+                         'w': 0.0 if _nan(r['w [mm]']) else float(r['w [mm]']),
+                         'l': 0.0 if _nan(r['l [mm]']) else float(r['l [mm]']), 'P': float(r['P [W]'])})
+        s[f"{K}|pcb"] = rows
+        st.caption(f"Total additional loss {fmt(sum(r['P'] for r in rows))} W. It is a constant heat source in the "
+                   "finite-volume model, the POD model and (as a steady offset) the Cauer network; the junction "
+                   "temperatures include it. The step responses and the R_th matrix describe the chips only, the "
+                   "export to the PO mode contains the chip losses only.")
+
+
+def s_get(key, default):
+    return st.session_state.get(f"{cm.KEY}|{key}", default)
+
+
+def layout_view():
+    """Top view and cross-section of the layout, side by side with the same height."""
+    lay = _layout('xy')
+    out = [c['name'] for c in lay['chips'] if c['x'] - c['w'] / 2 < 0 or c['x'] + c['w'] / 2 > lay['W']
+           or c['y'] - c['l'] / 2 < 0 or c['y'] + c['l'] / 2 > lay['L']]
+    if out:
+        st.warning(f"Chips outside the board: {', '.join(out)} (they are clipped at the edge).", icon=':material/warning:')
+    with st.container(border=True):
+        c = st.columns([3, 2], vertical_alignment='bottom')
+        c[0].markdown("**:material/developer_board: Layout** — top view and cross-section; the dashed line in the top "
+                      "view marks the cut.")
+        cm.num(c[1], "Cut of the cross-section y (mm)", 15.0, 'board|yCut', min_value=0.0, max_value=float(lay['L']))
+        c = st.columns(2)
+        with c[0]:
+            show(_top_fig(lay), height=480, key=f"{K}|topfig")
+        with c[1]:
+            show(_cut_fig(_layout('xz')), height=480, key=f"{K}|cutfig")
+
+
 def chip_inputs():
     cm.section(2, "Chips", "One row per chip: technology, centre position (x, y from the lower left corner of the "
                            "board), footprint, loss and loss profile. Empty w, l or P take the values of the "
@@ -520,6 +629,7 @@ def chip_inputs():
                                                  "0.2, GaN 0.8 %/K; estimates).")})
     st.session_state[f"{K}|chips_df"] = df
     mission_inputs(df)
+    layout_view()
     with st.expander("Chip technologies", icon=':material/memory:'):
         st.markdown("**Built-in**")
         table(pd.DataFrame([{'technology': n, 'die': c['mat'], 't die (mm)': c['t'], 'w × l (mm)': f"{c['w']} × "
@@ -630,18 +740,6 @@ def chip_lib_editor():
         lib_save(chips=lib)
         st.toast(f"{len(lib)} chip technologies saved to config/gui/board_lib.json", icon=':material/check:')
 
-    lay = _layout('xy')
-    out = [c['name'] for c in lay['chips'] if c['x'] - c['w'] / 2 < 0 or c['x'] + c['w'] / 2 > lay['W']
-           or c['y'] - c['l'] / 2 < 0 or c['y'] + c['l'] / 2 > lay['L']]
-    if out:
-        st.warning(f"Chips outside the board: {', '.join(out)} (they are clipped at the edge).", icon=':material/warning:')
-    c = st.columns([3, 2])
-    with c[0]:
-        show(_top_fig(lay), height=420, key=f"{K}|topfig")
-    with c[1]:
-        cm.num(st, "Cut of the cross-section y (mm)", 15.0, 'board|yCut', min_value=0.0, max_value=float(lay['L']))
-        show(_cut_fig(_layout('xz')), height=330, key=f"{K}|cutfig")
-
 
 def simulation():
     cm.section(3, "Simulation", "Layer-resolved finite-volume model of the whole board (x, y and every layer in z, die "
@@ -696,12 +794,13 @@ def simulation():
         P = _profiles(lay, D, t, mission=mis)
         cpl = _cpl(D, Bp) if cpl_on else None
         bar = st.progress(0.0, text="Simulating the finite-volume model …")
-        Tf, Tssf = simBoard(C, G, Bp, P, Ts, lay['Ta'], nSub, cpl=cpl, prog=_eta(bar, t0, "Finite-volume model"))
+        Tf, Tssf = simBoard(C, G, Bp, P, Ts, lay['Ta'], nSub, cpl=cpl, prog=_eta(bar, t0, "Finite-volume model"),
+                            q=_q(D))
         bar.empty()
         dt = time.perf_counter() - t0
         s[f"{K}|rate"] = dt / max(D['N3'] * nStep, 1)
         s[f"{K}|res"] = res = {'sig': sig, 'lay': lay, 'D': D, 'D2': D2, 't': t, 'P': P, 'T': Tf, 'Tss': Tssf,
-                               'C': C, 'G': G, 'Bp': Bp, 'nSub': nSub, 'time': dt, 'cpl': cpl}
+                               'C': C, 'G': G, 'Bp': Bp, 'nSub': nSub, 'time': dt, 'cpl': cpl, 'q': _q(D)}
     if res is None:
         st.info("Press *Simulate* to run the board model.", icon=':material/info:')
         return None
@@ -739,7 +838,9 @@ def results(res):
                "Hottest node of the top board layer, steady state for the last losses."),
               ("T_j,max (transient)", f"{fmt(Tj.max())} °C", "Highest junction temperature of the run (hottest die "
                                                              "cell)."),
-              ("Total loss (last)", f"{fmt(P[-1].sum())} W", None),
+              ("Total loss (last)", f"{fmt(P[-1].sum() + (0.0 if res.get('q') is None else res['q'].sum()))} W",
+               None if res.get('q') is None else f"Chips {fmt(P[-1].sum())} W + board {fmt(res['q'].sum())} W "
+               "(constant)."),
               ("Simulation time", f"{fmt(res['time'])} s", f"{D['N3']:,} nodes × {len(t)} steps")])
     rows = []
     for i, c in enumerate(D['chips']):
@@ -1045,12 +1146,13 @@ def _netMatrices(net, names, Rth):
                            mime='text/csv', icon=':material/download:', key=f"{K}|netcsv", width='stretch')
 
 
-def _simNet(net, M, P, Ts, Ta, nSub=4, cpl=None):
+def _simNet(net, M, P, Ts, Ta, nSub=4, cpl=None, dq=None):
     """
     Junction temperatures (Nt x M) (°C) of the fitted network for the losses P (Nt x M): exact modal solution per
     sub-step (zero-order hold); with electro-thermal coupling the junction temperature of the previous sub-step sets
     the losses (as in simBoard). The network gives the hottest die cell; the coupling uses the die average like the
-    board model, mapped with the exact steady-state matrices (Kavg = R_avg·R_th⁻¹).
+    board model, mapped with the exact steady-state matrices (Kavg = R_avg·R_th⁻¹). dq: steady junction temperature
+    rise of the constant board losses (hottest cell, die average), added as an offset (no transient).
     """
     from src.py.model.SF.sfNet import sfNet
     Nr = net['Nr']
@@ -1064,12 +1166,14 @@ def _simNet(net, M, P, Ts, Ta, nSub=4, cpl=None):
     Oz = (V / S[:, None])[np.arange(0, M) * Nr]                          # M x modes (junction nodes)
     Oa = net.get('Kavg', np.eye(M)) @ Oz                                 # die-average rise
     z = np.zeros(len(lam))
+    dh, da = (np.zeros(M), np.zeros(M)) if dq is None else dq
     Tj = np.zeros((P.shape[0], M))
     for k in range(1, P.shape[0]):
         for _ in range(0, max(int(nSub), 1)):
-            p = P[k] if cpl is None else P[k] * np.maximum(1 + cpl['alpha'] * (Oa @ z + Ta - cpl['Tref']), 0)
+            p = P[k] if cpl is None else P[k] * np.maximum(1 + cpl['alpha'] * (Oa @ z + da + Ta - cpl['Tref']), 0)
             z = a * z + gain * (Bz @ p)
         Tj[k] = Oz @ z
+    Tj[1:] += dh
     return Tj + Ta
 
 
@@ -1125,14 +1229,20 @@ def predict(res, rom, net):
         if 'POD model' in mdl:
             t0 = time.perf_counter()
             bar = st.progress(0.0, text="POD model …")
-            Tr = simRom(rom, P, Ts, lay['Ta'], res['nSub'], cpl=cpl, prog=_eta(bar, t0, "POD model"))
+            Tr = simRom(rom, P, Ts, lay['Ta'], res['nSub'], cpl=cpl, prog=_eta(bar, t0, "POD model"),
+                        q=res.get('q'))
             bar.empty()
             out['Tj']['POD model'] = (Tr - lay['Ta']) @ res['Bp'] + lay['Ta'] if tjdef == 'Die average' else \
                 _tj(D, Tr, P)
             out['time']['POD model'] = time.perf_counter() - t0
         if 'Cauer network' in mdl and net is not None:
             t0 = time.perf_counter()
-            out['Tj']['Cauer network'] = _simNet(net, M, P, Ts, lay['Ta'], res['nSub'], cpl=cpl)
+            dq = None
+            if res.get('q') is not None:                                # board losses: steady offset of T_j
+                import scipy.sparse.linalg as spl
+                thq = spl.spsolve(res['G'].tocsc(), res['q'])
+                dq = (_tj(D, thq[None, :] + lay['Ta'], np.zeros((1, M)))[0] - lay['Ta'], res['Bp'].T @ thq)
+            out['Tj']['Cauer network'] = _simNet(net, M, P, Ts, lay['Ta'], res['nSub'], cpl=cpl, dq=dq)
             out['time']['Cauer network'] = time.perf_counter() - t0
         s[f"{K}|pred"] = out
     if out is None or not out['Tj']:
@@ -1194,12 +1304,16 @@ def pod(res, stp=None):
         st.info("Run the step responses in section 4 first; the run itself is used meanwhile.", icon=':material/info:')
         src = 'This run'
     snap = stp['snap'] + lay['Ta'] if src == 'Step responses' else T
+    if src == 'Step responses' and res.get('q') is not None:          # field of the board losses as one snapshot
+        import scipy.sparse.linalg as spl
+        snap = np.vstack([snap, spl.spsolve(res['G'].tocsc(), res['q']) + lay['Ta']])
     Kmax = int(min(30, len(snap)))
     c = st.columns([1, 3])
     Kr = c[0].slider("Modes K", 1, Kmax, min(5, Kmax), key=f"{K}|K")
     rom = romBoard(res['C'], res['G'], res['Bp'], snap, lay['Ta'], Kr)
     t0 = time.perf_counter()
-    Tr = simRom(rom, res['P'], t[1] - t[0] if len(t) > 1 else 1.0, lay['Ta'], res['nSub'], cpl=res.get('cpl'))
+    Tr = simRom(rom, res['P'], t[1] - t[0] if len(t) > 1 else 1.0, lay['Ta'], res['nSub'], cpl=res.get('cpl'),
+                q=res.get('q'))
     tr = time.perf_counter() - t0
     err = np.abs(Tr - T)
     rise = max(T.max() - lay['Ta'], 1e-9)
@@ -1292,7 +1406,7 @@ def export(res):
             st.toast(f"Config '{done}' loaded — open Modes › PO to train the model", icon=':material/check:')
     D2 = res['D2']
     C2, G2, B2 = calcBoardMat(D2)
-    _, Ts2 = simBoard(C2, G2, B2, res['P'][-1:], 1.0, res['lay']['Ta'], 1)
+    _, Ts2 = simBoard(C2, G2, B2, res['P'][-1:], 1.0, res['lay']['Ta'], 1, q=_q(D2, len(C2)))
     Tj2 = _tj(D2, Ts2[None, :D2['geo'].shape[0]], res['P'][-1:])[0]
     Tj3 = _tj(res['D'], res['Tss'][None, :], res['P'][-1:])[0]
     cmp = ', '.join(f"{c['name']}: {fmt(a)} vs. {fmt(b)} °C" for c, a, b in zip(D2['chips'], Tj2, Tj3))
@@ -1303,6 +1417,120 @@ def export(res):
                "The data store the distributed heat sink h_v and the anisotropic conductivity k_y, so that the "
                "Galerkin projection of the PO mode includes the cooling (protocol 2/3, corrected version). Loading "
                "the config replaces the current GUI configuration.")
+
+
+def pinn_struct(net, names):
+    """Physics structure of the PI mode (setup['physPI']) from the fitted coupled Cauer network of the chips."""
+    from src.py.model.SF.sfNet import sfNet
+    M, Nr = len(names), net['Nr']
+    [Gm, Cm, E] = sfNet(net['p'], M, Nr)
+    return {'type': 'cauer', 'src': [f"x{i + 1}" for i in range(M)],
+            'cauer': {'G': np.asarray(Gm).tolist(), 'C': np.asarray(Cm).ravel().tolist(), 'E': np.asarray(E).tolist(),
+                      'out': [i * Nr + 1 for i in range(M)],
+                      'labels': [f"{n}·{k + 1}" if Nr > 1 else n for n in names for k in range(Nr)]},
+            'origin': f"board designer: coupled Cauer network ({Nr} stage(s) per chip)"}
+
+
+def _tj_def(res, T, P):
+    """Junction temperatures (die average or hottest cell, as selected in section 4)."""
+    if (st.session_state.get(f"{K}|tjdef") or 'Die average') == 'Die average':
+        return (T - res['lay']['Ta']) @ res['Bp'] + res['lay']['Ta']
+    return _tj(res['D'], T, P)
+
+
+def export_pinn(res, net):
+    cm.section(8, "Export for the PI mode (multi-output PINN)",
+               "Junction temperatures of all chips as 1D data (training: random load levels of every chip, several "
+               "profiles; validation: another random profile; testing: the designed profile), the coupled Cauer "
+               "network of section 4 as the physics of the PINN, and a ready-made PI config.")
+    D, lay = res['D'], res['lay']
+    names = [c['name'] for c in D['chips']]
+    M = len(names)
+    c = st.columns([2, 1, 1, 1], vertical_alignment='bottom')
+    name = c[0].text_input("Data name", 'myBoard', key=f"{K}|pname", help="data/board/<name>_pinn.xlsx, "
+                           "<name>_pinn.json (network) and config/gui/board_<name>_PI.json").strip().replace(' ', '_')
+    cm.num(c[1], "Training profiles", 4, 'board|pN', format='%d', min_value=1, max_value=20,
+           help="Number of random training profiles (sheets train1, train2, …).")
+    cm.num(c[2], "Duration per profile (s)", float(res['t'][-1]), 'board|pT', min_value=1.0)
+    go_ = c[3].button("Export PINN data", icon=':material/save:', key=f"{K}|pexp", width='stretch')
+    if net is None:
+        st.caption(":material/info: No R/C network fitted in section 4: the config uses the PINN without physics "
+                   "(phys = 0). Fit the network first to train with the Cauer physics.")
+    if go_ and name:
+        from gui.core import config as conf
+        from gui import adapter as A
+        Ts = float(res['t'][1] - res['t'][0]) if len(res['t']) > 1 else 1.0
+        nTr = int(st.session_state[f"{cm.KEY}|board|pN"])
+        tTr = np.arange(0.0, st.session_state[f"{cm.KEY}|board|pT"] + Ts * 1e-9, Ts)
+        bar, t0 = st.progress(0.0), time.perf_counter()
+        sheets = {}
+
+        def sim(P, k, n):
+            T, _ = simBoard(res['C'], res['G'], res['Bp'], P, Ts, lay['Ta'], res['nSub'], cpl=res.get('cpl'),
+                            q=res.get('q'), prog=lambda x: bar.progress(min((k + x) / n, 1.0),
+                                                                     text=f"Simulating profile {k + 1}/{n} · "
+                                                                          f"{fmt(time.perf_counter() - t0)} s"))
+            Pe = _peff({**res, 'P': P, 'T': T}, T) if res.get('cpl') else P
+            return _tj_def(res, T, Pe), Pe
+
+        jobs = [(f"train{k + 1}", tTr, _profiles(lay, D, tTr, kind='random', seed=11 + 17 * k)) for k in range(nTr)]
+        jobs += [('val', tTr, _profiles(lay, D, tTr, kind='random', seed=997)), ('test', res['t'], res['P'])]
+        for k, (sh, t, P) in enumerate(jobs):
+            Tj, Pe = sim(P, k, len(jobs))
+            df = pd.DataFrame({'time': t, 'time_id': t, 'id': k + 1})
+            for i, n in enumerate(names):
+                df[f"P_{n}"] = P[:, i]
+            df['Ta'] = lay['Ta']
+            for i, n in enumerate(names):
+                df[f"T_{n}"] = Tj[:, i]
+            sheets[sh] = df
+        bar.empty()
+        folder = os.path.join(A.ROOT, 'data', 'board')
+        os.makedirs(folder, exist_ok=True)
+        with pd.ExcelWriter(os.path.join(folder, f"{name}_pinn.xlsx")) as xw:
+            for sh, df in sheets.items():
+                df.to_excel(xw, sheet_name=sh, index=False)
+        struct = pinn_struct(net, names) if net is not None else None
+        if struct is not None:
+            with open(os.path.join(folder, f"{name}_pinn.json"), 'w', encoding='utf-8') as f:
+                json.dump(struct, f, indent=1)
+        tau = float(np.max(net['tau'])) if net is not None else float(res['t'][-1]) / 5
+        W = int(min(max(3 * tau / Ts, 50), 2000, len(tTr) - 1))
+        cfg = conf.read_config('tutorial_PI')
+        cfg['Run'].update({'name': f"board_{name}_PI", 'config': '/gui/_gui_run', 'mode': 'PI', 'format': 'xlsx',
+                           'datDim': 1, 'datSep': 2, 'trFile': [f"{name}_pinn"], 'vlFile': [f"{name}_pinn"],
+                           'teFile': f"{name}_pinn", 'trSheet': [f"train{k + 1}" for k in range(nTr)],
+                           'vlSheet': ['val'], 'teSheet': 'test', 'inp': [f"P_{n}" for n in names] + ['Ta'],
+                           'out': [f"T_{n}" for n in names], 'ref': ['Ta'], 'selPI': 2, 'archPI': None,
+                           'physPI': struct, 'train': 1, 'test': 1, 'featRoll': 0})
+        cfg['Exp']['gen'].update({'Ts': Ts, 'init': 1})
+        cfg['Mdl']['dl'].update({'W': W, 'stride': max(W // 10, 1), 'epoch': 60, 'batch': 32, 'initLr': 0.002,
+                                 'valPat': 12, 'gradTh': 1, 'lrDropPr': 20, 'lrDropFa': 0.5, 'shu': 3})
+        cfg['Mdl']['pinn'].update({'phys': 2 if struct else 0, 'alpha': 1, 'beta': 1, 'gamma': 0,
+                                   'warm': max(W // 20, 1), 'x0': 1, 'col': 3, 'pred': 1, 'TrefSrc': M + 1,
+                                   'node': 1})
+        cfg['Mdl']['gen']['dev'] = 1
+        conf.save_config(cfg, f"board_{name}_PI")
+        st.session_state[f"{K}|pexported"] = (f"board_{name}_PI", name, W, Ts)
+        st.toast(f"Exported PINN data '{name}'", icon=':material/check:')
+    done = st.session_state.get(f"{K}|pexported")
+    if done:
+        cfgname, nm, W, Ts = done
+        st.success(f"Written: data/board/{nm}_pinn.xlsx (sheets train…, val, test; columns P_<chip> in W, Ta, "
+                   f"T_<chip> in °C), data/board/{nm}_pinn.json (Cauer network) and config/gui/{cfgname}.json (PI mode, LSTM, "
+                   f"W = {W} samples = {fmt(W * Ts)} s, β = 1, physics = the network, T_ref = Ta).",
+                   icon=':material/check_circle:')
+        if st.button(f"Load config '{cfgname}' in the GUI", icon=':material/upload:', key=f"{K}|pload"):
+            from gui.core import config as conf
+            from gui.core import forms
+            forms.set_config(conf.read_config(cfgname), cfgname)
+            st.toast(f"Config '{cfgname}' loaded — open Modes › PI (views Physics, Network, Run)",
+                     icon=':material/check:')
+    st.caption("The PINN predicts the junction temperatures of all chips at once: the network outputs the node "
+               "temperatures of the Cauer network (hidden stages included), the physics loss enforces C·dT/dt = E·P "
+               "− G·T between them. The network of section 4 neglects the constant board losses and is fitted to the "
+               "step responses only — the PINN corrects such deviations from the data, the physics keeps it plausible "
+               "between the training load levels.")
 
 
 def interpretation(res, Tj, rom, err):
@@ -1357,13 +1585,15 @@ def page():
     rom, err = pod(res, stp)
     predict(res, rom, net)
     export(res)
+    export_pinn(res, net)
     cm.equations([
         ("Layer-resolved model (simulation, both views)",
-         [r"C_i\,\dot T_i = \sum_j G_{ij}(T_j - T_i) + g_{out,i}(T_a - T_i) + B_i P,\quad "
+         [r"C_i\,\dot T_i = \sum_j G_{ij}(T_j - T_i) + g_{out,i}(T_a - T_i) + B_i P + q_i,\quad "
           r"G_{ij}^{z} = \frac{A_i}{\Delta z_i/2k_{z,i} + \Delta z_j/2k_{z,j}},\quad "
           r"G_{ij}^{x} = \frac{\Delta y\,\bar{\Delta z}}{\Delta x/2k_{x,i} + \Delta x/2k_{x,j}}"],
          "Nodes on the x-y grid in every row of the stack (layers below, board layers, die attach and die over the "
-         "chip footprints); h on the bottom of the lowest row, h_top on the top of every column."),
+         "chip footprints); h on the bottom of the lowest row, h_top on the top of every column; q_i: constant "
+         "additional losses of the board (P of a region spread over its control volumes in the selected layer)."),
         ("Lumped board (export to the PO mode)", [r"k_{eff} = \frac{\sum_l k_{xy,l} t_l}{t_b},\quad (\rho c)_{eff} = "
                                     r"\frac{\sum_l \rho_l c_l t_l}{t_b},\quad h_{eff} = \frac{1}{\sum_l t_l/k_{z,l} + "
                                     r"1/h} + h_{top}"], "Stack-up of thickness t_b lumped into one plane."),
@@ -1391,6 +1621,7 @@ def page():
             ('h_v', 'distributed heat sink', 'W/(m³ K)'), ('Q', 'volumetric heat source', 'W/m³'),
             ('V_i, A_ij, d', 'control volume, face area, node distance', 'm², m, m (per m depth)'),
             ('R_jb', 'junction-to-board resistance of die and die attach', 'K/W'),
+            ('q_i', 'additional loss of the board in node i (traces, shunts, passives)', 'W'),
             ('c', 'copper coverage of a layer', '–'), ('p, r, t_pl', 'via pitch, drill radius, plating thickness',
                                                        'm')], title="Model equations")
     interpretation(res, Tj, rom, err)

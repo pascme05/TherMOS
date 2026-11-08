@@ -53,8 +53,19 @@ def _label(m):
     n = type(m).__name__
     if n == 'Conv1d':
         return f"Conv1d {m.in_channels}→{m.out_channels}, k = {m.kernel_size[0]}"
-    if n == 'LSTM':
-        return f"LSTM {m.input_size}→{m.hidden_size}"
+    if n in ('LSTM', 'GRU'):
+        return f"{'Bidirectional ' if m.bidirectional else ''}{n} {m.input_size}→{m.hidden_size}"
+    if n == 'TransformerEncoderLayer':
+        a = m.self_attn
+        return f"Transformer encoder d = {a.embed_dim}, {a.num_heads} heads, FF {m.linear1.out_features}"
+    if n == 'Pool':
+        return {'last': 'last time step', 'mean': 'mean over time', 'max': 'max over time'}[m.mode] + " (seq2point)"
+    if n == 'Conv1d' and m.dilation[0] > 1:
+        return f"Conv1d {m.in_channels}→{m.out_channels}, k = {m.kernel_size[0]}, d = {m.dilation[0]}"
+    if n == 'Dropout':
+        return f"Dropout {m.p:g}"
+    if n == 'LayerNorm':
+        return "LayerNorm"
     if n == 'Linear':
         return f"Linear {m.in_features}→{m.out_features}"
     if n == 'BatchNorm1d':
@@ -70,7 +81,7 @@ def arch_dot(net, W, F, names=None, outs=None, physics=None):
     import torch
     rec = []
     hooks = [m.register_forward_hook(lambda mod, i, o, mod_=m: rec.append((mod_, _shape(o))))
-             for m in net.modules() if len(list(m.children())) == 0]
+             for m in _atoms(net)]
     net.eval()
     with torch.no_grad():
         y = net(torch.zeros(2, W, F))
@@ -84,13 +95,16 @@ def arch_dot(net, W, F, names=None, outs=None, physics=None):
          'fontsize=11];', 'edge [color="#666666", fontname="Helvetica", fontsize=9];',
          f'x [label="input window\\n{inp}\\nB×{W}×{F}", fillcolor="#fff4e5", color="#e07b00"];',
          'nrm [label="normalisation (x − μ)/σ"];', 'x -> nrm;']
-    fill = {'Conv1d': '#e8f4ea', 'LSTM': '#f3e8f7', 'Linear': '#eef3fb'}
+    fill = {'Conv1d': '#e8f4ea', 'LSTM': '#f3e8f7', 'GRU': '#f3e8f7', 'Linear': '#eef3fb',
+            'TransformerEncoderLayer': '#fff4e5', 'Pool': '#fffbe6'}
     blocks = []                                                       # [label lines, out shape, kind, parameters]
     for m, sh in rec:
         n = type(m).__name__
         p = sum(q.numel() for q in m.parameters())
-        if n in ('ReLU', 'BatchNorm1d') and blocks:
-            blocks[-1][0].append('+ ' + ('ReLU' if n == 'ReLU' else _label(m)))
+        if n in ('Identity',):
+            continue
+        if n in ('ReLU', 'GELU', 'Tanh', 'BatchNorm1d', 'LayerNorm', 'Dropout') and blocks:
+            blocks[-1][0].append('+ ' + _label(m))
             blocks[-1][1], blocks[-1][3] = sh, blocks[-1][3] + p
         else:
             blocks.append([[_label(m)], sh, n, p])
@@ -102,44 +116,83 @@ def arch_dot(net, W, F, names=None, outs=None, physics=None):
         L.append(f'{prev} -> n{i};')
         prev = f'n{i}'
         nxt = blocks[i + 1][2] if i + 1 < len(blocks) else None
-        if seq > 0 and (n == 'LSTM' or (n == 'Conv1d' and nxt == 'Linear')):
+        if seq > 0 and not getattr(net, 'arch', None) and (n == 'LSTM' or (n == 'Conv1d' and nxt == 'Linear')):
             L.append(f'sel{i} [label="{"last time step" if n == "LSTM" else "mean over time"} (seq2point)", '
                      f'shape=note, fillcolor="#fffbe6"];')
             L.append(f'{prev} -> sel{i};')
             prev = f'sel{i}'
     o = ', '.join(map(str, outs)) if outs else 'outputs'
-    L.append(f'y [label="T̂ ({o})\\n{_shape(y)}  ·  {nP:,} parameters in total", fillcolor="#fde8e8", '
-             f'color="#d03b3b"];')
-    L.append(f'{prev} -> y;')
     if physics is None:
+        L.append(f'y [label="T̂ ({o})\\n{_shape(y)}  ·  {nP:,} parameters in total", fillcolor="#fde8e8", '
+                 f'color="#d03b3b"];')
+        L.append(f'{prev} -> y;')
         L.append('t [label="target T", shape=ellipse, fillcolor="#ffffff"]; ld [label="loss  mean((T̂ − T)²)", '
                  'shape=hexagon, fillcolor="#fde8e8"]; y -> ld; t -> ld;')
     else:
         ph = physics
-        L += ['t [label="measured T", shape=ellipse, fillcolor="#ffffff"];',
-              'ld [label="data loss\\nL_data = mean((T̂ − T)²)", shape=hexagon, fillcolor="#fde8e8"];',
+        src = ', '.join(f"P{j + 1} = {e}" for j, e in enumerate(ph.get('src') or [])) or 'no loss source'
+        L.append(f'xs [label="states x of the physics network (K)\\nx = ΔT·f(X), {_shape(y)}  ·  {nP:,} '
+                 f'parameters", fillcolor="#f3e8f7", color="#8a4fb3"];')
+        L.append(f'{prev} -> xs;')
+        L += [f'y [label="T̂ = T_ref + O·x  ({o})", fillcolor="#fde8e8", color="#d03b3b"];', 'xs -> y;',
+              't [label="measured T", shape=ellipse, fillcolor="#ffffff"];',
+              'ld [label="data loss\\nL_data = mean(((T̂ − T)/ΔT)²)", shape=hexagon, fillcolor="#fde8e8"];',
               'y -> ld; t -> ld;',
-              'dt [label="∂T̂/∂t\\n(finite difference over the window)", fillcolor="#f3e8f7"];',
-              f'phx [label="P_v = {ph.get("PvTxt", "3·R_s·x4²")}\\nT_ref = {ph.get("TrefTxt", "x2")}\\nfrom the '
-              f'input window", shape=ellipse, fillcolor="#fff4e5", color="#e07b00"];',
-              f'res [label="residual of the lumped model (output {ph.get("node", 1)})\\nr = C_th·∂T̂/∂t − ((T_ref − '
-              f'T̂)/R_th + P_v)\\nR_th = {fmt(ph["Rth"])} K/W, C_th = {fmt(ph["Cth"])} Ws/K", '
-              f'fillcolor="#e8f4ea", color="#3f8f4f"];',
+              'dt [label="dx/dt\\n(central differences)", fillcolor="#f3e8f7"];',
+              f'phx [label="{src}\\nfrom the input window (and T̂)", shape=ellipse, fillcolor="#fff4e5", '
+              f'color="#e07b00"];',
+              f'res [label="residual of the {ph.get("type", "")} network ({ph.get("nP", 0)} states)\\n'
+              f'r = (C·dx/dt + G·x − E·P)/(diag(G)·ΔT)", fillcolor="#e8f4ea", color="#3f8f4f"];',
               'lp [label="physics loss\\nL_phys = mean(r²)", shape=hexagon, fillcolor="#e8f4ea", color="#3f8f4f"];',
-              f'tot [label="L = α·L_data + β·L_phys\\nα = {fmt(ph["alpha"])}, β = {fmt(ph["beta"])}", '
+              'li [label="initial condition\\nL_init = Σw·((T̂ − T(0))/ΔT)²/Σw", shape=hexagon, fillcolor="#eef3fb"];',
+              f'tot [label="L = α·L_data + β·L_phys + γ·L_init\\nα = {fmt(ph["alpha"])}, β = {fmt(ph["beta"])}, '
+              f'γ = {fmt(ph.get("gamma", 0))}  (first {int(ph.get("warm", 0))} samples skipped)", '
               f'shape=doubleoctagon, fillcolor="#fffbe6", color="#b38600"];',
-              'y -> dt; dt -> res; y -> res; phx -> res; res -> lp; ld -> tot; lp -> tot;',
-              'x -> phx [style=dashed];']
-        if ph['beta'] == 0:
-            L.append('lp -> tot [style=invis]; note [label="β = 0: the physics loss is computed but not used",'
-                     ' shape=note, fillcolor="#ffffff", color="#b38600"]; tot -> note [style=dotted];')
+              'xs -> dt; dt -> res; xs -> res; phx -> res; y -> phx [style=dotted]; res -> lp; ld -> tot; '
+              'lp -> tot; y -> li; li -> tot;', 'x -> phx [style=dashed];']
+        if ph['beta'] == 0 or not ph.get('nP'):
+            L.append('note [label="β = 0 or no physics: the physics loss has no influence", shape=note, '
+                     'fillcolor="#ffffff", color="#b38600"]; tot -> note [style=dotted];')
     L.append('}')
-    return '\n'.join(L)
+    return '\\n'.join(L)
 
 
-def _net(sel, F, M, seq):
+ATOMS = ('Conv1d', 'LSTM', 'GRU', 'Linear', 'BatchNorm1d', 'LayerNorm', 'ReLU', 'GELU', 'Tanh', 'Dropout',
+         'TransformerEncoderLayer', 'Pool', 'Identity')
+
+
+def _atoms(net):
+    """Modules drawn as one block, in definition order (a transformer layer is not split into its parts)."""
+    out = []
+
+    def walk(m):
+        for c in m.children():
+            if type(c).__name__ in ATOMS or not list(c.children()):
+                out.append(c)
+            else:
+                walk(c)
+    walk(net)
+    return out
+
+
+def summary(net, W, F):
+    """Rows (layer, output shape, parameters) of a dlNet from a forward pass with a window of W samples."""
+    import torch
+    rec = []
+    hooks = [m.register_forward_hook(lambda mod, i, o, mod_=m: rec.append((mod_, _shape(o)))) for m in _atoms(net)]
+    net.eval()
+    with torch.no_grad():
+        y = net(torch.zeros(2, W, F))
+    for h in hooks:
+        h.remove()
+    rows = [{'layer': _label(m), 'output shape': sh, 'parameters': sum(q.numel() for q in m.parameters())}
+            for m, sh in rec if type(m).__name__ != 'Identity']
+    return rows, _shape(y)
+
+
+def _net(sel, F, M, seq, arch=None):
     from src.py.model.DL.dlNet import dlNet
-    return dlNet(int(sel), int(F), int(M), int(seq), np.zeros(F), np.ones(F))
+    return dlNet(int(sel), int(F), int(M), int(seq), np.zeros(F), np.ones(F), arch=arch)
 
 
 def _feat_names(cfg):
@@ -242,17 +295,25 @@ def theory_dl(cfg, sel=None, physics=None):
     ], sym=[('x(k)', 'input features of sample k (F)', '–'), ('W', 'window length', 'samples'),
             ('θ', 'weights of the network', '–'), ('B', 'batch size (Mdl › dl › batch)', '–')],
         expanded=physics is None)
-    cm.section(None, "Architecture" + (" of the network (CNN + LSTM, as in pinnFit)" if physics else ""))
+    cm.section(None, "Architecture" + (" of the PINN (network of the view *Network*, physics of the view "
+                                       "*Physics*)" if physics else ""))
     c = st.columns([1, 1, 1, 1])
     if physics is None:
-        sel = c[0].selectbox("Network", list(NETS), index=list(NETS).index(sel if sel in NETS else 3),
-                             format_func=NETS.get, key='thDL|sel')
+        arch = _get(cfg, 'Run', 'archDL', default=None)
+        if arch:
+            c[0].markdown("**Network:** user-defined (view *Network*)")
+        else:
+            sel = c[0].selectbox("Network", list(NETS), index=list(NETS).index(sel if sel in NETS else 3),
+                                 format_func=NETS.get, key='thDL|sel')
     Wd = int(c[1].number_input("Window W (shown)", 2, 100000, min(W, 100000), key=f'th{"PI" if physics else "DL"}|W',
                                help="Window length of the diagram; the config value is the default."))
     st.caption(f"{len(names)} input features: {', '.join(names[0:12])}{' …' if len(names) > 12 else ''} → "
                f"{len(outs)} outputs: {', '.join(map(str, outs))}. Shapes: B = batch, then time × channels.")
+    if physics is not None:
+        names = names + ([f"ΔT0({o})" for o in outs] if physics.get('x0') else [])
     try:
-        net = _net(3 if physics else sel, len(names), len(outs), 0 if physics else seq)
+        net = _net(sel, len(names), physics['n'] if physics else len(outs), 0 if physics else seq,
+                   _get(cfg, 'Run', 'archPI' if physics else 'archDL', default=None))
         st.graphviz_chart(arch_dot(net, Wd, len(names), names if len(names) <= 6 else None, outs, physics),
                           width='content')
     except Exception as e:                                                         # never let a diagram kill the page
@@ -288,118 +349,39 @@ def theory_dl(cfg, sel=None, physics=None):
 #######################################################################################################################
 # PI
 #######################################################################################################################
-def phys_text(cfg):
-    """Physics settings of the config (pinnFit.physPara) with readable texts for the graphs."""
-    from src.py.model.PINN.pinnFit import physPara
-    ph = physPara(cfg)
-    names = list((cfg.get('Run') or {}).get('inp') or [])
-    nm = lambda k: f"x{k} ({names[k - 1]})" if 0 < k <= len(names) else f"x{k}"
-    ph['PvTxt'] = nm(ph['PvSrc']) if ph['PvSrc'] > 0 else ph['PvEq'].replace('**', '^').replace('*', '·')
-    ph['TrefTxt'] = nm(ph['TrefSrc']) if ph['TrefSrc'] > 0 else f"{fmt(ph['Tref'])} °C"
-    ph['names'] = names
-    return ph
-
-
 def theory_pi(cfg):
-    ph = phys_text(cfg)
+    from gui.core import pinn_phys
+    from src.py.model.PINN.pinnPhys import physDef
     sel = int((cfg.get('Run') or {}).get('selPI', 3) or 3)
-    intro("PI mode: a network of the DL mode (CNN, LSTM or CNN + LSTM, sub-mode), trained with a loss that adds the "
-          "residual of a lumped thermal model of one output. The losses of the model come from an input feature or "
-          "from an equation of the inputs and constants.")
-    cm.question("What does the physics loss add, and how are the data and the physics weighted?")
+    intro("PI mode: a sequence network predicts the states of a thermal network (Foster terms or Cauer nodes, one or "
+          "several outputs); the loss adds the residual of that network to the data error. The physics regularises "
+          "the network where data are scarce or noisy, the data correct the simplified physics.")
+    cm.question("How do the data and the physics enter the training, and how should α, β and γ be chosen?")
     cm.equations([
-        ("Lumped thermal model of output j", r"C_{th}\,\frac{dT_j}{dt} = \frac{T_{ref} - T_j}{R_{th}} + P_v",
-         "One thermal node from the output to the reference (ambient / coolant)."),
-        ("Losses and reference", r"P_v = \begin{cases} x_k & \text{PvSrc} = k > 0 \\ f(x_1, x_2, \dots, T, "
-                                 r"\text{constants}) & \text{PvSrc} = 0 \end{cases},\qquad T_{ref} = "
-                                 r"\begin{cases} x_k & \text{TrefSrc} = k > 0 \\ \text{Tref} & \text{TrefSrc} = 0 "
-                                 r"\end{cases}",
-         "f is the equation PvEq, e.g. 3*Rs*x4**2 (copper losses of a three-phase winding with the current in "
-         "feature 4) or 3*Rs*(1+0.00393*(T-20))*x4**2 (with the temperature-dependent copper resistance)."),
-        ("Residual of the prediction", r"r(k) = C_{th}\,\frac{\hat T_j(k+1) - \hat T_j(k)}{T_s} - \left("
-                                       r"\frac{T_{ref}(k) - \hat T_j(k)}{R_{th}} + P_v(k)\right)",
-         "Forward difference over the window (sampling time of the data, legacy = 0)."),
-        ("Loss", r"L = \alpha\,\underbrace{\tfrac{1}{N}\textstyle\sum (\hat T - T)^2}_{L_{data}} + \beta\,"
-                 r"\underbrace{\tfrac{1}{N}\textstyle\sum r^2}_{L_{phys}}",
-         "α, β: Mdl › pinn › alpha, beta. β = 0 (default, as in MATLAB) trains on the data only."),
-    ], sym=[('T̂_j, T_j', 'predicted and measured temperature of the residual output j (Mdl › pinn › node)', '°C'),
-            ('x_k', 'input feature k (raw units, Setup › channels)', '–'),
-            ('P_v, T_ref', 'losses and reference temperature of the lumped model', 'W, °C'),
-            ('R_th, C_th', 'thermal resistance and capacitance', 'K/W, Ws/K'),
-            ('α, β', 'weights of the data and physics loss', '–')], expanded=True)
+        ("Physics network (view Physics)", r"C\,\dot x = E\,P - G\,x,\qquad \hat T = T_{ref} + O\,x",
+         "Foster: one state θ_k per term, τ_k·dθ_k/dt = R_k·P_j − θ_k (G = I, C = τ, E = R); Cauer: node "
+         "temperatures with capacitances C and conductances G, hidden nodes allowed."),
+        ("Network", r"x = \Delta T\cdot f_\theta(X, \Delta T_0)",
+         "f_θ: CNN/LSTM/own architecture on a window of W samples; ΔT₀: measured rise at the window start (x0)."),
+        ("Residual", r"r = \frac{C\,\dot x + G\,x - E\,P}{\mathrm{diag}(G)\,\Delta T}",
+         "dx/dt by central differences; dimensionless, so β does not depend on the units."),
+        ("Loss", r"L = \alpha L_{data} + \beta L_{phys} + \gamma L_{init}",
+         "Each part is a mean square relative to ΔT (see Physics › How the parameters enter the PINN)."),
+    ], sym=[('x', 'states of the physics network (rises over T_ref)', 'K'),
+            ('C, G, E, O', 'capacitance, conductance, input and output matrix', 'Ws/K, W/K, –, –'),
+            ('P_j', 'loss sources (equations of the inputs, view Physics)', 'W'),
+            ('T_ref', 'reference temperature (constant, feature or reference channel)', '°C'),
+            ('ΔT', '99th percentile of |T − T_ref| of the training data', 'K'),
+            ('α, β, γ', 'weights of the data, physics and initial-condition loss', '–'),
+            ('W', 'window length (Mdl › dl › W)', 'samples')], expanded=True)
+    pinn_phys.equation_panel(cfg, expanded=False)
+    try:
+        ph = physDef(cfg, cfg.get('Run') or {}, len(list((cfg.get('Run') or {}).get('out') or ['T'])))
+        ph['beta'] = float(ph['beta'])
+        theory_dl(cfg, sel=sel, physics=ph)
+    except Exception as e:
+        st.warning(f"The physics of the configuration is not valid ({e}) — fix it in the view *Physics*.",
+                   icon=':material/warning:')
+    pinn_phys.lab(cfg)
 
-    # Physics of the current config
-    cm.section(None, "Physics of the current configuration")
-    feats = ph['names'] or [f"x{i + 1}" for i in range(4)]
-    c = st.columns([3, 2])
-    with c[0]:
-        table(pd.DataFrame([
-            {'term': 'losses P_v', 'source': ph['PvTxt'], 'set by': 'Mdl › pinn › PvSrc / PvEq'},
-            {'term': 'reference T_ref', 'source': ph['TrefTxt'], 'set by': 'Mdl › pinn › TrefSrc / Tref'},
-            {'term': 'output j', 'source': str(ph['node']), 'set by': 'Mdl › pinn › node'},
-            {'term': 'constants', 'source': ', '.join(f"{k} = {fmt(v)}" for k, v in ph['const'].items()),
-             'set by': 'Mdl › pinn › Rth, Cth, Rs, const'}]), hide_index=True)
-    with c[1]:
-        st.markdown("**Check the loss equation** at an operating point")
-        vals = {}
-        cc = st.columns(2)
-        for k, n in enumerate(feats):
-            vals[f"x{k + 1}"] = cc[k % 2].number_input(f"x{k + 1} = {n}", value=60.0 if k == 3 else 25.0,
-                                                       key=f"thPI|x{k}")
-        vals['T'] = cc[len(feats) % 2].number_input("T (°C)", value=80.0, key='thPI|Tx')
-        try:
-            from src.py.general.calcEq import calcEq
-            Pv0 = float(vals[f"x{ph['PvSrc']}"]) if ph['PvSrc'] > 0 else float(calcEq(ph['PvEq'], vals, ph['const']))
-            st.success(f"P_v = {fmt(Pv0)} W → steady ΔT = P_v·R_th = {fmt(Pv0 * ph['Rth'])} K", icon=':material/check:')
-        except Exception as e:
-            Pv0 = None
-            st.warning(f"The loss equation does not fit the inputs of this configuration ({e}). Use the input "
-                       f"names x1 … x{len(feats)}, or set Mdl › pinn › PvSrc to the feature that holds the losses; "
-                       f"the PI run stops with this error otherwise.", icon=':material/warning:')
-    if ph['beta'] == 0:
-        st.info("β = 0 in the current config: the PINN trains on the data only (the physics loss is monitored on the "
-                "validation data but has no influence). Set Mdl › pinn › beta > 0 to use it.", icon=':material/info:')
-    cm.section(None, "Network and loss")
-    theory_dl(cfg, sel=sel, physics=ph)
 
-    cm.section(None, "Explorer: residual of a prediction")
-    st.caption("The losses alternate between P_v of the operating point above and 30 % of it (load cycle).")
-    c = st.columns(3)
-    Ta = num(c[0], "T_ref (°C)", 25.0, 'thPI|Ta')
-    bias = num(c[1], "Prediction offset (K)", 2.0, 'thPI|bias')
-    noise = num(c[2], "Prediction noise σ (K)", 0.5, 'thPI|noise', min_value=0.0)
-    P0 = Pv0 if Pv0 is not None and np.isfinite(Pv0) else 100.0
-    tau = ph['Rth'] * ph['Cth']
-    Ts = max(tau / 400, 1e-3)
-    t = np.arange(0, 4 * tau, Ts)
-    Pcu = np.where((t % (tau * 1.5)) < tau * 0.9, P0, P0 * 0.3)
-    T, _ = rcSim(np.array([ph['Rth']]), np.array([tau]), Pcu, Ts)
-    T = T + Ta
-    That = T + bias + np.random.default_rng(42).normal(0, noise, len(t))
-
-    def resid(x):
-        return ph['Cth'] * np.diff(x) / Ts - ((Ta - x[:-1]) / ph['Rth'] + Pcu[:-1])
-    r0, r1 = resid(T), resid(That)
-    Ld = float(np.mean((That - T) ** 2))
-    Lp = float(np.mean(r1 ** 2))
-    cm.tiles([("τ = R_th·C_th", f"{fmt(tau)} s", None), ("Steady ΔT at P_v", f"{fmt(P0 * ph['Rth'])} K", None),
-              ("L_data of the prediction", f"{fmt(Ld)} K²", None), ("L_phys of the prediction", f"{fmt(Lp)} W²",
-                                                                     f"exact solution: {fmt(np.mean(r0 ** 2))} W²")])
-    tabs = st.tabs(["Temperatures", "Residual"])
-    with tabs[0]:
-        fig = go.Figure([line(t, T, 'lumped model (physics)', 0, width=3), line(t, That, 'prediction T̂', 1)])
-        fig.update_layout(xaxis_title='t (s)', yaxis_title='T (°C)')
-        show(fig, key='thPI|T')
-    with tabs[1]:
-        fig = go.Figure([line(t[:-1], r1, 'r of the prediction', 1), line(t[:-1], r0, 'r of the model solution', 0)])
-        fig.update_layout(xaxis_title='t (s)', yaxis_title='residual r (W)')
-        show(fig, key='thPI|r')
-    cm.interpret([
-        f"A constant offset of {fmt(bias)} K costs {fmt(bias ** 2)} K² of data loss and {fmt((bias / ph['Rth']) ** 2)} "
-        f"W² of physics loss (the model sees a wrong heat flow to the ambient). Noise is punished much harder by the "
-        f"physics loss, because the derivative amplifies it: the physics term acts as a smoothness prior.",
-        "The two losses have different units (K² vs. W²), so β must be scaled: start with β·L_phys ≈ 0.1·α·L_data "
-        "of an untrained network. The physics only holds if the lumped model is valid for the first output; a wrong "
-        "R_th/C_th pulls the network away from the data.",
-        "Benefit: less training data needed and more plausible extrapolation; cost: a second loss to balance and "
-        "slower training."])

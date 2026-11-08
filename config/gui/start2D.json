@@ -73,6 +73,7 @@
       "initLr": 0.005,
       "lrDropPr": 50,
       "lrDropFa": 0.2,
+      "lrAdapt": 0,
       "valFreq": 10,
       "batch": 64,
       "shu": 1,
@@ -103,13 +104,19 @@
       "Cth": 20800,
       "Rs": 0.0141,
       "alpha": 1,
-      "beta": 0,
+      "beta": 0.1,
       "PvSrc": 1,
       "PvEq": "3*Rs*x4**2",
       "const": 0,
       "TrefSrc": 0,
       "Tref": 25,
-      "node": 1
+      "node": 1,
+      "phys": 1,
+      "gamma": 0,
+      "warm": 50,
+      "pred": 1,
+      "x0": 1,
+      "col": 0
     },
     "sf": {
       "bnd": 10000,
@@ -201,6 +208,9 @@
       5,
       50
     ],
-    "legacy": 0
+    "legacy": 0,
+    "archDL": null,
+    "archPI": null,
+    "physPI": null
   }
 }

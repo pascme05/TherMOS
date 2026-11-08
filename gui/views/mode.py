@@ -30,13 +30,16 @@ import os
 
 import streamlit as st
 
-VIEW_ICONS = {'Workflow': ':material/account_tree:', 'Parameters': ':material/tune:', 'Inputs': ':material/table_chart:',
-              'Theory': ':material/function:', 'Run': ':material/play_arrow:', 'Results': ':material/monitoring:'}
+VIEW_ICONS = {'Workflow': ':material/account_tree:', 'Parameters': ':material/tune:',
+              'Inputs': ':material/table_chart:',
+              'Theory': ':material/function:', 'Network': ':material/hub:', 'Physics': ':material/device_thermostat:',
+              'Run': ':material/play_arrow:', 'Results': ':material/monitoring:'}
 
 
 def views(m):
     return (['Workflow'] if m in workflow.WORKFLOWS else []) + ['Parameters', 'Inputs'] + \
-        (['Theory'] if m in theory.THEORY else []) + ['Run', 'Results']
+        (['Theory'] if m in theory.THEORY else []) + (['Network'] if m in ('DL', 'PI') else []) + \
+        (['Physics'] if m == 'PI' else []) + ['Run', 'Results']
 
 
 #######################################################################################################################
@@ -44,6 +47,16 @@ def views(m):
 #######################################################################################################################
 def theory_view(m):
     theory.THEORY[m](forms.cfg())
+
+
+def physics_view(m):
+    from gui.core import pinn_phys
+    pinn_phys.view(m)
+
+
+def network_view(m):
+    from gui.core import dl_arch
+    dl_arch.view(m)
 
 
 #######################################################################################################################
@@ -84,6 +97,11 @@ def parameters(m):
         load_example(m)
     with c3:
         forms.reset_section(d['section'])
+    if m == 'PI':
+        st.info("The PINN settings — physics, loss weights α, β, γ, warm-up, initial state, prediction, collocation, "
+                "reference temperature, constants and loss sources — are in the view **Physics**. Here: the "
+                "general settings and the training of the network (dl: window W, stride, epochs, learning rate and "
+                "its schedule, batch, early stopping).", icon=':material/device_thermostat:')
     forms.section(d['section'], cats=d.get('cats'))
     for sec in d.get('extra', []):
         with st.expander(f"**{sec}** · {SECTION_TITLES.get(sec, '')}", expanded=False):
@@ -262,7 +280,7 @@ def make_page(m):
                                     format_func=lambda v: f"{VIEW_ICONS[v]} {v}") or vs[0]
         st.divider()
         {'Workflow': workflow.view, 'Parameters': parameters, 'Inputs': inputs, 'Theory': theory_view,
-         'Run': run_view, 'Results': results_view}[view](m)
+         'Network': network_view, 'Physics': physics_view, 'Run': run_view, 'Results': results_view}[view](m)
 
     page.__name__ = f"mode{m}"
     return page

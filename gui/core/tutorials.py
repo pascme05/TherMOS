@@ -20,7 +20,9 @@ Every tutorial is a config (config/tutorials/<id>.json) made of a base config an
 come from runs of the tutorial configs — never invent the numbers.
 
 Entry: {'id', 'mode', 'level' (Beginner | Intermediate | Advanced), 'minutes', 'base' (config name, default
-'default'), 'title', 'story', 'goals' [..], 'changes' {..}, 'steps' [..], 'look' (markdown), 'exercise' [..]}
+'default'), 'title', 'story', 'goals' [..], 'changes' {..}, 'steps' [..], 'look' (markdown), 'exercise' [..],
+'runs' (optional) [{'label', 'changes'}]: the runs of the 'look' table as changes relative to the tutorial config,
+so that every row can be loaded and reproduced}
 """
 
 #######################################################################################################################
@@ -58,6 +60,13 @@ def merge_changes(cfg, t):
     if A.MODE_VAR and m in A.MODES:
         cfg[A.RUN_SECTION][A.MODE_VAR] = m
     return cfg
+
+
+def run_config(tid, k):
+    """Config of run k of a tutorial (tutorial config + the changes of the run)."""
+    t = get(tid)
+    r = (t.get('runs') or [])[k]
+    return merge_changes(load(tid), {'changes': r['changes'], 'mode': t.get('runMode') or t['mode']})
 
 
 def base(t):

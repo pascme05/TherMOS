@@ -40,14 +40,31 @@ def _mode(m):
     return f"{m} · {A.MODES[m]['title']}" if m in A.MODES else str(m)
 
 
-def _changes(t):
-    """Readable table of the base config and the changes of a tutorial."""
-    rows = [{'setting': 'base configuration', 'value': f"config/{t.get('base', 'default')}.json"}]
+RUN_LABELS = {'physPI': 'physics structure (view Physics)', 'selPI': 'network variant (1 CNN, 2 LSTM, 3 CNN + LSTM)'}
+
+
+def _value(k, v):
+    """Short text of a setting (the physics structure of the PI mode as a summary)."""
+    if isinstance(v, dict) and v.get('type') == 'foster':
+        return "Foster: " + "; ".join(f"T{c['out']} ← P{c['src']}: R = {', '.join(f'{r:.4g}' for r in c['R'])} K/W, "
+                                      f"τ = {', '.join(f'{x:.4g}' for x in c['tau'])} s" for c in v['foster']) + \
+            f" · sources {', '.join(v.get('src') or [])}"
+    if isinstance(v, dict) and v.get('type') == 'cauer':
+        return f"Cauer network, {len(v['cauer']['C'])} nodes · sources {', '.join(v.get('src') or [])}"
+    if k.endswith('physPI') and v is None:
+        return "none (default single Foster term)"
+    return v
+
+
+def _changes(t, changes=None, head=True):
+    """Readable table of the base config and the changes of a tutorial (or of one of its runs)."""
+    rows = [{'setting': 'base configuration', 'value': f"config/{t.get('base', 'default')}.json"}] if head else []
     runs = {var: label for var, _, label, _ in A.RUN_FIELDS}
-    for k, v in t['changes'].items():
+    for k, v in (t['changes'] if changes is None else changes).items():
+        v = _value(k, v)
         label, (sec, *rest) = k, k.split('.')
         if sec == A.RUN_SECTION and len(rest) == 1:
-            label = f"Run settings › {runs.get(rest[0], rest[0])}"
+            label = f"Run settings › {runs.get(rest[0], RUN_LABELS.get(rest[0], rest[0]))}"
         elif len(rest) == 2:
             try:
                 p = forms.find(sec, *rest)
@@ -59,7 +76,30 @@ def _changes(t):
             except KeyError:
                 pass
         rows.append({'setting': label, 'value': '(empty)' if v is None else str(v)})
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=['setting', 'value'])
+
+
+def runs(t):
+    """Runs of the table 'What you should see': their changes and a button that loads each one."""
+    st.markdown("**Runs of the table *What you should see*** — changes relative to the tutorial configuration; "
+                "load a run and press *Run* to reproduce its row.")
+    rows = []
+    for r in t['runs']:
+        ch = _changes(t, r['changes'], head=False)
+        txt = '; '.join(f"{a} = {b}" for a, b in zip(ch['setting'], ch['value']))
+        rows.append({'run': r['label'], 'changes': txt or 'none (the tutorial configuration)'})
+    table(pd.DataFrame(rows), hide_index=True, width='stretch')
+    c = st.columns([3, 1], vertical_alignment='bottom')
+    k = c[0].selectbox("Run", range(len(t['runs'])), format_func=lambda i: t['runs'][i]['label'],
+                       key=f"tut|run|{t['id']}")
+    if c[1].button("Load this run", icon=':material/download:', key=f"tut|runl|{t['id']}", width='stretch'):
+        forms.set_config(tut.run_config(t['id'], k), f"tutorials/{t['id']}")
+        if t['mode'] in A.MODES:
+            st.session_state[f"goto|{t['mode']}"] = 'Run'
+        st.session_state['tutorial'] = t['id']
+        st.toast(f"Run '{t['runs'][k]['label']}' loaded", icon=':material/check:')
+        if _target(t) in PAGES:
+            st.switch_page(PAGES[_target(t)])
 
 
 def _target(t):
@@ -147,3 +187,5 @@ def page():
             table(_changes(t), hide_index=True, width='stretch')
             st.caption(f"Config file: {A.CONFIG_DIR}/tutorials/{t['id']}.json — all other parameters are those of the "
                        f"base configuration. Load it in the sidebar or import it as JSON.")
+            if t.get('runs'):
+                runs(t)

@@ -16,13 +16,15 @@
 """
 This function trains a deep learning model (PyTorch) that maps a window of the input features (losses, optionally
 extended with EWMA/EWMS features) to the temperatures of all nodes (see dlNet). The windows are cut per profile, so
-no window spans two profiles. Training uses Adam with a piece-wise constant learning rate (factor lrDropFa every
-lrDropPr epochs), gradient norm clipping (gradTh), validation every valFreq iterations and early stopping after
+no window spans two profiles. Training uses Adam with a learning rate schedule (lrAdapt = 0: factor lrDropFa every
+lrDropPr epochs; lrAdapt = 1: factor lrDropFa after lrDropPr epochs without improvement of the validation loss, at
+least 1e-3·initLr), gradient norm clipping (gradTh), validation every valFreq iterations and early stopping after
 valPat validations without improvement; the network with the lowest validation loss is returned.
 Inputs:     1) data:    training data
             2) val:     validation data
             3) para:    all simulation parameters
-            4) setup:   includes all simulation variables (selDL, featRoll, EWMA, EWMS)
+            4) setup:   includes all simulation variables (selDL, featRoll, EWMA, EWMS, archDL: user-defined
+                        architecture of dlNet, optional, replaces selDL)
             5) legacy:  (0): corrected behaviour, (1): MATLAB behaviour
 Outputs:    1) mdl:     model {'sys': network, 'info': training history, 'seq', 'W'}
 
@@ -32,6 +34,12 @@ V1.0: 07.11.2026, Pascal Schirmer
 
 V1.1: 07.11.2026, Pascal Schirmer
 - Training on the CPU or the GPU (para['Mdl']['gen']['dev'], getDevice); the network is returned on the CPU
+
+V1.2: 08.11.2026, Pascal Schirmer
+- User-defined architecture (setup['archDL'], see dlNet)
+
+V1.3: 08.11.2026, Pascal Schirmer
+- Adaptive learning rate (lrAdapt), the learning rate is printed every epoch and stored in the history
 """
 
 #######################################################################################################################
@@ -123,9 +131,21 @@ def dlFit(data, val, para, setup, legacy=0):
     mu = Xtr.reshape(-1, F).mean(axis=0)
     sd = Xtr.reshape(-1, F).std(axis=0)
     sd[sd < 1e-12] = 1
-    net = dlNet(int(setup['selDL']), F, M, seq, mu, sd).to(dev)
+    arch = setup.get('archDL') or None
+    if arch:
+        print("INFO: User-defined architecture: " + ' -> '.join(f"{l['type']} {l['units']}" for l in arch['body'])
+              + f" -> head {arch.get('head', [])}")
+    net = dlNet(int(setup['selDL']), F, M, seq, mu, sd, arch=arch).to(dev)
     opt = torch.optim.Adam(net.parameters(), lr=dl['initLr'])
-    sch = torch.optim.lr_scheduler.StepLR(opt, step_size=max(int(dl['lrDropPr']), 1), gamma=dl['lrDropFa'])
+    lrAd = int(dl.get('lrAdapt', 0) or 0)
+    if lrAd == 1:
+        sch = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=dl['lrDropFa'], threshold=1e-3,
+                                                         patience=max(int(dl['lrDropPr']) - 1, 0),
+                                                         min_lr=1e-3 * dl['initLr'])
+        print("INFO: Adaptive learning rate: factor %g after %d epoch(s) without improvement of the validation loss"
+              % (dl['lrDropFa'], max(int(dl['lrDropPr']), 1)))
+    else:
+        sch = torch.optim.lr_scheduler.StepLR(opt, step_size=max(int(dl['lrDropPr']), 1), gamma=dl['lrDropFa'])
     lossFnc = _loss(int(dl['loss']), legacy)
     Xtr, ytr = torch.from_numpy(Xtr), torch.from_numpy(ytr)
     Xvl, yvl = torch.from_numpy(Xvl).to(dev), torch.from_numpy(yvl).to(dev)
@@ -137,14 +157,15 @@ def dlFit(data, val, para, setup, legacy=0):
     # Calculation
     ###################################################################################################################
     best, bestNet, wait, it, stop = np.inf, copy.deepcopy(net.state_dict()), 0, 0, False
-    info = {'iter': [], 'loss': [], 'valIter': [], 'valLoss': [], 'device': str(dev)}
+    info = {'iter': [], 'loss': [], 'valIter': [], 'valLoss': [], 'lrIter': [], 'learnRate': [], 'lrAdapt': lrAd,
+            'device': str(dev)}
     for ep in range(0, epoch):
         if dl['shu'] not in (1, 2):
             order = torch.randperm(len(Xtr))
         net.train()
         for b in range(0, len(Xtr), batch):
             idx = order[b:b + batch]
-            if len(idx) < 2 and int(setup['selDL']) == 1:
+            if len(idx) < 2:                                            # BatchNorm needs two samples
                 continue
             opt.zero_grad()
             loss = lossFnc(net(Xtr[idx].to(dev)), ytr[idx].to(dev))
@@ -154,7 +175,7 @@ def dlFit(data, val, para, setup, legacy=0):
             opt.step()
             it = it + 1
             info['iter'].append(it)
-            info['loss'].append(float(loss))
+            info["loss"].append(float(loss.detach()))
 
             # Validation
             if it % valFreq == 0:
@@ -171,8 +192,17 @@ def dlFit(data, val, para, setup, legacy=0):
                     stop = wait >= valPat
                 if stop:
                     break
-        sch.step()
-        print("INFO: Epoch %d/%d, training loss %.4e, best validation loss %.4e" % (ep + 1, epoch, float(loss), best))
+        lrEp = opt.param_groups[0]['lr']
+        info['lrIter'].append(it)
+        info['learnRate'].append(lrEp)
+        if lrAd == 1:
+            sch.step(info['valLoss'][-1] if info['valLoss'] else float(loss))
+        else:
+            sch.step()
+        print("INFO: Epoch %d/%d, lr %.3e, training loss %.4e, best validation loss %.4e" % (ep + 1, epoch, lrEp,
+                                                                                            float(loss), best))
+        if opt.param_groups[0]['lr'] < lrEp:
+            print("INFO: Learning rate reduced to %.3e" % opt.param_groups[0]['lr'])
         if stop:
             print("INFO: Early stopping (validation patience %d)" % valPat)
             break

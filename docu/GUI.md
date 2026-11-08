@@ -28,7 +28,7 @@ python start_gui.py                      # opens http://localhost:8501
 | **Project › Setup** | Ready-made setups (tutorials, journal, lecture), project settings (name, output, numerics, train/test switches), data (format, dimension, split, files, channels) |
 | **Project › Input data** | 1D time series and 2D/3D fields of the data sets, read with the toolkit loader (`DataLoader`) |
 | **Operating modes** | One page per model family (RC, SS, SF, PO, PS, ML, DL, PI) plus the **Study** page |
-| **Theory & Tools** | Power losses, Thermal stack, Hand calculator, Thermal networks, MOR & POD, Numerics, Board designer |
+| **Theory & Tools** | Power losses, Thermal stack, Hand calculator, Thermal networks, MOR & POD, Numerics, Neural networks, Board designer |
 | **Results** | Browser of all results folders, including runs started from the start scripts |
 | **Help** | Tutorials and this guide |
 
@@ -60,22 +60,89 @@ Every page has the views below:
 | DL | CNN / LSTM / CNN + LSTM on windows | 3 networks | 1D | **Architecture diagram from the network code** (layers, shapes, parameters), windows over a profile |
 | PI | CNN + LSTM with a physics loss | – | 1D | **Network and loss graph** (data loss + residual of the lumped stator model), residual explorer |
 
+**Network view of the DL mode**
+- Shows the network that will be trained: parameters, receptive field, output shape, a layer table (output shape and
+  parameters per layer) and the architecture diagram.
+- *User-defined architecture* (switch) replaces the built-in network of the model variant with a layer table
+  (`setup['archDL']`, saved with the configuration): conv (units, kernel, dilation), lstm / gru (units,
+  bidirectional), transformer encoder (units, heads), dense; normalisation, activation and dropout per layer; the
+  pooling of seq2point and the hidden dense layers of the head.
+- Presets to start from: CNN, LSTM, CNN-LSTM (identical to the built-in networks), GRU, stacked LSTM,
+  bidirectional LSTM, TCN (dilated CNN), transformer. Own architectures are saved to `config/gui/dl_arch_lib.json`
+  and appear marked ★.
+
 **Notes on DL and PI**
 - The results view shows:
   - the training history;
   - for PI, the data loss and the physics loss separately;
   - the architecture of the trained network.
-- The PINN adds the residual of a lumped model of one output (`Mdl › pinn › node`):
-  `C_th·dT/dt = (T_ref − T)/R_th + P_v`.
-  - P_v is an input feature (`PvSrc = k`) or an equation (`PvSrc = 0`, `PvEq`) of the inputs `x1, x2, …` (raw
-    units), the predicted temperature `T` and the constants `Rth, Cth, Rs` and those of `const` (`a=1; b=2`).
-    Allowed: `+ − * / **`, `abs sqrt exp log sin cos tan tanh minimum maximum where`. Example with the
-    temperature-dependent copper resistance: `3*Rs*(1+0.00393*(T-20))*x4**2`.
-  - T_ref is an input feature (`TrefSrc = k`) or the constant `Tref` (`TrefSrc = 0`).
-  - The equation is checked before training; the PI theory page evaluates it at an operating point.
-  - The network follows the sub-mode (CNN, LSTM, CNN + LSTM).
-- The physics weight β (`Mdl › pinn › beta`) is 0 by default, as in MATLAB. The network then trains on the data
-  only.
+- **PINN (PI mode).** The network predicts the states x of a linear thermal network,
+  `C·dx/dt = E·P − G·x`, and the outputs are `T̂ = T_ref + O·x`. The loss is
+  `L = α·L_data + β·L_phys + γ·L_init`, with every part relative to the temperature scale ΔT (the 99th percentile of
+  |T − T_ref|), so β is dimensionless (typically 0.01 … 1):
+  - `L_data = mean(((T̂ − T)/ΔT)²)`;
+  - `L_phys = mean(((C·dx/dt + G·x − E·P)/(diag(G)·ΔT))²)`;
+  - `L_init` holds T̂ at the measured start temperature during about τ_min.
+
+  The first `warm` samples of every window are left out.
+  - **Where the settings are.** All PINN settings are in the view *Physics*: physics model, loss weights α, β, γ,
+    warm-up, initial state, prediction, collocation, reference temperature, constants, loss sources and the
+    structure. *Parameters* only holds the general settings and the training of the network (`dl`: W, stride,
+    epochs, learning rate and its schedule, batch, early stopping).
+  - **Physics** (`Mdl › pinn › phys`, view *Physics*, stored as `setup['physPI']`). Three choices:
+    - 0 = none;
+    - 1 = Foster terms (one state per term, τ·dθ/dt = R·P_j − θ; single or multiple outputs, coupling chains
+      allowed);
+    - 2 = Cauer / nodal network (node and resistance tables, hidden nodes only enter L_phys).
+
+    Without physPI a default single Foster term is used; edit it in the structure table.
+  - **Constants** (view *Physics* › section 3): a general list `name = value [unit] meaning`, e.g.
+    `Rs = 0.0141 [Ohm] stator resistance; k = 0.00393 [1/K] temperature coefficient`, stored in `Mdl › pinn › const`.
+    The V1.x parameters `Rth`, `Cth`, `Rs`, `PvSrc`, `PvEq` are no longer shown in the GUI; the command line still
+    reads them, and an `Rs` used in an equation is moved into the list.
+  - **Loss sources P_j** are equations of the inputs `x1, x2, …` (raw units), the predicted outputs `T1, T2, …`
+    (`T` = output `node`) and the constants. Allowed: `+ − * / **`, `abs sqrt exp log sin cos tan tanh minimum
+    maximum where`. Example: `3*Rs*(1+k*(T-20))*x4**2`.
+  - **T_ref** (`TrefSrc`): 0 = constant `Tref`, k = feature k, −1 = the reference channels of the data.
+  - **Import** (view *Physics* › section 6). Five sources:
+    - fit on the training data with the RC mode (Foster chain per output) or the SF mode (coupled Cauer network);
+    - trained `mdl/mdl_rc_*.pkl` / `mdl_sf_*.pkl`;
+    - the network exported by the board designer (`data/board/<name>_pinn.json` or its CSV);
+    - exact Cauer → Foster conversion (modal);
+    - Foster → Cauer conversion (continued fraction per self-heating chain).
+
+    The step responses Z_th(t), the network diagram, the matrices and a simulation of the physics alone on the
+    training data show how good the physics is.
+  - **Training details:**
+    - `x0 = 1` gives the network the measured rise at the start of a window as an extra input. Training: every
+      window (one per `stride`) gets its own measured start. Validation and testing: only the first sample of every
+      profile is measured.
+    - `pred = 1` predicts every test profile in one pass from its measured initial temperature; `pred = 2` chains
+      windows, each starting from the predicted end of the previous one.
+    - The validation runs exactly like the testing (whole profiles from their first sample), so early stopping and
+      the kept network refer to the test procedure. The log also prints the error with measured window starts; the
+      gap between the two is the error that builds up over a profile.
+    - Learning rate (`Mdl › dl › lrAdapt`, DL and PI): 0 = factor `lrDropFa` every `lrDropPr` epochs; 1 = adaptive,
+      factor `lrDropFa` after `lrDropPr` epochs without a better validation error (minimum 1e-3·initLr). The rate
+      is printed every epoch and drawn in the convergence chart of the results.
+    - Profiles are cut at every session ID of the data.
+    - `col` (collocation) evaluates L_phys also on the inputs of the validation (1), testing (2) or both (3) data
+      sets. Their temperatures are never used.
+  - **Network** (view *Network*): any architecture as in the DL mode (`setup['archPI']`), with outputs = the states
+    of the physics.
+  - **Explanations:**
+    - *Physics* › *How the parameters enter the PINN* shows the equations with the current value of every
+      parameter.
+    - *Theory* › *Example: variation of α, β, γ* trains a small PINN on synthetic data, with sliders for noise,
+      physics mismatch, labelled and unlabelled profiles, and a β sweep.
+  - **Results:** the temperature chart groups its legend per output: a click hides or shows the measured and
+    predicted temperature and the error of that output together.
+  - **Tutorials** (all settings are in the tutorial, *Settings of the tutorial* lists them and loads every run of
+    the result table):
+    - `pi_physics` (motor, fitted two-term Foster physics, β = 0.01): test MAE 1.66 K vs 2.00 K without physics weight
+    - `pi_board` (three chips of the board designer, coupled Cauer network with 6 nodes, β = 1, col = 3): mean MAE
+      0.82 K vs 1.47 K without physics. The data are generated with `python setup/tutorial/genBoardPINN.py`, or with
+      *Export for the PI mode* in the board designer.
 - DL and PI training on the CPU takes minutes to hours. `Mdl › gen › dev = 1` trains on the GPU (CUDA). This needs
   a CUDA build of PyTorch, e.g. `pip install torch==2.15.0 --index-url https://download.pytorch.org/whl/cu132`; otherwise a
   warning is printed and the CPU is used. The ML models (scikit-learn) always run on the CPU.
@@ -113,6 +180,7 @@ Self-contained calculators. They do not change the configuration.
 | Thermal networks | Sketch of a heat path next to its Foster and Cauer networks; Foster → Cauer conversion, Z_th, structure function, pulse response (rcSim) |
 | MOR & POD | Sketch of the POD pipeline; POD-Galerkin vs. modal truncation on a 1D rod |
 | Numerics | Sketch of the rod with control volumes and its RC ladder; explicit/implicit/Crank-Nicolson, stability, stiffness, grid convergence; quadrature weights W, relative element size J (legacy) and the calibration of C_th/G_th (rcond, prior λ, SF bounds) with explorers |
+| Neural networks | DNN, CNN, LSTM, transformer (TRA) and PINN on thermal examples: sketch, live demo (Z_th fit, receptive field as truncated impulse response, forget gate = exp(−h/τ), attention as exponential memory, physics loss fixing the extrapolation), equations with symbols; data & initial state (why a constant load is ambiguous in a transient — best possible error from the chosen inputs: window length, start temperature θ₀, last temperature, time since start; coverage of the test operating points by the training profile; checklist for a training data set); training (learning rate, setup parameters) |
 | Board designer | 2D board model, POD reduced model, export to the PO/PS modes (section 6) |
 
 ## 6. Board designer
@@ -149,6 +217,15 @@ The board designer builds a finite-volume model of a board with chips. The model
 - The simulation raises k_z of the FR4 cells in the via region; the lumped export model lowers the local
   through-plane resistance instead.
 
+**Additional losses in the board** (switch)
+- Losses that are not in the chips: I²R of traces and planes, shunts, gate drivers, passives.
+- One row per region: layer of the stack-up (0 = top), centre x, y, size w × l (empty = whole board), loss P in W.
+- The loss is constant over the run and spread over the control volumes of the region in that layer (term `q_i` of
+  the model). The finite-volume model and the POD model include it (with step-response training the steady field of
+  the board losses is added as one snapshot); the Cauer network adds its steady junction temperature rise as an
+  offset. The step responses, the R_th matrix and the export to the PO mode describe the chips only.
+- The regions are drawn dashed red in the top view and in the cross-section.
+
 **Chips**
 - *Add a chip* (technology, position, loss) or edit the table directly: position, size, loss, profile (step, pulse,
   sine, random), period.
@@ -157,6 +234,8 @@ The board designer builds a finite-volume model of a board with chips. The model
   W, or scale × P of the chip table if that column is empty; ramps are linear. The sequence can be repeated, edited
   and saved. Template and example (inverter drive cycle):
   `data/board/mission/template_mission.csv`, `data/board/mission/example_driveCycle.csv`.
+- The **layout** (top view and cross-section side by side, same height; cut position y above them) is always shown
+  below the chip table.
 - Own chip technologies are defined in *Chip technologies › Own technologies* (die, thickness, size, die attach,
   T_j,max). They can be saved to the library.
 

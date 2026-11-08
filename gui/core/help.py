@@ -163,8 +163,16 @@ HELP = {
     'Mdl.dl.loss': "Training loss: 1) MSE, 2) MAE, 3) Huber, 4) custom.",
     'Mdl.dl.gradTh': "Gradient norm clipping threshold (stabilises LSTM training; 0 or inf = off).",
     'Mdl.dl.initLr': "Initial learning rate of Adam. 1e-3 is a safe start; too large gives a jumping loss.",
-    'Mdl.dl.lrDropPr': "The learning rate is multiplied by lrDropFa every lrDropPr epochs.",
-    'Mdl.dl.lrDropFa': "Factor of the learning rate drop (0–1).",
+    'Mdl.dl.lrDropPr': "Period of the learning rate drop in epochs. lrAdapt = 0: the rate is multiplied by lrDropFa "
+                       "every lrDropPr epochs; lrAdapt = 1: after lrDropPr epochs without improvement of the "
+                       "validation error. Keep it below valPat, otherwise early stopping ends the training first.",
+    'Mdl.dl.lrDropFa': "Factor of the learning rate drop (0–1), e.g. 0.5 halves the rate.",
+    'Mdl.dl.lrAdapt':
+        "Learning rate schedule. 0: fixed steps (factor lrDropFa every lrDropPr epochs, also when the training "
+        "still improves). 1: adaptive — the rate is reduced by lrDropFa only when the validation error has not "
+        "improved by 0.1 % for lrDropPr epochs (plateau), down to 1e-3·initLr. Adam already scales every weight's "
+        "step; the schedule sets the overall size. The rate of every epoch is printed in the log and drawn in the "
+        "convergence plot of the results.",
     'Mdl.dl.valFreq': "Validation every valFreq iterations (mini-batches).",
     'Mdl.dl.batch': "Mini-batch size (windows per gradient step). Larger = faster per epoch, smoother gradient.",
     'Mdl.dl.shu': "Shuffling of the windows: 1) never, 2) once, 3) every epoch.",
@@ -175,31 +183,70 @@ HELP = {
     'Mdl.dl.seq': "0: seq2seq (the network predicts the whole window), x > 0: seq2point (the network predicts "
                   "sample x of the window; x = W means causal, only past inputs).",
     'Mdl.dl.valPat': "Early stopping patience: validations without improvement before training stops.",
-    'Mdl.pinn.Rth': "Thermal resistance of the lumped physics model Cth·dT/dt = (T_ref − T)/Rth + Pv (K/W), from "
-                    "the node to the reference temperature.",
-    'Mdl.pinn.Cth': "Thermal capacitance of the lumped physics model (Ws/K). τ = Rth·Cth is its time constant.",
-    'Mdl.pinn.Rs': "Stator resistance (Ω); available as the constant Rs in the loss equation (default 3·Rs·x4²).",
-    'Mdl.pinn.alpha': "Weight α of the data loss mean((T̂ − T)²).",
+    'Mdl.pinn.phys':
+        "Physics of the residual. 0: none (the PINN is a DL network with the same windows); 1: Foster terms — "
+        "one chain Σ R_k(1 − e^(−t/τ_k)) per output (and optionally per output/source pair for the coupling); "
+        "2: Cauer / nodal network C·dx/dt = E·P − G·x with hidden nodes (e.g. from the SF mode or the board "
+        "designer). The structure is edited in the view *Physics*; without one, a single RC term (Rth, Cth) of "
+        "the output 'node' is used.",
+    'Mdl.pinn.Rth': "V1.x parameter (not shown in the GUI): thermal resistance (K/W) of the default Foster term "
+                    "used when no structure was set in the view Physics. In the GUI the term is edited in Physics › "
+                    "structure.",
+    'Mdl.pinn.Cth': "V1.x parameter (not shown in the GUI): thermal capacitance (Ws/K) of the default term, "
+                    "τ = Rth·Cth.",
+    'Mdl.pinn.Rs': "V1.x parameter (not shown in the GUI): stator resistance (Ω), the constant Rs of the loss "
+                   "equations unless the list of constants (Physics › Constants) defines Rs.",
+    'Mdl.pinn.alpha': "Weight α of the data loss mean(((T̂ − T)/ΔT)²); ΔT is the temperature scale of the training "
+                      "data, so the loss is dimensionless. Usually 1.",
     'Mdl.pinn.beta':
-        "Weight β of the physics residual mean(r²). 0 = data only (as MATLAB). The residual is in W, its square is "
-        "large (10⁶–10⁸ W²), so useful values are small (1e-8–1e-5): compare β·L_phys with α·L_data in the "
-        "results.",
+        "Weight β of the dimensionless physics residual r = (C·dx/dt + G·x − E·P)/(diag(G)·ΔT). 0 = data only. "
+        "Both losses are relative to ΔT, so β does not depend on the units: 0.01–1 is the useful range (β = 0.1: "
+        "a residual of 10 % of ΔT costs as much as a data error of 3 % of ΔT). Too large: the network follows the "
+        "(simplified) physics instead of the data.",
+    'Mdl.pinn.gamma':
+        "Weight γ of the initial-condition loss: at the start of every profile the prediction must stay at the "
+        "measured initial temperature (weight exp(−t/τ_min)). Helps profiles that start in thermal equilibrium; "
+        "0 = off.",
+    'Mdl.pinn.warm':
+        "Samples at the start of every training window that are excluded from all losses. The recurrent state of "
+        "the network does not know the thermal history of a window at its first samples; with a warm-up the "
+        "network learns to estimate it from the inputs instead of being punished for it. 5–10 % of W.",
+    'Mdl.pinn.pred':
+        "1: the network runs over every testing profile in one pass (the LSTM state is carried from the start, "
+        "no jumps at window boundaries; recommended). 2: consecutive windows of W samples as in the DL mode "
+        "(every window starts without history).",
+    'Mdl.pinn.x0':
+        "Initial state as an input (repeated over the window). Training: every window gets the measured temperature "
+        "rise at its own first sample (one value per window, i.e. every stride samples) — without it a window that "
+        "starts in the middle of a profile has an unknown thermal state, which the network can only guess from the "
+        "inputs. Validation and testing: only the very first sample of every profile is measured; pred = 1 runs "
+        "the whole profile from it, pred = 2 chains the windows (each starts from the predicted end of the previous "
+        "one). Measured temperatures inside a test profile are never used.",
+    'Mdl.pinn.col':
+        "Collocation profiles: input profiles without temperatures on which only the physics loss is evaluated. "
+        "0: none, 1: inputs of the validation data, 2: inputs of the testing data, 3: both. The measured "
+        "temperatures of these profiles are never used — only the losses and the ambient, which are known in "
+        "advance for a planned load cycle. Helps most with little labelled data and an accurate physics (example "
+        "in Theory: one labelled profile, 12 K → 4 K test RMSE with 6 unlabelled profiles).",
     'Mdl.pinn.PvSrc':
-        "Where the losses Pv of the physics residual come from. 0: the equation PvEq; k > 0: input feature k is "
-        "already the loss in W (e.g. measured or simulated losses).",
+        "Loss of the single RC term (no structure set in Physics). 0: the equation PvEq; k > 0: input feature k "
+        "is already the loss in W. In the view Physics every loss source is an equation such as 'x4' or "
+        "'3*Rs*x4**2'.",
     'Mdl.pinn.PvEq':
         "Loss equation (W) for PvSrc = 0, evaluated on every sample of the window. Symbols: x1, x2, … input "
-        "features (raw units), T predicted temperature of the residual node (°C), Rth, Cth, Rs and the constants "
-        "of 'Constants'. Operators + − * / ** and abs, sqrt, exp, log, sin, cos, tanh, minimum, maximum. "
-        "Examples: 3*Rs*x4**2 (copper losses), 3*Rs*(1+0.00393*(T-20))*x4**2 (with temperature-dependent "
-        "resistance), x1*x2 (voltage × current), k*x3**2 + p0 with const 'k=0.01; p0=50'.",
-    'Mdl.pinn.const': "Constants of the loss equation, 'name=value' separated by semicolons, e.g. 'k=0.01; p0=50'. "
-                      "Empty or 0: none.",
-    'Mdl.pinn.TrefSrc': "Reference temperature of the residual (ambient, coolant). 0: the constant Tref; k > 0: "
-                        "input feature k in °C (motor data: feature 2 = ambient).",
+        "features (raw units), T predicted temperature of the output 'node' and T1, T2, … of every output (°C), "
+        "Rth, Cth, Rs and the constants of 'Constants'. Operators + − * / ** and abs, sqrt, exp, log, sin, cos, "
+        "tanh, minimum, maximum. Examples: 3*Rs*x4**2 (copper losses), 3*Rs*(1+0.00393*(T-20))*x4**2 (with "
+        "temperature-dependent resistance), x1*x2 (voltage × current), k*x3**2 + p0 with const 'k=0.01; p0=50'.",
+    'Mdl.pinn.const': "Constants of the loss equations (view Physics › Constants): 'name = value [unit] meaning' "
+                      "separated by semicolons, e.g. 'Rs = 0.0141 [Ohm] stator resistance; k = 0.00393 [1/K] "
+                      "temperature coefficient'. Empty or 0: none.",
+    'Mdl.pinn.TrefSrc': "Reference temperature of the physics (ambient, coolant). 0: the constant Tref; k > 0: "
+                        "input feature k in °C (motor data: feature 2 = coolant); −1: the reference channel of every "
+                        "output (Setup › reference, e.g. Tc1, Tc2, … of the SF data).",
     'Mdl.pinn.Tref': "Constant reference temperature for TrefSrc = 0 (°C).",
-    'Mdl.pinn.node': "Output (1 = first) whose prediction enters the residual; the other outputs are trained on the "
-                     "data only.",
+    'Mdl.pinn.node': "Output (1 = first) of the single RC term (no structure set in Physics) and the meaning of T in "
+                     "the loss equations; other outputs without physics are trained on the data only.",
     'Mdl.gen.dev':
         "Compute device of the neural networks (DL, PI). 1: GPU via CUDA if PyTorch was installed with CUDA "
         "support, otherwise the CPU is used with a warning. The scikit-learn models of the ML mode always run on "
@@ -243,8 +290,9 @@ BASIC = {
     'Mdl.dt.leaf', 'Mdl.dt.split', 'Mdl.svm.kernel', 'Mdl.svm.C', 'Mdl.gpr.kernel', 'Mdl.en.method', 'Mdl.en.cycle',
     'Mdl.nn.layer', 'Mdl.nn.nodes', 'Mdl.nn.act',
     'Mdl.dl.epoch', 'Mdl.dl.initLr', 'Mdl.dl.batch', 'Mdl.dl.W', 'Mdl.dl.seq', 'Mdl.dl.loss',
-    'Mdl.pinn.alpha', 'Mdl.pinn.beta', 'Mdl.pinn.Rth', 'Mdl.pinn.Cth', 'Mdl.pinn.PvSrc', 'Mdl.pinn.PvEq',
-    'Mdl.pinn.const', 'Mdl.pinn.TrefSrc', 'Mdl.pinn.Tref', 'Mdl.gen.dev',
+    'Mdl.dl.lrAdapt', 'Mdl.dl.lrDropPr', 'Mdl.dl.lrDropFa', 'Mdl.dl.valPat', 'Mdl.dl.stride',
+    'Mdl.pinn.phys', 'Mdl.pinn.alpha', 'Mdl.pinn.beta', 'Mdl.pinn.gamma', 'Mdl.pinn.warm', 'Mdl.pinn.pred',
+    'Mdl.pinn.x0', 'Mdl.pinn.col', 'Mdl.pinn.TrefSrc', 'Mdl.pinn.Tref', 'Mdl.pinn.node', 'Mdl.gen.dev',
     'Par.gen.normX', 'Par.gen.normY', 'Par.loss.fw', 'Par.loss.bw',
 }
 
@@ -266,6 +314,14 @@ def _ml(c):
 
 def _probe(c):
     return int(_run(c, 'datDim', 1)) > 1 and int(c['Dat']['gen']['dOut']) == 1
+
+
+def _single(c):
+    """PINN with the single RC term of the scalar parameters (no structure in setup physPI)."""
+    p = c['Mdl'].get('pinn', {})
+    st = _run(c, 'physPI', None) or {}
+    return int(p.get('phys', 1) or 0) != 0 and not (st.get('type') == {1: 'foster', 2: 'cauer'}.get(
+        int(p.get('phys', 1) or 0)) and st.get('src'))
 
 
 def _loss(c):
@@ -298,9 +354,12 @@ ACTIVE = {
     'Mdl.dl.loss': lambda c: _mode(c) == 'DL',
     'Mdl.dl.valFreq': lambda c: _mode(c) == 'DL',
     'Mdl.gen.dev': lambda c: _mode(c) in ('DL', 'PI'),
-    'Mdl.pinn.PvEq': lambda c: int(c['Mdl']['pinn'].get('PvSrc', 0) or 0) == 0,
-    'Mdl.pinn.const': lambda c: int(c['Mdl']['pinn'].get('PvSrc', 0) or 0) == 0,
-    'Mdl.pinn.Rs': lambda c: int(c['Mdl']['pinn'].get('PvSrc', 0) or 0) == 0,
+    'Mdl.pinn.PvEq': lambda c: _single(c) and int(c['Mdl']['pinn'].get('PvSrc', 0) or 0) == 0,
+    'Mdl.pinn.PvSrc': _single,
+    'Mdl.pinn.Rth': _single, 'Mdl.pinn.Cth': _single,
+    'Mdl.pinn.beta': lambda c: int(c['Mdl']['pinn'].get('phys', 1) or 0) != 0,
+    'Mdl.pinn.col': lambda c: int(c['Mdl']['pinn'].get('phys', 1) or 0) != 0 and
+    float(c['Mdl']['pinn'].get('beta', 0) or 0) > 0,
     'Mdl.pinn.Tref': lambda c: int(c['Mdl']['pinn'].get('TrefSrc', 0) or 0) == 0,
     'Mdl.sf.bnd': lambda c: int(_run(c, 'selSF', 2) or 2) == 2,
     'Mdl.sf.Nmax': lambda c: int(_run(c, 'selSF', 2) or 2) == 2,

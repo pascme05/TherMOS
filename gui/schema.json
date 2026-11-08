@@ -683,7 +683,7 @@
    "cat": "dl",
    "var": "lrDropPr",
    "name": "LearnRateDropPeriod",
-   "desc": "Specifies the number of epochs between reductions of the learning rate when using the 'piecewise' schedule.",
+   "desc": "Learning rate drop period in epochs: fixed schedule (lrAdapt = 0) every lrDropPr epochs, adaptive (lrAdapt = 1) after lrDropPr epochs without improvement of the validation error",
    "unit": null,
    "type": "int",
    "percent": false,
@@ -704,6 +704,22 @@
    "nested": true,
    "optional": false,
    "default": 0.2
+  },
+  {
+   "cat": "dl",
+   "var": "lrAdapt",
+   "name": "Adaptive Learning Rate",
+   "desc": "Learning rate schedule",
+   "unit": null,
+   "type": "int",
+   "percent": false,
+   "options": {
+    "0": "fixed steps, factor LearnRateDropFactor every LearnRateDropPeriod epochs",
+    "1": "adaptive, factor LearnRateDropFactor after LearnRateDropPeriod epochs without improvement of the validation error (minimum 1e-3 of the initial rate)"
+   },
+   "nested": true,
+   "optional": false,
+   "default": 0
   },
   {
    "cat": "dl",
@@ -1005,7 +1021,7 @@
    "cat": "pinn",
    "var": "alpha",
    "name": "Data Loss Weight",
-   "desc": "Weight α of the data loss mean((T̂ - T)²)",
+   "desc": "Weight α of the data loss mean(((T̂ - T)/ΔT)²) (ΔT: temperature scale of the training data)",
    "unit": null,
    "type": "float",
    "percent": false,
@@ -1018,14 +1034,14 @@
    "cat": "pinn",
    "var": "beta",
    "name": "Physics Loss Weight",
-   "desc": "Weight β of the physics residual mean(r²); 0 = data only (MATLAB default)",
+   "desc": "Weight β of the dimensionless physics residual mean(r²), r = (C·dx/dt + G·x - E·P)/(diag(G)·ΔT); 0 = data only. Typical 0.01 ... 1",
    "unit": null,
    "type": "float",
    "percent": false,
    "options": null,
    "nested": true,
    "optional": false,
-   "default": 0
+   "default": 0.1
   },
   {
    "cat": "gen",
@@ -1099,7 +1115,7 @@
    "cat": "pinn",
    "var": "const",
    "name": "Constants PINN",
-   "desc": "Further constants of the loss equation separated by semicolons, e.g. \"k=0.004; T0=20\" (0 = none).",
+   "desc": "Constants of the loss equations: 'name = value [unit] meaning' separated by semicolons, e.g. 'Rs = 0.0141 [Ohm] stator resistance; k = 0.00393 [1/K] temperature coefficient' (GUI: Physics > Constants)",
    "unit": null,
    "type": "str",
    "percent": false,
@@ -1146,6 +1162,99 @@
    "nested": true,
    "optional": false,
    "default": 1
+  },
+  {
+   "cat": "pinn",
+   "var": "phys",
+   "name": "Physics Model PINN",
+   "desc": "Physics of the residual",
+   "unit": null,
+   "type": "int",
+   "percent": false,
+   "options": {
+    "0": "none, data only",
+    "1": "Foster terms (single or several outputs)",
+    "2": "Cauer / nodal network (structure in the GUI view Physics, setup physPI; without it one RC term from Rth, Cth)"
+   },
+   "nested": true,
+   "optional": false,
+   "default": 1
+  },
+  {
+   "cat": "pinn",
+   "var": "gamma",
+   "name": "Initial Condition Weight",
+   "desc": "Weight γ of the initial-condition loss: at the start of every profile the prediction stays at the measured initial temperature, weighted with exp(-t/τ_min); 0 = off",
+   "unit": null,
+   "type": "float",
+   "percent": false,
+   "options": null,
+   "nested": true,
+   "optional": false,
+   "default": 0
+  },
+  {
+   "cat": "pinn",
+   "var": "warm",
+   "name": "Warm-up Samples PINN",
+   "desc": "Samples at the start of every training window that are excluded from all losses (the recurrent state settles)",
+   "unit": null,
+   "type": "int",
+   "percent": false,
+   "options": null,
+   "nested": true,
+   "optional": false,
+   "default": 50
+  },
+  {
+   "cat": "pinn",
+   "var": "pred",
+   "name": "Prediction Mode PINN",
+   "desc": "Prediction of the testing profiles",
+   "unit": null,
+   "type": "int",
+   "percent": false,
+   "options": {
+    "1": "whole profile in one pass (state carried from the start)",
+    "2": "consecutive windows of W samples"
+   },
+   "nested": true,
+   "optional": false,
+   "default": 1
+  },
+  {
+   "cat": "pinn",
+   "var": "x0",
+   "name": "Initial State Input PINN",
+   "desc": "Initial state input: the measured temperature rise at the start of a window is an extra input; training: every window (one per stride) gets its own measured start, validation and testing: only the first sample of every profile is measured (windows continue from the prediction). Options",
+   "unit": null,
+   "type": "int",
+   "percent": false,
+   "options": {
+    "0": "off",
+    "1": "on"
+   },
+   "nested": true,
+   "optional": false,
+   "default": 1
+  },
+  {
+   "cat": "pinn",
+   "var": "col",
+   "name": "Collocation Profiles PINN",
+   "desc": "Collocation profiles of the physics loss: only their inputs (losses, ambient) are used, never the measured temperatures; helps most with little labelled data and an accurate physics. Options",
+   "unit": null,
+   "type": "int",
+   "percent": false,
+   "options": {
+    "0": "none",
+    "1": "inputs of the validation data",
+    "2": "inputs of the testing data",
+    "3": "both"
+   },
+   "nested": true,
+   "optional": false,
+   "default": 0
   }
  ],
  "Par": [

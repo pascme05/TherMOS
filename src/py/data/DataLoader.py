@@ -186,7 +186,8 @@ class DataLoader:
                'y': df[list(setup['out'])].to_numpy(dtype=float),
                'r': df[list(setup['ref'])].to_numpy(dtype=float),
                'Ts': self.Ts,
-               'Data': df.drop(columns=[c for c in ['time', 'id'] if c in df.columns])}
+               'Data': df.drop(columns=[c for c in ['time', 'id'] if c in df.columns]),
+               'sid': df['id'].to_numpy() if 'id' in df.columns else None}
 
         return out
 

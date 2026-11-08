@@ -112,17 +112,21 @@ def response(data, setup, key):
             idx = [names.index(x) for x in pick]
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.68, 0.32], vertical_spacing=0.06)
     for j, i in enumerate(idx):
-        fig.add_trace(line(t, yT[:, i], f"{names[j] if field else names[i]} measured", j), 1, 1)
-        fig.add_trace(line(t, yP[:, i], f"{names[j] if field else names[i]} predicted", j, dash='dash'), 1, 1)
-        fig.add_trace(line(t, yT[:, i] - yP[:, i], f"error {names[j] if field else names[i]}", j, width=1.3,
-                           showlegend=False), 2, 1)
+        nm = names[j] if field else names[i]
+        grp = dict(legendgroup=nm, legendgrouptitle_text=nm)              # one group per output: T, T̂ and error
+        fig.add_trace(line(t, yT[:, i], "measured", j, **grp), 1, 1)
+        fig.add_trace(line(t, yP[:, i], "predicted", j, dash='dash', legendgroup=nm), 1, 1)
+        fig.add_trace(line(t, yT[:, i] - yP[:, i], "error T − T̂", j, width=1.3, dash='dot', legendgroup=nm), 2, 1)
+    fig.update_layout(legend=dict(groupclick='togglegroup'))
     fig.update_yaxes(title_text="Temperature (°C)", row=1, col=1)
     fig.update_yaxes(title_text="T − T̂ (K)", row=2, col=1)
     fig.update_xaxes(title_text="Time (s)", row=2, col=1)
     show(fig, height=520, key=f"{key}|resp",
          info="**Temperature over time (testing data).** Solid: measured, dashed: predicted, bottom: error "
-              "T − T̂. An error that drifts with time points to a wrong steady-state resistance; an error that "
-              "peaks at load steps and decays points to wrong time constants.")
+              "T − T̂. The legend is grouped per output: a click on an entry hides or shows the measured and "
+              "predicted temperature and the error of that output together (double click: only this output). An "
+              "error that drifts with time points to a wrong steady-state resistance; an error that peaks at load "
+              "steps and decays points to wrong time constants.")
 
 
 def scatter(data, setup, key):
@@ -375,49 +379,117 @@ def pod_view(data, setup, key):
              "steady state).")
 
 
+def convergence(info, key):
+    """Training history with the learning rate (right axis): DL per iteration, PINN per epoch."""
+    loss = np.asarray(info['loss'], dtype=float)
+    pinn = 'dT' in info and 'valWin' in info                            # PINN V2.1: validation as in testing
+    fig = make_subplots(specs=[[{'secondary_y': True}]])
+    if pinn:
+        ep = np.arange(1, len(loss) + 1)
+        dT2 = float(info['dT']) ** 2
+        fig.add_trace(line(ep, loss, 'L (training, weighted)', 0), secondary_y=False)
+        fig.add_trace(line(ep, info['lossData'], 'L_data (training windows)', 4, dash='dash'), secondary_y=False)
+        fig.add_trace(line(ep, np.asarray(info['valLoss'], dtype=float) / dT2, 'validation as testing (MSE/ΔT²)', 1,
+                           mode='lines+markers'), secondary_y=False)
+        fig.add_trace(line(ep, np.asarray(info['valWin'], dtype=float) / dT2,
+                           'validation windows, measured start (MSE/ΔT²)', 1, dash='dot'), secondary_y=False)
+        xl, xlr, lr = ep, ep, np.asarray(info.get('learnRate') or [], dtype=float)
+    else:
+        xl = np.asarray(info.get('iter') or np.arange(1, len(loss) + 1))
+        fig.add_trace(line(xl, loss, 'training', 0), secondary_y=False)
+        if info.get('valLoss'):
+            vl = np.asarray(info['valLoss'], dtype=float)
+            fig.add_trace(line(np.asarray(info.get('valIter') or np.arange(1, len(vl) + 1)), vl, 'validation', 1,
+                               mode='lines+markers'), secondary_y=False)
+        lr = np.asarray(info.get('learnRate') or [], dtype=float)
+        xlr = np.asarray(info.get('lrIter') or np.arange(1, len(lr) + 1))
+    if len(lr):
+        fig.add_trace(line(xlr, lr, 'learning rate', 6, width=1.5, line_shape='hv', opacity=0.8),
+                      secondary_y=True)
+        fig.update_yaxes(type='log', title_text='learning rate', secondary_y=True, showgrid=False)
+    fig.update_yaxes(type='log', title_text='loss (relative to ΔT²)' if pinn else 'loss (normalised)',
+                     secondary_y=False)
+    fig.update_xaxes(title_text='Epoch' if pinn or not info.get('iter') else 'Iteration')
+    nDrop = int(np.sum(np.diff(lr) < 0)) if len(lr) > 1 else 0
+    txt = ("**Convergence.** Left axis: losses (log), right axis: learning rate (steps). "
+           + ("The learning rate is adaptive (lrAdapt = 1): it drops when the validation error stalls. "
+              if info.get('lrAdapt') else "Fixed schedule (lrAdapt = 0): the learning rate drops every lrDropPr "
+              "epochs. ") + "Training falling while validation rises → overfitting (early stopping keeps the best "
+           "validation state). Both flat and high → model too small or learning rate too low.")
+    if pinn:
+        txt += (" The solid validation curve is computed exactly like the testing (every validation profile from "
+                "its first measured sample); the dotted one gives every window its measured start temperature, as "
+                "in the training — the gap between them is the error that builds up over a profile.")
+    show(fig, height=360, key=f"{key}|loss", info=txt)
+    if len(lr):
+        cap = f"Learning rate {fmt(lr[0])} → {fmt(lr[-1])} ({nDrop} reduction(s)) over {len(loss)} " \
+              f"{'epochs' if pinn or not info.get('iter') else 'iterations'}."
+        if pinn and info.get('valLoss'):
+            vl = np.asarray(info['valLoss'], dtype=float)
+            b = int(np.argmin(vl))
+            cap += f" Best validation RMSE (as testing) {fmt(float(np.sqrt(vl[b])))} K in epoch {b + 1}; " \
+                   f"with measured window starts {fmt(float(np.sqrt(info['valWin'][b])))} K."
+        st.caption(cap)
+
+
 def dl_view(data, setup, key):
     tag = _tag(data)
     info = data['mdls'].get(tag, {}).get('info') or {}
     if not info.get('loss'):
         return
-    loss = np.asarray(info['loss'], dtype=float)
-    fig = go.Figure(line(np.asarray(info.get('iter') or np.arange(1, len(loss) + 1)), loss, 'training', 0))
-    if info.get('valLoss'):
-        vl = np.asarray(info['valLoss'], dtype=float)
-        fig.add_trace(line(np.asarray(info.get('valIter') or np.arange(1, len(vl) + 1)), vl, 'validation', 1,
-                           mode='lines+markers'))
-    fig.update_layout(xaxis_title='Iteration' if info.get('iter') else 'Epoch', yaxis=dict(type='log',
-                      title='Loss (normalised)'))
-    show(fig, height=340, key=f"{key}|loss", info="**Training history.** Training loss per iteration/epoch and the "
-         "validation loss. Training continues to fall while validation rises → overfitting (early stopping keeps "
-         "the best validation state). Both flat and high → model too small or learning rate too low.")
+    convergence(info, key)
     if info.get('lossPhys'):
         ep = np.arange(1, len(info['lossData']) + 1)
-        fig = go.Figure([line(ep, info['lossData'], 'L_data = mean((T̂ − T)²)', 0),
-                         line(ep, np.maximum(np.asarray(info['lossPhys'], dtype=float), 1e-30),
-                              'L_phys = mean(r²)', 2, yaxis='y2')])
-        fig.update_layout(xaxis_title='Epoch', yaxis=dict(type='log', title='L_data (normalised K²)'),
-                          yaxis2=dict(type='log', title='L_phys (W²)', overlaying='y', side='right'))
+        v2 = 'dT' in info                                                 # PINN V2: dimensionless losses
+        tr = [line(ep, info['lossData'], 'L_data (training)', 0),
+              line(ep, np.maximum(np.asarray(info['lossPhys'], dtype=float), 1e-30), 'L_phys (training)', 2,
+                   yaxis=None if v2 else 'y2')]
+        if v2 and info.get('valPhys'):
+            tr.append(line(ep, np.maximum(np.asarray(info['valPhys'], dtype=float), 1e-30), 'L_phys (validation)', 2,
+                           dash='dot'))
+        if v2 and any(info.get('lossInit') or []):
+            tr.append(line(ep, np.maximum(np.asarray(info['lossInit'], dtype=float), 1e-30), 'L_init (training)', 3))
+        fig = go.Figure(tr)
+        if v2:
+            fig.update_layout(xaxis_title='Epoch', yaxis=dict(type='log', title='loss (relative to ΔT²)'))
+        else:
+            fig.update_layout(xaxis_title='Epoch', yaxis=dict(type='log', title='L_data (normalised K²)'),
+                              yaxis2=dict(type='log', title='L_phys (W²)', overlaying='y', side='right'))
         show(fig, height=320, key=f"{key}|lossPI", info=f"**Data and physics loss** (unweighted, α = "
-             f"{fmt(info.get('alpha', 1))}, β = {fmt(info.get('beta', 0))}). With β = 0 the physics loss is only "
-             "monitored on the validation data: it shows how well the purely data-trained network satisfies the "
-             "lumped thermal model.")
+             f"{fmt(info.get('alpha', 1))}, β = {fmt(info.get('beta', 0))}, γ = {fmt(info.get('gamma', 0))}). "
+             + (f"Both are relative to ΔT = {fmt(info['dT'])} K: L = 0.01 means an RMS of 10 % of ΔT. "
+                if v2 else "") + "With β = 0 the physics loss is only monitored: it shows how well the purely "
+             "data-trained network satisfies the thermal network.")
+        ph = data['mdls'].get(tag, {}).get('phys') or {}
+        if v2 and ph:
+            lp = np.asarray(info['lossPhys'], dtype=float)
+            ld = np.asarray(info['lossData'], dtype=float)
+            st.caption(f"Physics: {ph.get('type')} ({ph.get('origin', '')}), {ph.get('nP', 0)} physics states, "
+                       f"sources {', '.join(ph.get('src') or []) or '–'}; {info.get('nWin', '?')} training windows, "
+                       f"warm-up {info.get('warm', 0)} samples. Last epoch: β·L_phys = "
+                       f"{fmt(info['beta'] * lp[-1])} vs. "
+                       f"α·L_data = {fmt(info['alpha'] * ld[-1])} — "
+                       + ("the physics dominates the loss: the network follows the physics more than the data; "
+                          "reduce β if the test error is high." if info['beta'] * lp[-1] > 3 * info['alpha'] * ld[-1]
+                          else "the data dominate: the physics acts as a regulariser." if info['beta'] > 0 else
+                          "β = 0: the physics has no influence."))
     if info.get('device'):
         st.caption(f"Trained on: {info['device']}")
     mdl = data['mdls'].get(tag, {})
     net = mdl.get('sys')
-    if net is not None and hasattr(net, 'mu'):
+    body = getattr(net, 'body', net)
+    if net is not None and hasattr(body, 'mu'):
         with st.expander("Architecture of the trained network", icon=':material/account_tree:'):
             try:
                 from gui.core.theory_dl import arch_dot
-                F = int(np.asarray(net.mu.cpu()).size)
+                F = int(np.asarray(body.mu.cpu()).size)
                 ph = None
-                if info.get('lossPhys') is not None and 'beta' in info:
-                    from gui.core.theory_dl import phys_text
-                    ph = phys_text({'Mdl': (data.get('para') or {}).get('Mdl') or {}, 'Run': (setup or {}).get('Run')
-                                    or {}})
-                    ph.update({'alpha': info.get('alpha', 1.0), 'beta': info.get('beta', 0.0)})
-                st.graphviz_chart(arch_dot(net, int(mdl.get('W') or 100), F, None,
+                if isinstance(mdl.get('phys'), dict) and 'n' in mdl['phys']:
+                    ph = dict(mdl['phys'])
+                elif info.get('lossPhys') is not None and 'beta' in info:
+                    ph = {'type': 'lumped', 'nP': 1, 'src': [], 'alpha': info.get('alpha', 1.0),
+                          'beta': info.get('beta', 0.0)}
+                st.graphviz_chart(arch_dot(body, int(mdl.get('W') or 100), F, None,
                                            list((setup or {}).get('Run', {}).get('out') or []) or None, ph),
                                   width='content')
             except Exception as e:

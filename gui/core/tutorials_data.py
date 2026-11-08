@@ -194,27 +194,141 @@ TUTORIALS = [
     # ------------------------------------------
     # PI
     # ------------------------------------------
-    dict(id='pi_physics', mode='PI', level='Advanced', minutes=25, base='tutorial_PI',
+    dict(id='pi_physics', mode='PI', level='Advanced', minutes=20, base='tutorial_PI',
          title="Physics-informed training: data loss and physics loss",
-         story="The CNN + LSTM is trained on the stator winding temperature with an additional loss: the residual "
-               "of a lumped stator model C_th·dT/dt = (T_amb − T)/R_th + P_v with the copper losses P_v = 3·R_s·I_s² "
-               "(Mdl › pinn › PvEq = 3*Rs*x4**2, x4 = I_s). 3 epochs.",
-         goals=["understand the PINN loss", "balance the data and the physics loss with β"],
-         changes={'Mdl.dl.epoch': 3},
-         steps=["Open *Theory*: network and loss graph, and the residual explorer.",
-                "*Run* with β = 0 (default, data only), then with β = 1e-6 (Parameters › pinn › beta).",
-                "Open *Results*: the chart *Data and physics loss* shows both terms per epoch."],
-         look="| β | MAE T_sw (K) | MAX (K) | FIT (%) | data loss per epoch | physics loss per epoch |\n"
-              "|---|---|---|---|---|---|\n"
-              "| 0 | 14.6 | 62.7 | 26.5 | 3618 → 982 → 625 | not evaluated |\n"
-              "| 1e-6 | **7.35** | 72.4 | 58.3 | 3630 → 716 → 167 | 3.4e7 → 5.4e7 → 3.5e7 |\n\n"
-              "With β = 0 the residual is not computed (as in MATLAB). With β = 1e-6 the weighted physics term "
-              "(≈ 35) is of the order of the data loss and halves the error after 3 epochs (about 9 min each "
-              "on a CPU). The physics loss stays large: the lumped stator model is only a rough description of "
-              "the motor, which limits how large β can be.",
-         exercise=["Try β = 1e-5 and 1e-7: where is the best compromise?",
-                   "Change R_th by ±50 %: how sensitive is the result to wrong physics?",
-                   "Use the temperature-dependent copper resistance: PvEq = 3*Rs*(1+0.00393*(T-20))*x4**2."]),
+         story="An LSTM predicts the stator winding temperature T_sw of the motor data. The physics is a two-term "
+               "Foster network fitted on the training sessions with the RC mode (R = 0.029, 0.009 K/W, τ = 187, "
+               "1251 s), heated by the copper losses P = 3·R_s·I_s² (view *Physics*, loss source 3*Rs*x4**2 with "
+               "the constant Rs = 0.0141 Ω) on top of the coolant temperature. The loss is α·L_data + β·L_phys; both "
+               "parts are relative to ΔT, so β is dimensionless. 30 epochs with an adaptive learning rate (about "
+               "1 min on a GPU, 10 min on a CPU).",
+         goals=["understand the PINN loss and where α, β enter", "see why the physics must be fitted to the data",
+                "balance the data and the physics loss with β"],
+         changes={'Run.selPI': 2,
+                  'Run.physPI': {'type': 'foster', 'src': ['3*Rs*x4**2'],
+                                 'foster': [{'out': 1, 'src': 1, 'R': [0.028626181657719574, 0.00918259051226378],
+                                             'tau': [187.22138958971937, 1250.6272288997054]}],
+                                 'origin': 'RC mode fit (K = 2) on the training sessions'},
+                  'Mdl.gen.dev': 1,
+                  'Mdl.dl.epoch': 30,
+                  'Mdl.dl.W': 1800,
+                  'Mdl.dl.stride': 120,
+                  'Mdl.dl.batch': 32,
+                  'Mdl.dl.initLr': 0.002,
+                  'Mdl.dl.lrAdapt': 1,
+                  'Mdl.dl.lrDropPr': 3,
+                  'Mdl.dl.lrDropFa': 0.5,
+                  'Mdl.dl.valPat': 8,
+                  'Mdl.dl.gradTh': 1,
+                  'Mdl.dl.shu': 3,
+                  'Mdl.pinn.phys': 1,
+                  'Mdl.pinn.alpha': 1,
+                  'Mdl.pinn.beta': 0.01,
+                  'Mdl.pinn.gamma': 0,
+                  'Mdl.pinn.warm': 0,
+                  'Mdl.pinn.x0': 1,
+                  'Mdl.pinn.pred': 1,
+                  'Mdl.pinn.col': 0,
+                  'Mdl.pinn.TrefSrc': 2,
+                  'Mdl.pinn.Tref': 25,
+                  'Mdl.pinn.node': 1,
+                  'Mdl.pinn.const': 'Rs = 0.0141 [Ohm] stator resistance per phase'},
+         runs=[dict(label="no physics weight (β = 0)", changes={'Mdl.pinn.beta': 0}),
+               dict(label="fitted Foster, β = 0.01 (tutorial configuration)", changes={}),
+               dict(label="fitted Foster, β = 0.1", changes={'Mdl.pinn.beta': 0.1}),
+               dict(label="default single Foster term, β = 0.1", changes={'Mdl.pinn.beta': 0.1, 'Run.physPI': None})],
+         steps=["Open *Physics*: the panel *How the parameters enter the PINN* shows the equations and the current "
+                "value of every parameter; section 2 holds α, β, γ, the initial state and the prediction, section 3 "
+                "the constant Rs.",
+                "Physics › section 5 and 7: the Foster terms and their step response; section 8 simulates the "
+                "physics alone on the training data (≈ 12 K RMSE — a usable but rough prior).",
+                "*Run* the tutorial configuration (β = 0.01). *Settings of the tutorial* › *Load this run* loads "
+                "the other rows of the table.",
+                "Open *Results*: the convergence chart shows the losses and the learning rate, the chart *Data and "
+                "physics loss* both loss terms per epoch."],
+         look="| run | MAE T_sw (K) | RMSE (K) | MAX (K) | FIT (%) |\n|---|---|---|---|---|\n"
+              "| β = 0 | 2.00 | 2.58 | 14.7 | 89.7 |\n"
+              "| **fitted Foster, β = 0.01** | **1.66** | **2.32** | 16.4 | **90.7** |\n"
+              "| fitted Foster, β = 0.1 | 2.55 | 3.61 | 25.9 | 85.6 |\n"
+              "| default single Foster term, β = 0.1 | 6.78 | 8.61 | 29.7 | 65.6 |\n\n"
+              "A small weight of a fitted physics lowers the mean error by 17 % and the RMSE by 10 %: the physics "
+              "keeps the prediction plausible between the load situations of the training sessions. The largest "
+              "single deviation stays at 15 … 16 K (a fast transient the two-term network cannot follow). A larger "
+              "β pulls the prediction towards the rough two-term network (12 K RMSE on its own) and the gain is "
+              "lost. A wrong physics — the default term of the workbook (R = 0.0265 K/W, τ = 551 s) heated by "
+              "feature x1, the ambient temperature instead of a loss — makes the PINN more than three times worse "
+              "than the network alone. The test profile is predicted in one pass from its measured initial "
+              "temperature (pred = 1, x0 = 1); the validation is computed the same way (best 3.5 K RMSE). The "
+              "learning rate halves three times (0.002 → 0.00025) when the validation error stalls for 3 epochs. "
+              "GPU runs differ by a few hundredths of a kelvin.",
+         exercise=["Try β = 0.003 and 0.03: where is the best compromise?",
+                   "Physics › section 6: fit the Foster network with K = 3 and run again.",
+                   "Theory › *Example: variation of α, β, γ*: run the β sweep with 0 % and 50 % physics mismatch.",
+                   "Add the constant k = 0.00393 [1/K] in section 3 and use the temperature-dependent copper "
+                   "resistance: source 3*Rs*(1+k*(T-20))*x4**2."]),
+    dict(id='pi_board', mode='PI', level='Advanced', minutes=15, base='tutorial_PI_board',
+         title="Multi-output PINN with a Cauer network from the board designer",
+         story="Three chips (IGBT T1, diode D1, SiC MOSFET M1) on an IMS board: the board designer simulated their "
+               "junction temperatures (finite-volume model) for four random training profiles, one validation "
+               "and one test profile (setup/tutorial/genBoardPINN.py, or *Export for the PI mode* in the board "
+               "designer). The physics is the coupled Cauer network of the chips fitted to their step responses: "
+               "6 nodes (two per chip), the junctions are measured, the second stages are hidden and only enter "
+               "the physics loss. LSTM, 60 epochs, adaptive learning rate; about 25 s on a GPU.",
+         goals=["train one PINN for several outputs", "use a Cauer network with hidden nodes as physics",
+                "move a network between the board designer, SF/RC modes and the PI mode"],
+         changes={'Run.selPI': 2,
+                  'Mdl.gen.dev': 1,
+                  'Mdl.dl.epoch': 60,
+                  'Mdl.dl.W': 50,
+                  'Mdl.dl.stride': 5,
+                  'Mdl.dl.batch': 32,
+                  'Mdl.dl.initLr': 0.002,
+                  'Mdl.dl.lrAdapt': 1,
+                  'Mdl.dl.lrDropPr': 4,
+                  'Mdl.dl.lrDropFa': 0.5,
+                  'Mdl.dl.valPat': 12,
+                  'Mdl.dl.gradTh': 1,
+                  'Mdl.dl.shu': 3,
+                  'Mdl.pinn.phys': 2,
+                  'Mdl.pinn.alpha': 1,
+                  'Mdl.pinn.beta': 1,
+                  'Mdl.pinn.gamma': 0,
+                  'Mdl.pinn.warm': 2,
+                  'Mdl.pinn.x0': 1,
+                  'Mdl.pinn.pred': 1,
+                  'Mdl.pinn.col': 3,
+                  'Mdl.pinn.TrefSrc': 4,
+                  'Mdl.pinn.Tref': 25,
+                  'Mdl.pinn.node': 1,
+                  'Mdl.pinn.const': ''},
+         runs=[dict(label="β = 0 (data only)", changes={'Mdl.pinn.beta': 0, 'Mdl.pinn.col': 0}),
+               dict(label="β = 0.1", changes={'Mdl.pinn.beta': 0.1, 'Mdl.pinn.col': 0}),
+               dict(label="β = 1", changes={'Mdl.pinn.beta': 1, 'Mdl.pinn.col': 0}),
+               dict(label="β = 1, col = 3 (tutorial configuration)", changes={})],
+         steps=["Open *Physics*: settings (section 2), node and resistance tables, network diagram and step "
+                "responses Z_th(t) (solid: self-heating, dotted: coupling between the chips).",
+                "Section 6 › Convert Foster ↔ Cauer: convert to Foster and compare the step responses, then back.",
+                "*Run* the tutorial configuration (β = 1, col = 3). *Settings of the tutorial* › *Load this run* "
+                "loads the other rows of the table (col = 0, β = 0, β = 0.1).",
+                "Open *Results*: convergence with the learning rate, junction temperatures of all three chips (a "
+                "click on a legend entry hides the temperature and the error of that chip)."],
+         look="| run | MAE T1 / D1 / M1 (K) | FIT T1 / D1 / M1 (%) | mean MAE (K) |\n|---|---|---|---|\n"
+              "| β = 0 | 1.66 / 1.38 / 1.37 | 84.4 / 78.0 / 74.7 | 1.47 |\n"
+              "| β = 0.1 | 1.13 / 0.90 / 1.28 | 89.2 / 84.4 / 76.2 | 1.10 |\n"
+              "| β = 1 | 0.97 / 1.08 / 1.27 | 91.0 / 82.9 / 76.2 | 1.11 |\n"
+              "| **β = 1, col = 3** | **0.65 / 0.92 / 0.88** | **93.2 / 85.1 / 82.9** | **0.82** |\n\n"
+              "With only four 40-s training profiles the physics lowers the mean error by 25 % (β = 0.1 or 1): the "
+              "Cauer network describes the simulated board well. The two coupled chips T1 and D1 gain most (their "
+              "heating of each other is in the network); M1 sits apart and changes little. Evaluating the physics "
+              "also on the inputs of the validation and test profiles (col = 3, their temperatures are not used) "
+              "lowers the mean error by another quarter, to 44 % below the data-only network. The validation "
+              "error printed in the log is computed like the test (best 0.91 K RMSE for the tutorial "
+              "configuration); with the measured temperature at every window start it would be 0.44 K — the "
+              "difference is the error that builds up over a profile. The learning rate drops from 0.002 to 0.001 "
+              "after the validation error stalls for 4 epochs. GPU runs differ by a few hundredths of a kelvin.",
+         exercise=["Reduce the training profiles to one sheet (Setup › trSheet = train1): how much does the physics "
+                   "help now?", "Set the output of the hidden node of T1 to 1 in the node table: what changes?",
+                   "Set lrAdapt = 0 (fixed steps every 4 epochs): compare the convergence chart."]),
 
     # ------------------------------------------
     # Studies

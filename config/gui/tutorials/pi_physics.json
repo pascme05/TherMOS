@@ -38,7 +38,7 @@
       "opt": 0,
       "Kmax": 10,
       "Emax": 0.9999,
-      "dev": 0
+      "dev": 1
     },
     "rc": {
       "K": 3,
@@ -73,17 +73,18 @@
       "eps": 1
     },
     "dl": {
-      "epoch": 3,
+      "epoch": 30,
       "gradTh": 1,
-      "initLr": 0.001,
-      "lrDropPr": 10,
+      "initLr": 0.002,
+      "lrDropPr": 3,
       "lrDropFa": 0.5,
+      "lrAdapt": 1,
       "valFreq": 100,
-      "batch": 1024,
+      "batch": 32,
       "shu": 3,
-      "W": 600,
-      "stride": 5,
-      "valPat": 5,
+      "W": 1800,
+      "stride": 120,
+      "valPat": 8,
       "loss": 1,
       "seq": 50
     },
@@ -108,13 +109,19 @@
       "Cth": 20800,
       "Rs": 0.0141,
       "alpha": 1,
-      "beta": 0,
+      "beta": 0.01,
       "PvSrc": 1,
       "PvEq": "3*Rs*x4**2",
-      "const": 0,
-      "TrefSrc": 0,
+      "const": "Rs = 0.0141 [Ohm] stator resistance per phase",
+      "TrefSrc": 2,
       "Tref": 25,
-      "node": 1
+      "node": 1,
+      "phys": 1,
+      "gamma": 0,
+      "warm": 0,
+      "pred": 1,
+      "x0": 1,
+      "col": 0
     },
     "sf": {
       "bnd": 10000,
@@ -198,7 +205,7 @@
     "selPS": 1,
     "selML": 1,
     "selDL": 1,
-    "selPI": 3,
+    "selPI": 2,
     "featRoll": 0,
     "EWMA": [
       5,
@@ -208,6 +215,29 @@
       5,
       50
     ],
-    "legacy": 0
+    "legacy": 0,
+    "archDL": null,
+    "archPI": null,
+    "physPI": {
+      "type": "foster",
+      "src": [
+        "3*Rs*x4**2"
+      ],
+      "foster": [
+        {
+          "out": 1,
+          "src": 1,
+          "R": [
+            0.028626181657719574,
+            0.00918259051226378
+          ],
+          "tau": [
+            187.22138958971937,
+            1250.6272288997054
+          ]
+        }
+      ],
+      "origin": "RC mode fit (K = 2) on the training sessions"
+    }
   }
 }

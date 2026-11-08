@@ -62,7 +62,10 @@ def training(data, setup, para, path):
         # Fitting
         # ==============================================================================
         tStart = time.time()
+        if m['tag'] == 'pi':                                                # inputs of the testing data (collocation)
+            data['tr']['_te'] = data.get('te')
         mdl = m['fit'](data['tr'], data['vl'], para)
+        data['tr'].pop('_te', None)
         mdl['timeTrain'] = time.time() - tStart
         mdl['size'] = m['size'](mdl)
         print("INFO: %s trained in %.2f sec (%d parameters)" % (m['name'], mdl['timeTrain'], mdl['size']))

@@ -40,6 +40,7 @@ from src.py.data.concatData import concatData
 # ==============================================================================
 # External
 # ==============================================================================
+import numpy as np
 
 
 #######################################################################################################################
@@ -66,8 +67,15 @@ def _loadSplit(loader, files, sheets, stat, para, setup):
         temp = loader.loadData(f, s, stat, setup)
         [xOut, yOut, rOut, tOut] = resmpData(temp, para, setup['legacy'])
         if out is None:
-            out = {k: v for k, v in temp.items() if k not in ('X', 'y', 'r', 't')}
-            out.update({'X': [], 'y': [], 'r': [], 't': []})
+            out = {k: v for k, v in temp.items() if k not in ('X', 'y', 'r', 't', 'sid')}
+            out.update({'X': [], 'y': [], 'r': [], 't': [], 'sid': []})
+        sid = temp.get('sid')
+        if sid is not None and len(sid) == len(temp['t']):                  # session of every resampled sample
+            tDat = np.asarray(temp['t'], dtype=float) - float(temp['t'][0])
+            k = np.clip(np.searchsorted(tDat, np.asarray(tOut) + 1e-9, side='right') - 1, 0, len(sid) - 1)
+            out['sid'].append(np.asarray(sid)[k])
+        else:
+            out['sid'].append(np.zeros(len(tOut)))
         out['X'].append(xOut)
         out['y'].append(yOut)
         out['r'].append(rOut)
