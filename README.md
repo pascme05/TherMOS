@@ -80,7 +80,8 @@ learning models), the MATLAB `.mat` models cannot be loaded in Python.
 
 # Graphical User Interface
 The Python version comes with a local browser GUI (Streamlit). It wraps `src/py/main.py` without changing it, so the
-start scripts and the GUI always give the same results.
+start scripts and the GUI always give the same results. The GUI is licensed for noncommercial use only (PolyForm
+Noncommercial 1.0.0, see `gui/LICENSE`); commercial use needs a separate licence.
 
 ```
 pip install -r requirements.txt
@@ -107,7 +108,9 @@ python start_gui.py                      # opens http://localhost:8501
 - **GPU:** `Mdl › gen › dev = 1` trains DL/PI on CUDA (needs a CUDA build of PyTorch).
 - **Tutorials:** at least one per mode, plus board → PO, grid search, optimisation and feature selection.
 
-The user guide is `docu/GUI.md`; it is also shown in the GUI under *Help › Documentation*.
+The user guide is `docu/GUI.md`; it is also shown in the GUI under *Help › Documentation*. The theory of all model
+order reduction options (full-order model, Foster/Cauer, state space, coupled networks, POD-Galerkin, POD state space,
+ML/DL, PINN, selection guide) is derived in `docu/theory/TherMOS_MOR_Theory.pdf` (LaTeX source next to it).
 
 
 # Datasets
@@ -257,7 +260,12 @@ The following aspects will be improved in future version:
 
 
 # License
-The software framework is provided under the MIT License.
+TherMOS is licensed in two parts (see `LICENSE`):
+
+- **Simulation toolkit** (MATLAB and Python sources, start scripts, configurations): MIT License.
+- **Graphical user interface** (`gui/` and `start_gui.py`): PolyForm Noncommercial License 1.0.0 (`gui/LICENSE`).
+  It is free for personal use, research, teaching and public or charitable institutions; any commercial use requires
+  a separate written licence from the author.
 
 
 # Version History

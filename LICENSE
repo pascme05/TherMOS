@@ -1,3 +1,12 @@
+TherMOS is licensed in two parts:
+
+1) Simulation toolkit (everything except the parts listed under 2): MIT License, see below.
+2) Graphical user interface (the folder gui/ and the file start_gui.py): PolyForm Noncommercial License 1.0.0,
+   see gui/LICENSE. Free for noncommercial use (personal, research, teaching, public institutions); commercial use
+   requires a separate written licence from the copyright holder.
+
+-----------------------------------------------------------------------------------------------------------------------
+
 MIT License
 
 Copyright (c) 2024 Pascal Schirmer
