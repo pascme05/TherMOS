@@ -135,3 +135,14 @@ def test_skin_eddy():
     K = e['beta'] * I * he / math.pi * (1 / (he ** 2 + x ** 2) - 1 / (he ** 2 + (x - s) ** 2))
     num = e['R_s'] * float(np.sum((K[1:] ** 2 + K[:-1] ** 2) / 2 * np.diff(x)))
     assert math.isclose(hc.plate_eddy(I, f, w, h, t, rho, s)['P'], num, rel_tol=1e-3)
+
+
+def test_die_attach_voids():
+    """Hot spot above a void grows with r² (disc with uniform heating), the attach term is t/(k A (1 − φ))."""
+    q, k_d, t_d = 1.5e6, 130.0, 120e-6
+    assert math.isclose(float(hc.void_spot(q, 1e-3, k_d, t_d)), q * 1e-6 / (4 * k_d * t_d))
+    assert math.isclose(float(hc.void_spot(q, 2e-3, k_d, t_d)), 4 * float(hc.void_spot(q, 1e-3, k_d, t_d)))
+    A, phi = 1e-4, 0.2
+    R, tau = hc.die_foster(A, t_d, k_d, 1.63e6, 70e-6, 58.0, 1.67e6, phi)
+    assert math.isclose(R[0], t_d / (k_d * A)) and math.isclose(R[1], 70e-6 / (58.0 * A * (1 - phi)))
+    assert math.isclose(tau[1], 4 / math.pi ** 2 * 70e-6 ** 2 * 1.67e6 / 58.0)          # τ independent of the area

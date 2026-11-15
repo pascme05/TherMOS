@@ -31,9 +31,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from gui.core.style import table, SERIES, STATUS, INK, INK2, MUTED, SEQ, show, line, fmt
+from gui.core.style import table, SERIES, STATUS, INK, INK2, MUTED, SEQ, show, line, fmt, _rgba
 from gui.views.tools import _common as cm
 from gui.views.tools import pkg_art
+from src.py.tools import handCalc as hc
 from src.py.tools import thermStack as ts
 from src.py.tools import toolData as td
 
@@ -58,6 +59,8 @@ COL_HELP = {
     'angle [°]': "Spreading angle θ: the heated area grows by 2 t tan θ per side (45° rule).",
 }
 ROLES = ['attach', 'package', 'iso', 'board', 'tim', 'housing', 'cooler', 'chip']
+ATTACH_MAT = {'SAC305 solder': (58.0, 1.67e6, 70.0), 'SnPb solder': (50.0, 1.5e6, 70.0),
+              'Silver sinter': (200.0, 2.5e6, 30.0), 'Conductive adhesive': (3.0, 2.0e6, 25.0)}  # k, ρc, t [µm]
 EXTRA_DEF = {'R_jtop': 30.0, 'A_top': 100.0, 'h_top': 10.0, 'R_jpins': 20.0, 'R_pins_amb': 40.0}
 
 
@@ -674,60 +677,153 @@ def transient():
 # Die attach & voids
 #######################################################################################################################
 def die_attach():
-    cm.question("How much does the die attach layer add to the thermal resistance, and how much do voids in it (or "
-                "their growth during power cycling) raise the junction temperature?",
-                "The solder or sinter layer under the die conducts the heat through its area A over its thickness t. "
-                "Voids take away a part of that area; the heat has to pass through the rest. Power cycling grows "
-                "cracks and voids, which is why R_th,jc is the end-of-life criterion of power cycling tests.")
-    cm.section(1, "Die and layer")
+    cm.question("How much do voids in the die attach raise the junction temperature — on average and locally above "
+                "the largest void — and does a part pass the X-ray void limits?",
+                "Voids take away a part of the attach area (average effect, 1D). A single large void is worse: the "
+                "heat above it must flow sideways through the thin die, which makes a local hot spot. Power cycling "
+                "grows cracks and voids, which is why R_th / Z_th is the end-of-life criterion of power cycling tests.")
+    cm.section(1, "Die and attach layer")
     with st.container(border=True):
         c = st.columns(5)
         a = cm.num(c[0], "Die edge a [mm]", 10.0, "da|a", min_value=0.1, help="Edge of a square die, e.g. 10 mm "
                                                                             "for a 200 A IGBT.")
-        t = cm.num(c[1], "Layer thickness t [µm]", 70.0, "da|t", min_value=1.0,
-                   help="Solder 50–100 µm, silver sinter 20–50 µm.")
-        k = cm.num(c[2], "Conductivity k [W/(m K)]", 58.0, "da|k", min_value=0.01,
-                   help="SAC305 ≈ 58, SnPb ≈ 50, silver sinter ≈ 150–250 W/(m K).")
-        v = cm.num(c[3], "Void fraction φ [%]", 20.0, "da|v", min_value=0.0, max_value=95.0,
-                   help="Share of the die area without solder (X-ray inspection: < 5–10 % is a typical limit).") / 100
+        tdie = cm.num(c[1], "Die thickness t_d [µm]", 120.0, "da|td", min_value=10.0,
+                    help="IGBT / diode 70–150 µm, SiC MOSFET 180–350 µm.")
+        kd = cm.num(c[2], "Die conductivity k_d [W/(m K)]", 130.0, "da|kd", min_value=1.0,
+                    help="Si ≈ 130–150 at 25 °C (≈ 100 at 125 °C), SiC ≈ 300–370 W/(m K).")
+        mat = c[3].selectbox("Attach material", list(ATTACH_MAT), key=f"{K}|da|mat",
+                             help="Prefills conductivity and thickness of the attach.")
         P = cm.num(c[4], "Power per die P [W]", 150.0, "da|P", min_value=0.0)
+        k0, rc_a, t0 = ATTACH_MAT[mat]
+        c = st.columns(5)
+        t = cm.num(c[0], "Attach thickness t [µm]", t0, f"da|t|{mat}", min_value=1.0,
+                   help="Solder 50–100 µm, silver sinter 20–50 µm.")
+        k = cm.num(c[1], "Attach conductivity k [W/(m K)]", k0, f"da|k|{mat}", min_value=0.01)
+        v = cm.num(c[2], "Total void fraction φ [%]", 8.0, "da|v", min_value=0.0, max_value=95.0,
+                   help="Share of the die area without solder (X-ray).") / 100
+        dmax = cm.num(c[3], "Largest void diameter d_max [mm]", 1.5, "da|dmax", min_value=0.0,
+                      help="Diameter of the largest single void (X-ray).")
+        cv = cm.num(c[4], "Spread of the void sizes (CV)", 0.8, "da|cv", min_value=0.05, max_value=3.0,
+                    help="Coefficient of variation of the void diameters (lognormal): small = similar voids, large "
+                         "= a few big and many small ones.")
+        c = st.columns(3)
+        lim_t = cm.num(c[0], "X-ray limit total [%]", 10.0, "da|lt", min_value=0.0,
+                       help="Typical customer / internal limit for power dies 5–15 % (MIL-STD-883 TM 2012: 50 % "
+                            "for small hybrids, much stricter for power).") / 100
+        lim_s = cm.num(c[1], "X-ray limit single void [% of die]", 2.0, "da|ls", min_value=0.0,
+                       help="Largest single void in % of the die area, typically 1–5 %.") / 100
     A = (a * 1e-3) ** 2
     R0 = t * 1e-6 / (k * A)
     Rv = R0 / (1 - v)
+    q = P / A
+    r_v = dmax * 1e-3 / 2
+    dT_spot = float(hc.void_spot(q, r_v, kd, tdie * 1e-6))
+    s_single = np.pi * r_v ** 2 / A
+    ok_t, ok_s = v <= lim_t, s_single <= lim_s
+
+    # ------------------------------------------
+    # Void population (lognormal diameters scaled to the total fraction, largest = d_max)
+    # ------------------------------------------
+    rng = np.random.default_rng(3)
+    sl = np.sqrt(np.log1p(cv ** 2))
+    d = np.sort(rng.lognormal(0, sl, 400))[::-1]
+    d = d / d[0] * max(dmax, 1e-6)
+    area = np.cumsum(np.pi * d ** 2 / 4) * 1e-6
+    nv = int(np.clip(np.searchsorted(area, v * A) + 1, 1, len(d))) if v > 0 else 0
+    d = d[:nv]
+    xy = rng.uniform(-a / 2, a / 2, (nv, 2))
+    xy = np.clip(xy, -a / 2 + d[:, None] / 2, a / 2 - d[:, None] / 2) if nv else xy
+    spots = hc.void_spot(q, d * 1e-3 / 2, kd, tdie * 1e-6) if nv else np.array([0.0])
+
     cm.section(None, "Result")
-    cm.tiles([("R without voids", f"{1e3 * R0:.2f} mK/W"), ("R with voids", f"{1e3 * Rv:.2f} mK/W",
-                                                             f"+{100 * (Rv / R0 - 1):.0f} %"),
-              ("Extra ΔT_j", f"{P * (Rv - R0):.2f} K", "P · (R_void − R) at the given power."),
-              ("Layer ΔT", f"{P * Rv:.2f} K", "Temperature drop across the layer with voids.")])
-    vv = np.linspace(0, 0.8, 200)
-    fig = go.Figure([line(100 * vv, 1e3 * R0 / (1 - vv), "R of the layer", 0)])
-    fig.add_vline(x=100 * v, line=dict(color=MUTED, dash='dot'), annotation_text='design',
-                  annotation_font_color=INK2)
-    fig.add_hline(y=1.2e3 * R0, line=dict(color=STATUS['warning'], dash='dash'), annotation_text='+20 %',
-                  annotation_font_color=STATUS['warning'])
-    fig.update_layout(title="Resistance of the layer over the void fraction", xaxis_title="void fraction φ [%]",
-                      yaxis_title="R [mK/W]", showlegend=False)
-    show(fig, 300, key=f"{cm.KEY}|th|void", info=(
-        "Resistance of the die attach layer over the void fraction (evenly spread voids, 1D). It rises slowly at "
-        "first and steeply above about 50 %; the dashed line marks +20 %, the end-of-life criterion of R_th in "
-        "power cycling (reached at φ ≈ 17 % of the layer alone)."))
-    cm.equations([("Layer resistance", r"R=\frac{t}{k\,A},\qquad R_{void}=\frac{t}{k\,A\,(1-\varphi)}",
-                   "1D, voids evenly spread; a void under the hot spot is worse because the heat cannot spread "
-                   "sideways in the thin layer.")],
-                 [('t', "thickness of the layer", 'm'), ('k', "thermal conductivity of the layer", 'W/(m K)'),
-                  ('A', "die area a²", 'm²'), ('φ', "void fraction of the area", '-'),
-                  ('R, R_void', "thermal resistance of the layer without and with voids", 'K/W')])
+    cm.tiles([("R attach without voids", f"{1e3 * R0:.2f} mK/W"),
+              ("R attach with voids", f"{1e3 * Rv:.2f} mK/W", f"+{100 * (Rv / R0 - 1):.0f} % → +{P * (Rv - R0):.2f} K "
+                                                              f"average T_j at {P:g} W"),
+              ("Hot spot above the largest void", f"+{dT_spot:.1f} K", "q'' r_v²/(4 k_d t_d): local rise of the die "
+                                                                      "above a void of diameter d_max"),
+              ("X-ray check", ("pass" if ok_t and ok_s else "fail"),
+               f"total {100 * v:.1f} % vs {100 * lim_t:g} % · single {100 * s_single:.1f} % vs {100 * lim_s:g} %")])
+    c1, c2 = st.columns(2)
+    with c1:
+        fig = go.Figure()
+        fig.add_shape(type='rect', x0=-a / 2, y0=-a / 2, x1=a / 2, y1=a / 2, line=dict(color=INK2),
+                      fillcolor=_rgba(SERIES[0], 0.12))
+        for (x, y), dd, s in zip(xy, d, spots):
+            col = STATUS['critical'] if s > 0.5 * max(dT_spot, 1e-9) else STATUS['warning'] if s > 0.1 * dT_spot \
+                else MUTED
+            fig.add_shape(type='circle', x0=x - dd / 2, x1=x + dd / 2, y0=y - dd / 2, y1=y + dd / 2,
+                          line=dict(color=col, width=1), fillcolor=_rgba(col, 0.5))
+        fig.add_trace(go.Scatter(x=xy[:, 0] if nv else [], y=xy[:, 1] if nv else [], mode='markers',
+                                 marker=dict(size=1, color='rgba(0,0,0,0)'), showlegend=False,
+                                 text=[f"d = {dd:.2f} mm, hot spot +{s:.2f} K" for dd, s in zip(d, spots)],
+                                 hoverinfo='text'))
+        fig.update_layout(title=f"X-ray view: {nv} voids, φ = {100 * v:.1f} %",
+                          xaxis=dict(title='x [mm]', range=[-a / 2 * 1.05, a / 2 * 1.05], scaleanchor='y'),
+                          yaxis=dict(title='y [mm]', range=[-a / 2 * 1.05, a / 2 * 1.05]))
+        show(fig, 360, key=f"{K}|da|xray", info="A drawn void population with the given total fraction, the largest "
+             "void d_max and the size spread (positions random). Colour: hot spot of the void — red > 50 % of the "
+             "largest, orange > 10 %, grey small. A few large voids hurt much more than many small ones of the same "
+             "total area, because the hot spot grows with d².")
+    with c2:
+        dd = np.linspace(0, max(3 * dmax, 1.0), 200)
+        fig = go.Figure([line(dd, hc.void_spot(q, dd * 1e-3 / 2, kd, tdie * 1e-6), f"die {tdie:g} µm", 0),
+                         line(dd, hc.void_spot(q, dd * 1e-3 / 2, kd, 2 * tdie * 1e-6), f"die {2 * tdie:g} µm", 1,
+                              dash='dot')])
+        d_lim = 2 * np.sqrt(lim_s * A / np.pi) * 1e3
+        fig.add_vline(x=d_lim, line=dict(color=STATUS['warning'], dash='dash'), annotation_text='single-void limit')
+        fig.add_vline(x=dmax, line=dict(color=MUTED, dash='dot'), annotation_text='d_max')
+        fig.update_layout(title="Hot spot over the void diameter", xaxis_title="void diameter d [mm]",
+                          yaxis_title="local ΔT above the void [K]", hovermode='x unified')
+        show(fig, 360, key=f"{K}|da|spot", info="Local temperature rise of the die above a single void: the heat "
+             "over the void flows sideways through the die. It grows with d² and falls with the die thickness — "
+             "thin dies (IGBT) are more sensitive than thick SiC dies of the same area. The dashed line is the "
+             "diameter allowed by the single-void X-ray limit.")
+
+    # ------------------------------------------
+    # Z_th of die + attach
+    # ------------------------------------------
+    cm.section(2, "Effect on Z_th(t)", "Die and attach as two Foster terms; voids raise the attach term. Power cycling "
+                                       "and the production test read ΔZ_th at a short heating time.")
+    tz = np.geomspace(1e-5, 10, 300)
+    Rn, tn = hc.die_foster(A, tdie * 1e-6, kd, 1.63e6, t * 1e-6, k, rc_a, 0.0)
+    Ra, ta = hc.die_foster(A, tdie * 1e-6, kd, 1.63e6, t * 1e-6, k, rc_a, v)
+    Zn, Za = hc.foster_Z(Rn, tn, tz), hc.foster_Z(Ra, ta, tz)
+    fig = go.Figure([line(tz, 1e3 * Zn, "no voids", 0), line(tz, 1e3 * Za, f"φ = {100 * v:.1f} %", 3),
+                     go.Scatter(x=tz, y=1e3 * (Za - Zn), name='ΔZ_th', yaxis='y2',
+                                line=dict(color=MUTED, dash='dot'))])
+    fig.update_layout(title="Z_th of die and attach", xaxis=dict(type='log', title='heating time t [s]'),
+                      yaxis_title='Z_th [mK/W]', yaxis2=dict(title='ΔZ_th [mK/W]', overlaying='y', side='right',
+                                                              showgrid=False), hovermode='x unified')
+    show(fig, 320, key=f"{K}|da|zth", info="Thermal impedance of die + attach (the rest of the stack adds on top). "
+         f"Below ≈ {fmt(tn[0])} s only the die heats and voids do not show; after ≈ {fmt(3 * tn[1])} s the attach is "
+         "fully heated and ΔZ_th reaches its final value. A production test with a heating pulse in between "
+         "detects voids; a datasheet R_th alone hides them.")
+    cm.equations([("Average (1D)", r"R=\frac{t}{k\,A},\qquad R_{void}=\frac{t}{k\,A\,(1-\varphi)}",
+                   "Voids evenly spread; the heat has only the area A(1 − φ)."),
+                  ("Hot spot above a void", r"\Delta T_{spot}=\frac{q''\,r_v^2}{4\,k_d\,t_d},\qquad q''=\frac{P}{A}",
+                   "The heat over the void flows sideways through the die (disc with uniform heating, adiabatic "
+                   "below); an upper estimate, the attach around the void helps a little."),
+                  ("Z_th of a layer", r"Z(t)=R\left(1-e^{-t/\tau}\right),\quad \tau=\frac{4}{\pi^2}\,R\,C,\quad "
+                                      r"C=\rho c\,t\,A", "First eigenvalue of a slab heated on one face.")],
+                 [('t, k', "thickness and conductivity of the attach", 'm, W/(m K)'),
+                  ('t_d, k_d', "thickness and conductivity of the die", 'm, W/(m K)'),
+                  ('A', "die area a²", 'm²'), ('φ', "total void fraction of the area", '-'),
+                  ('r_v', "radius of a void (d/2)", 'm'), ('q″', "heat flux through the die P/A", 'W/m²'),
+                  ('ρc', "volumetric heat capacity", 'J/(m³ K)'),
+                  ('R, C, τ', "resistance, capacitance and time constant of a layer", 'K/W, J/K, s')])
     cm.interpret([
-        f"The {t:g} µm layer under the {a:g} × {a:g} mm² die has R = {t:g}·10⁻⁶ m / ({k:g} W/(m K) · "
-        f"{A * 1e6:g}·10⁻⁶ m²) = {1e3 * R0:.2f} mK/W. With {100 * v:g} % voids the heat has only "
-        f"{100 * (1 - v):g} % of the area, so R = {1e3 * Rv:.2f} mK/W (+{100 * (Rv / R0 - 1):.0f} %), which at "
-        f"{P:g} W raises the junction by {P * (Rv - R0):.2f} K.",
-        "This is small against the whole stack (tab 'Stack designer'), but the die attach is the layer that ages: "
-        "cracks grow from the corners during power cycling and the voids under the hot spot block the heat locally. "
-        "Therefore R_th,jc is monitored in power cycling tests (end of life at +20 %), and the X-ray void limit of "
-        "the production keeps the start value low.",
+        f"Spread over the die, {100 * v:.1f} % voids raise the attach resistance from {1e3 * R0:.2f} to "
+        f"{1e3 * Rv:.2f} mK/W, i.e. only +{P * (Rv - R0):.2f} K at {P:g} W. The largest void of {dmax:g} mm is "
+        f"what matters: the die above it runs {dT_spot:.1f} K hotter than its surroundings.",
+        ("The part passes both X-ray limits." if ok_t and ok_s else
+         "The part fails the X-ray check: " + " and ".join(x for x, ok in (("the total void fraction", ok_t),
+                                                                          ("the largest single void", ok_s))
+                                                         if not ok) + " is above the limit.") +
+        " The single-void limit is the more important one for power dies, because the hot spot grows with d².",
+        "Power cycling grows cracks from the die corners and lets voids coalesce; R_th rises until the end-of-life "
+        "criterion (+20 %). The start value set by the production voids decides how much of this margin is left.",
     ])
-    cm.refs(['Wintrich2015', 'AQG324', 'JESD51-14'])
+    cm.refs(['Wintrich2015', 'AQG324', 'JESD51-14', 'Incropera2007'])
 
 
 #######################################################################################################################

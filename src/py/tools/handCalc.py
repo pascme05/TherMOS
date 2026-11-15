@@ -24,7 +24,8 @@ inputs and outputs are in SI units (m, W, K, Pa, kg, s) unless a name says other
     6) vias:        thermal via array in a PCB pad
     7) coolant:     energy balance of a coolant (temperature rise ↔ flow rate)
     8) transient:   surface temperature of a semi-infinite body under a heat flux pulse, diffusion time, lumped body,
-                    pulse train on a Foster network (first pulse, build-up, periodic steady state)
+                    pulse train on a Foster network (first pulse, build-up, periodic steady state), die attach:
+                    hot spot above a void q'' r_v²/(4 k_d t_d) and the two-term Foster network of die + attach
     9) radiation:   grey-body exchange of two surfaces expressed as an equivalent convection coefficient h_rad
    10) skin/eddy:   skin depth, AC resistance of round and rectangular conductors (Bessel, Dowell), self-heating, eddy
                     losses induced in a metal substrate / baseplate below a trace
@@ -414,6 +415,27 @@ def pulse_train(P, t_p, T, R, tau, n_show=3, pts=60):
             'valley': float((x_inf * c).sum()), 'mean': D * P * Rth, 'Rth': Rth,
             'approx': P * (D * Rth + (1 - D) * Z(T + t_p) - Z(T) + Z(t_p)), 'single': P * Z(t_p),
             'w_first': wave(0, n_show), 'w_last': wave(max(N - n_show, 0), n_show), 'terms': x_inf}
+
+
+def void_spot(q, r_v, k_d, t_d):
+    """
+    Local temperature rise above a circular void of radius r_v [m] in the die attach: the heat flux q [W/m²] over the
+    void flows sideways through the die (thickness t_d, conductivity k_d) to the edge of the void (disc with uniform
+    heating, adiabatic below): ΔT = q r_v² / (4 k_d t_d) [K]. Upper estimate, the attach around the void helps a little.
+    """
+    return q * np.asarray(r_v, dtype=float) ** 2 / (4 * k_d * t_d)
+
+
+def die_foster(A, t_d, k_d, rc_d, t_a, k_a, rc_a, phi=0.0):
+    """
+    Two-term Foster estimate of the die (t_d, k_d, ρc_d) and of the die attach (t_a, k_a, ρc_a, void fraction φ) on
+    the area A: R = t/(k A_eff), C = ρc t A_eff, τ = 4/π² R C (first eigenvalue of a slab heated on one face).
+    Returns (R [K/W], τ [s]) per layer.
+    """
+    A_a = A * (1 - phi)
+    R = np.array([t_d / (k_d * A), t_a / (k_a * A_a)])
+    C = np.array([rc_d * t_d * A, rc_a * t_a * A_a])
+    return R, 4 / math.pi ** 2 * R * C
 
 
 #######################################################################################################################
