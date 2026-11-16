@@ -5,7 +5,7 @@
 # File:         genBoard
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.3
+# Version:      V.1.5
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -82,6 +82,10 @@ V1.4: 08.11.2026, Pascal Schirmer
 - Additional losses in the board (rectangular regions on a selected layer or the whole board, constant): q = P of
   the region distributed over its control volumes (layer-resolved model: over the rows of the layer; top view: over
   the lumped plane)
+
+V1.5: 16.11.2026, Pascal Schirmer
+- Layer-resolved model: position, control volume and material of every node (D['nod']) for the 3D field export
+  (saveBoard, PF mode)
 """
 
 #######################################################################################################################
@@ -155,12 +159,12 @@ def _nRows(t, dzMax):
 
 
 def _rows(stack, dzMax):
-    """Rows of the layer-resolved model, bottom → top: (layer, material, dz, k_xy, k_z, ρc, FR4) per row."""
+    """Rows of the layer-resolved model, bottom → top: (layer, material, dz, k_xy, k_z, ρc, FR4, ρ) per row."""
     out = []
     for l in stack:
         t = l[2] * 1e-3
         n = _nRows(l[2], dzMax)
-        out += [(l[0], l[1], t / n, l[3], l[4], l[5] * l[6], l[1] == 'FR4')] * n
+        out += [(l[0], l[1], t / n, l[3], l[4], l[5] * l[6], l[1] == 'FR4', l[5])] * n
     return out
 
 
@@ -184,20 +188,20 @@ def _model3D(layout, layers, below, chips, vias, isFR4, W, L, dx, h, hTop):
     rws = _rows(list(reversed(below)) + list(reversed(layers)), 0.5e-3)
     via = _viaMask(X, Y, chips, vias) if isFR4.any() else np.zeros((ny, nx), dtype=bool)
     R = []
-    for (nm, mat, dz, kxy, kz, rc, fr4) in rws:
+    for (nm, mat, dz, kxy, kz, rc, fr4, rho) in rws:
         KZ = np.full((ny, nx), kz)
         if fr4 and via.any():
             KZ[via] = viaK(vias, kz)
         R.append({'m': full, 'dz': np.full((ny, nx), dz), 'kx': np.full((ny, nx), kxy), 'kz': KZ,
-                  'rc': np.full((ny, nx), rc), 'name': nm or mat})
+                  'rc': np.full((ny, nx), rc), 'rho': np.full((ny, nx), rho), 'name': nm or mat})
     nBoard = len(rws)
     nBelow = len(_rows(list(reversed(below)), 0.5e-3)) if below else 0
 
     # Rows: die attach and die over the chip footprints
     ra = {'m': np.zeros((ny, nx), dtype=bool), 'dz': np.ones((ny, nx)), 'kx': np.ones((ny, nx)),
-          'kz': np.ones((ny, nx)), 'rc': np.ones((ny, nx)), 'name': 'die attach'}
+          'kz': np.ones((ny, nx)), 'rc': np.ones((ny, nx)), 'rho': np.ones((ny, nx)), 'name': 'die attach'}
     rd = {'m': np.zeros((ny, nx), dtype=bool), 'dz': np.ones((ny, nx)), 'kx': np.ones((ny, nx)),
-          'kz': np.ones((ny, nx)), 'rc': np.ones((ny, nx)), 'name': 'die'}
+          'kz': np.ones((ny, nx)), 'rc': np.ones((ny, nx)), 'rho': np.ones((ny, nx)), 'name': 'die'}
     masks = []
     for c in chips:
         m = (np.abs(X - c['x'] * 1e-3) <= c['w'] * 5e-4 + 1e-9) & (np.abs(Y - c['y'] * 1e-3) <= c['l'] * 5e-4 + 1e-9)
@@ -207,9 +211,9 @@ def _model3D(layout, layers, below, chips, vias, isFR4, W, L, dx, h, hTop):
         m = m & ~rd['m']                                                       # overlapping chips: first one wins
         kA, rA, cA = _mat(c['attach'])
         kD, rD, cD = _mat(c['mat'])
-        for r, k, rc, t in ((ra, kA, rA * cA, c['t_att']), (rd, kD, rD * cD, c['t'])):
+        for r, k, rc, t, ro in ((ra, kA, rA * cA, c['t_att'], rA), (rd, kD, rD * cD, c['t'], rD)):
             r['m'] = r['m'] | m
-            r['kx'][m], r['kz'][m], r['rc'][m], r['dz'][m] = k, k, rc, t * 1e-3
+            r['kx'][m], r['kz'][m], r['rc'][m], r['dz'][m], r['rho'][m] = k, k, rc, t * 1e-3, ro
         masks.append(m)
     if chips:
         R += [ra, rd]
@@ -290,7 +294,16 @@ def _model3D(layout, layers, below, chips, vias, isFR4, W, L, dx, h, hTop):
     zc = np.cumsum(dzr) - dzr / 2
     Xs, Zs = np.meshgrid(x, zc)
     tb = float(np.sum([l[2] for l in layers]) * 1e-3)
-    return [{'mat': [C, Gm, Bp], 'B3': B3, 'gOut': gOut, 'sel': idx[:, jc, :], 'top': idx[nBoard - 1], 'idx': idx,
+
+    # Nodes of the 3D field (export for the PF mode): position, control volume and material of every node
+    nod = {k: np.zeros(N) for k in ('x', 'y', 'z', 'V', 'kx', 'kz', 'rc', 'rho')}
+    for r, row in enumerate(R):
+        m, ii = row['m'], idx[r][row['m']]
+        nod['x'][ii], nod['y'][ii], nod['z'][ii] = X[m], Y[m], zc[r]
+        nod['V'][ii] = (A * row['dz'])[m]
+        for k in ('kx', 'kz', 'rc', 'rho'):
+            nod[k][ii] = row[k][m]
+    return [{'nod': nod, 'zc': zc, 'dzr': dzr, 'mat': [C, Gm, Bp], 'B3': B3, 'gOut': gOut, 'sel': idx[:, jc, :], 'top': idx[nBoard - 1], 'idx': idx,
              'rowName': [row['name'] for row in R], 'nBoard': nBoard, 'nBelow': nBelow, 'tb': tb, 'yCut': y[jc],
              'geo': np.column_stack([Xs.ravel(), Zs.ravel()]), 'dx': dx, 'dy': float(np.min(dzr[dzr > 0])),
              'Lx': x[-1], 'Ly': zc[-1], 'x': x, 'y': zc, 'shape': (nr, nx), 'xg': x, 'yg': y, 'N3': N,

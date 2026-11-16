@@ -1533,6 +1533,97 @@ def export_pinn(res, net):
                "between the training load levels.")
 
 
+def export_pf(res):
+    cm.section(9, "Export for the PF mode (physics-informed field network)",
+               "Temperature fields of the whole board as 2D/3D data (training: random load levels of every chip, "
+               "several profiles; validation: another random profile; testing: the designed profile) together with "
+               "the finite-volume operator of the model, and a ready-made PF config.")
+    lay = res['lay']
+    c = st.columns([2, 2, 1, 1, 1], vertical_alignment='bottom')
+    name = c[0].text_input("Data name", 'myBoard', key=f"{K}|fname", help="data/board/<name>_pf_train1 … N.mat, "
+                           "_pf_val.mat, _pf_test.mat and config/gui/board_<name>_PF.json").strip().replace(' ', '_')
+    dim = c[1].selectbox("Model", ['3D layer-resolved', '2D lumped top view'], key=f"{K}|fdim",
+                         help="3D: every node of the layer-resolved model (the model of the simulation above). 2D: "
+                              "the board lumped over its thickness, one temperature per node of the top view "
+                              "(smaller, as the export to the PO mode).")
+    cm.num(c[2], "Training profiles", 4, 'board|fN', format='%d', min_value=1, max_value=20,
+           help="Number of random training profiles (files <name>_pf_train1, …).")
+    cm.num(c[3], "Duration per profile (s)", float(res['t'][-1]), 'board|fT', min_value=1.0)
+    go_ = c[4].button("Export PF data", icon=':material/save:', key=f"{K}|fexp", width='stretch')
+    if go_ and name:
+        from gui.core import config as conf
+        from gui import adapter as A
+        import scipy.sparse as sp
+        from scipy.sparse.linalg import eigsh
+        d3 = dim.startswith('3D')
+        D = res['D'] if d3 else res['D2']
+        [C, G, Bp] = calcBoardMat(D)
+        q = _q(D, len(C))
+        Ts = float(res['t'][1] - res['t'][0]) if len(res['t']) > 1 else 1.0
+        nTr = int(st.session_state[f"{cm.KEY}|board|fN"])
+        tTr = np.arange(0.0, st.session_state[f"{cm.KEY}|board|fT"] + Ts * 1e-9, Ts)
+        jobs = [(f"train{k + 1}", tTr, _profiles(lay, D, tTr, kind='random', seed=11 + 17 * k)) for k in range(nTr)]
+        jobs += [('val', tTr, _profiles(lay, D, tTr, kind='random', seed=997)), ('test', res['t'], res['P'])]
+        folder = os.path.join(A.ROOT, 'data', 'board')
+        bar, t0 = st.progress(0.0), time.perf_counter()
+        for k, (tag, t, P) in enumerate(jobs):
+            T, _ = simBoard(C, G, Bp, P, Ts, lay['Ta'], res['nSub'], q=q, steady=False,
+                            prog=lambda x: bar.progress(min((k + x) / len(jobs), 1.0),
+                                                        text=f"Simulating profile {k + 1}/{len(jobs)} · "
+                                                             f"{fmt(time.perf_counter() - t0)} s"))
+            saveBoard(D, t, P, T, os.path.join(folder, f"{name}_pf_{tag}.mat"), q=q)
+        bar.empty()
+        lam = float(eigsh(G.tocsc(), k=1, M=sp.diags(C).tocsc(), sigma=0, which='LM', return_eigenvectors=False)[0])
+        tau = 1.0 / lam
+        warm = int(min(max(3 * tau / Ts, 10), max((len(tTr) - 1) // 4, 10)))
+        W = int(min(3 * warm, len(tTr) + warm))
+        op = d3 or 'k2' not in D
+        ch = D['chips'][0] if D['chips'] else {'x': lay['W'] / 2, 'y': lay['L'] / 2}
+        zTop = float(np.max(D['zc']) - np.min(D['zc'])) if d3 else 0.0
+        cfg = conf.read_config('tutorial_PF')
+        cfg['Run'].update({'name': f"board_{name}_PF", 'config': '/gui/_gui_run', 'mode': 'PF', 'format': 'mat',
+                           'datDim': 3 if d3 else 2, 'datSep': 1,
+                           'trFile': [f"{name}_pf_train{k + 1}" for k in range(nTr)],
+                           'vlFile': [f"{name}_pf_val"], 'teFile': f"{name}_pf_test", 'selPF': 1, 'archPF': None,
+                           'train': 1, 'test': 1})
+        cfg['Exp']['gen'].update({'Ts': Ts, 'init': 1})
+        cfg['Dat']['gen'].update({'dOut': 3 if d3 else 2, 'inpX': ch['x'] * 1e-3, 'inpY': ch['y'] * 1e-3,
+                                  'inpZ': zTop, 'outX': ch['x'] * 1e-3, 'outY': ch['y'] * 1e-3, 'outZ': zTop})
+        cfg['Par']['gen'].update({'normX': 1, 'normY': 1})
+        cfg['Mdl']['dl'].update({'W': W, 'stride': max(W // 40, 1), 'epoch': 600, 'batch': 32, 'initLr': 0.003,
+                                 'valPat': 80, 'gradTh': 1, 'lrAdapt': 1, 'lrDropPr': 30, 'lrDropFa': 0.5})
+        cfg['Mdl']['pinf'].update({'phys': 2 if op else 1, 'alpha': 1, 'beta': 1, 'gamma': 0.1, 'warm': warm,
+                                   'col': 1, 'nSens': 0})
+        cfg['Mdl']['gen']['dev'] = 1
+        conf.save_config(cfg, f"board_{name}_PF")
+        st.session_state[f"{K}|fexported"] = (f"board_{name}_PF", name, nTr, len(C) if d3 else len(D['geo']), tau,
+                                              warm, W, Ts, op, d3)
+        st.toast(f"Exported PF data '{name}'", icon=':material/check:')
+    done = st.session_state.get(f"{K}|fexported")
+    if done:
+        cfgname, nm, nTr, N, tau, warm, W, Ts, op, d3 = done
+        st.success(f"Written: data/board/{nm}_pf_train1 … {nTr}.mat, {nm}_pf_val.mat, {nm}_pf_test.mat "
+                   f"({'3D' if d3 else '2D'} field, {N} nodes; X heat generation in W/m³, y temperature in °C"
+                   + (", finite-volume operator Cn, Gi, Gj, Gv, Vn" if op else "") + f") and config/gui/{cfgname}.json "
+                   f"(PF mode, operator network, physics {2 if op else 1}). Slowest time constant of the board "
+                   f"τ_max = {fmt(tau)} s → warm-up {warm} samples (3·τ_max/Ts, at least 10) and window W = {W} samples = "
+                   f"{fmt(W * Ts)} s.", icon=':material/check_circle:')
+        if not op:
+            st.caption(":material/info: The lumped board has a heat sink plane below it, which the 2D data do not "
+                       "contain: no operator is stored and the config uses physics 1 (automatic differentiation) "
+                       "with the equivalent heat sink h_v. Export the 3D model for physics 2.")
+        if st.button(f"Load config '{cfgname}' in the GUI", icon=':material/upload:', key=f"{K}|fload"):
+            from gui.core import config as conf
+            from gui.core import forms
+            forms.set_config(conf.read_config(cfgname), cfgname)
+            st.toast(f"Config '{cfgname}' loaded — open Modes › PF (views Theory, Run)", icon=':material/check:')
+    st.caption("The PF mode learns the whole temperature field T(x, t), not only the junction temperatures: a "
+               "network of the position (trunk) times a network of the chip losses over time (branch). The stored "
+               "operator C·dθ/dt + G·θ = V·Q is the finite-volume model of this page; the PF mode uses it as the "
+               "physics loss (Mdl › pinf › phys = 2). The electro-thermal coupling of the losses is not exported "
+               "(the profiles are simulated with the given losses), the constant board losses are part of Q.")
+
+
 def interpretation(res, Tj, rom, err):
     D, D2, lay = res['D'], res['D2'], res['lay']
     i = int(np.argmax(Tj.max(axis=0) - np.array([c['Tjmax'] for c in D['chips']])))
@@ -1586,6 +1677,7 @@ def page():
     predict(res, rom, net)
     export(res)
     export_pinn(res, net)
+    export_pf(res)
     cm.equations([
         ("Layer-resolved model (simulation, both views)",
          [r"C_i\,\dot T_i = \sum_j G_{ij}(T_j - T_i) + g_{out,i}(T_a - T_i) + B_i P + q_i,\quad "

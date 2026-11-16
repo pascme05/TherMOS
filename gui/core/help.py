@@ -183,6 +183,65 @@ HELP = {
     'Mdl.dl.seq': "0: seq2seq (the network predicts the whole window), x > 0: seq2point (the network predicts "
                   "sample x of the window; x = W means causal, only past inputs).",
     'Mdl.dl.valPat': "Early stopping patience: validations without improvement before training stops.",
+    'Mdl.pinf.phys':
+        "Physics in the loss of the PF mode. 0: none, the network only fits the temperatures. 1: residual of the heat "
+        "equation ρc·∂T/∂t = ∇·(k∇T) − h_v·(T − T_a) + Q with automatic differentiation at random collocation points; "
+        "works for any field data, but material interfaces and boundary conditions are not part of the residual. "
+        "2: residual of the finite-volume operator stored in the data file (Cn, Gi, Gj, Gv, Vn; written by the board "
+        "designer), exact at interfaces and boundaries and scaled as a temperature error — the most accurate "
+        "choice when available. See Theory for measured results.",
+    'Mdl.pinf.alpha':
+        "Weight α of the data loss (mean squared temperature error at the sensor nodes relative to ΔT²). α = 0 "
+        "trains with the physics only, without any temperature; useful to check how far the physics alone carries.",
+    'Mdl.pinf.beta':
+        "Weight β of the physics loss. The residual is a temperature error relative to ΔT, like the data loss, so "
+        "β = 1 weights both equally. Larger β (up to 10) when the data are sparse or noisy and the physics is "
+        "trusted; smaller β (0.1) when the physics is only approximate (physics 1 on layered boards).",
+    'Mdl.pinf.gamma':
+        "Weight γ of the initial-condition loss: before the first sample every profile is in thermal equilibrium "
+        "with the ambient (rise 0). 0 switches it off; 0.1 is enough to pin the start.",
+    'Mdl.pinf.K':
+        "Operator network: number K of basis functions φ_k(x) and coefficients b_k(t). The field is T̂ = T_ref + "
+        "ΔT·Σ b_k(t)·φ_k(x). Comparable to the number of POD modes: 8–32. Too small limits the accuracy, larger "
+        "values only cost time.",
+    'Mdl.pinf.nSens':
+        "Number of sensor nodes whose temperatures enter the data loss (farthest-point sampling: evenly spread, "
+        "starting at the hottest node). 0 = all nodes. The coordinate network needs n > 0 to be meaningful (every "
+        "fifth sensor is held out for the validation); try 20–100. Theory › *Where are the sensors?* shows them.",
+    'Mdl.pinf.nDat':
+        "Data points per optimiser step. Operator network: sensor nodes drawn per step (all windows of the batch use "
+        "them). Coordinate network: (sensor, time) samples per step. More points give smoother gradients and cost "
+        "memory; 1000–10000.",
+    'Mdl.pinf.nCol':
+        "Points of the physics loss per optimiser step: collocation points (physics 1; the second derivatives make "
+        "them about 10 times as expensive as a data point) or nodes of the finite-volume operator (physics 2). "
+        "500–5000.",
+    'Mdl.pinf.col':
+        "Operator network: 1 = the physics loss is also evaluated for the heat sources of the validation and testing "
+        "profiles. Their temperatures are never used — the physics needs none. This lets the network follow loads "
+        "for which no temperature data exist and gave the largest gain on the tutorial board. 0 = training profiles "
+        "only.",
+    'Mdl.pinf.srcTol':
+        "Source encoding: the heat generation Q (one value per node) is replaced by a few amplitudes p_j(t), one per "
+        "singular value above srcTol·σ₁. For chips with fixed footprints the number of amplitudes equals the number "
+        "of independently driven chips. Raise it (1e-3) for noisy source fields.",
+    'Mdl.pinf.branch':
+        "Operator network: sequence network of the branch (as the DL mode). 2 = LSTM is the default: it carries the "
+        "thermal state through a profile. 1 = CNN only sees a few samples around each time step.",
+    'Mdl.pinf.warm':
+        "Operator network: number of samples without sources placed before every profile, and number of samples at "
+        "the start of each training window that are excluded from the loss, because the branch has no thermal state "
+        "there. Rule: about 3·τ_max/Ts (τ_max: slowest time constant), and a window Mdl › dl › W of at least twice "
+        "that. Too short: the training error cannot fall, the windows start with an unknown state.",
+    'Mdl.pinf.width': "Neurons per hidden layer of the fully connected network (trunk / coordinate network). 32–128.",
+    'Mdl.pinf.depth': "Hidden layers of the fully connected network (trunk / coordinate network). 3–6.",
+    'Mdl.pinf.fourier':
+        "Number of Fourier frequencies added to every scaled coordinate (sin and cos of 2^i·π·x̂). A plain tanh "
+        "network is smooth; chip edges and thin layers need 3–6 frequencies. 0 = off.",
+    'Mdl.pinf.steps': "Coordinate network: optimiser steps per epoch; the validation error (held-out sensors) is "
+                      "evaluated once per epoch.",
+    'Mdl.pinf.seed': "Seed of the random numbers (network weights, sensors, collocation points); change it to see "
+                     "the spread between runs.",
     'Mdl.pinn.phys':
         "Physics of the residual. 0: none (the PINN is a DL network with the same windows); 1: Foster terms — "
         "one chain Σ R_k(1 − e^(−t/τ_k)) per output (and optionally per output/source pair for the coupling); "
@@ -291,6 +350,8 @@ BASIC = {
     'Mdl.nn.layer', 'Mdl.nn.nodes', 'Mdl.nn.act',
     'Mdl.dl.epoch', 'Mdl.dl.initLr', 'Mdl.dl.batch', 'Mdl.dl.W', 'Mdl.dl.seq', 'Mdl.dl.loss',
     'Mdl.dl.lrAdapt', 'Mdl.dl.lrDropPr', 'Mdl.dl.lrDropFa', 'Mdl.dl.valPat', 'Mdl.dl.stride',
+    'Mdl.pinf.phys', 'Mdl.pinf.alpha', 'Mdl.pinf.beta', 'Mdl.pinf.gamma', 'Mdl.pinf.K', 'Mdl.pinf.nSens',
+    'Mdl.pinf.warm', 'Mdl.pinf.col',
     'Mdl.pinn.phys', 'Mdl.pinn.alpha', 'Mdl.pinn.beta', 'Mdl.pinn.gamma', 'Mdl.pinn.warm', 'Mdl.pinn.pred',
     'Mdl.pinn.x0', 'Mdl.pinn.col', 'Mdl.pinn.TrefSrc', 'Mdl.pinn.Tref', 'Mdl.pinn.node', 'Mdl.gen.dev',
     'Par.gen.normX', 'Par.gen.normY', 'Par.loss.fw', 'Par.loss.bw',
@@ -324,6 +385,15 @@ def _single(c):
         int(p.get('phys', 1) or 0)) and st.get('src'))
 
 
+def _pfVar(c):
+    return int(_run(c, 'selPF', 1) or 1)
+
+
+def _pf(c, k, d):
+    v = (c['Mdl'].get('pinf') or {}).get(k)
+    return d if v is None or v == '' else v
+
+
 def _loss(c):
     return c['Par']['loss']['bw'] == 1 or c['Par']['loss']['fw'] == 1
 
@@ -353,7 +423,18 @@ ACTIVE = {
     'Mdl.dl.seq': lambda c: _mode(c) == 'DL',
     'Mdl.dl.loss': lambda c: _mode(c) == 'DL',
     'Mdl.dl.valFreq': lambda c: _mode(c) == 'DL',
-    'Mdl.gen.dev': lambda c: _mode(c) in ('DL', 'PI'),
+    'Mdl.gen.dev': lambda c: _mode(c) in ('DL', 'PI', 'PF'),
+    'Mdl.dl.shu': lambda c: _mode(c) != 'PF',
+    'Mdl.dl.W': lambda c: not (_mode(c) == 'PF' and _pfVar(c) == 2),
+    'Mdl.dl.stride': lambda c: not (_mode(c) == 'PF' and _pfVar(c) == 2),
+    'Mdl.dl.batch': lambda c: not (_mode(c) == 'PF' and _pfVar(c) == 2),
+    'Mdl.pinf.beta': lambda c: _pf(c, 'phys', 1) != 0,
+    'Mdl.pinf.nCol': lambda c: _pf(c, 'phys', 1) != 0 and float(_pf(c, 'beta', 1.0)) > 0,
+    'Mdl.pinf.col': lambda c: _pfVar(c) == 1 and _pf(c, 'phys', 1) != 0 and float(_pf(c, 'beta', 1.0)) > 0,
+    'Mdl.pinf.K': lambda c: _pfVar(c) == 1,
+    'Mdl.pinf.branch': lambda c: _pfVar(c) == 1,
+    'Mdl.pinf.warm': lambda c: _pfVar(c) == 1,
+    'Mdl.pinf.steps': lambda c: _pfVar(c) == 2,
     'Mdl.pinn.PvEq': lambda c: _single(c) and int(c['Mdl']['pinn'].get('PvSrc', 0) or 0) == 0,
     'Mdl.pinn.PvSrc': _single,
     'Mdl.pinn.Rth': _single, 'Mdl.pinn.Cth': _single,
@@ -381,14 +462,15 @@ RELEVANT = {
             'gpr': lambda c: _mode(c) == 'ML' and _ml(c) == 4,
             'en': lambda c: _mode(c) == 'ML' and _ml(c) == 5,
             'nn': lambda c: _mode(c) == 'ML' and _ml(c) == 6,
-            'dl': lambda c: _mode(c) in ('DL', 'PI'),
+            'dl': lambda c: _mode(c) in ('DL', 'PI', 'PF'),
             'pinn': lambda c: _mode(c) == 'PI',
+            'pinf': lambda c: _mode(c) == 'PF',
             'sf': lambda c: _mode(c) == 'SF'},
 }
 CATEGORY_TITLES = {'gen': 'General', 'rc': 'RC network', 'ss': 'State space', 'pod': 'POD',
                    'knn': 'K nearest neighbours', 'dt': 'Regression tree', 'svm': 'Support vector regression',
                    'gpr': 'Gaussian process', 'en': 'Ensemble', 'nn': 'Neural network (MLP)', 'dl': 'Deep learning',
-                   'pinn': 'Physics (PINN)', 'loss': 'Temperature-dependent losses', 'sf': 'Coupled network (SF)'}
+                   'pinn': 'Physics (PINN)', 'pinf': 'Field network (PF)', 'loss': 'Temperature-dependent losses', 'sf': 'Coupled network (SF)'}
 
 
 #######################################################################################################################

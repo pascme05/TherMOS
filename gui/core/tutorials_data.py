@@ -331,6 +331,70 @@ TUTORIALS = [
                    "Set lrAdapt = 0 (fixed steps every 4 epochs): compare the convergence chart."]),
 
     # ------------------------------------------
+    # PF
+    # ------------------------------------------
+    dict(id='pf_board', mode='PF', level='Advanced', minutes=20, base='tutorial_PF',
+         title="Field PINN of a board: 3D temperature field from data and the heat equation",
+         story="Three chips (IGBT T1, diode D1, SiC MOSFET M1) on a 30 × 20 mm IMS board. The board designer "
+               "simulated the layer-resolved 3D temperature field (finite-volume model, 3453 nodes) for four random "
+               "training profiles of 20 s, one validation profile and a designed pulse/sine test profile of 40 s "
+               "with a maximum rise of 107 K (setup/tutorial/genBoardPF.py, or *Export for the PF mode* in the "
+               "board designer). The operator network (variant 1) learns the field of any load profile; the "
+               "coordinate network (variant 2) reconstructs the field of the test profile from 50 sensors. About "
+               "3 min on a GPU for the tutorial configuration.",
+         goals=["see why a network trained on temperatures alone fails on a new load and how the heat equation "
+                "repairs it", "choose the physics loss (finite-volume operator or automatic differentiation)",
+                "reconstruct a field from few sensors"],
+         changes={},
+         runs=[dict(label="physics 0 (data only)", changes={'Mdl.pinf.phys': 0}),
+               dict(label="physics 2 (tutorial configuration)", changes={}),
+               dict(label="physics 2, col = 0", changes={'Mdl.pinf.col': 0}),
+               dict(label="physics 2, α = 0 (no temperatures)", changes={'Mdl.pinf.alpha': 0}),
+               dict(label="physics 1, β = 0.01", changes={'Mdl.pinf.phys': 1, 'Mdl.pinf.beta': 0.01}),
+               dict(label="coordinate network, 50 sensors, physics 0",
+                    changes={'Run.selPF': 2, 'Mdl.pinf.phys': 0, 'Mdl.pinf.nSens': 50,
+                             'Mdl.dl.epoch': 150, 'Mdl.dl.valPat': 40, 'Mdl.dl.lrDropPr': 15}),
+               dict(label="coordinate network, 50 sensors, physics 2",
+                    changes={'Run.selPF': 2, 'Mdl.pinf.phys': 2, 'Mdl.pinf.nSens': 50,
+                             'Mdl.dl.epoch': 150, 'Mdl.dl.valPat': 40, 'Mdl.dl.lrDropPr': 15})],
+         steps=["Generate the data once: `python setup/tutorial/genBoardPF.py` (about 1 min).",
+                "Open *Theory*: the two variants, the loss with all symbols, the three source footprints found in "
+                "the data and the sensor placement.",
+                "*Run* the tutorial configuration (operator network, physics 2). *Settings of the tutorial* › *Load "
+                "this run* loads the other rows of the table.",
+                "Open *Results*: verdict, loss history (data and physics separately), field against the reference "
+                "with the time slider, error map and the learned basis functions of the trunk."],
+         look="| run | RMSE (K) | MAE (K) | MAX (K) | training (s) |\n|---|---|---|---|---|\n"
+              "| operator, physics 0 (data only) | 8.94 | 8.46 | 18.9 | 22 |\n"
+              "| **operator, physics 2 (tutorial)** | **0.81** | **0.58** | 19.8 | 159 |\n"
+              "| operator, physics 2, col = 0 | 2.32 | 2.11 | 12.8 | 108 |\n"
+              "| operator, physics 2, α = 0 | 1.98 | 1.20 | 29.2 | 82 |\n"
+              "| operator, physics 1, β = 0.01 | 31.9 | 30.8 | 66.3 | 66 |\n"
+              "| coordinate, 50 sensors, physics 0 | 5.64 | 3.12 | 44.9 | 42 |\n"
+              "| coordinate, 50 sensors, physics 2 | 3.18 | 2.31 | 43.9 | 245 |\n"
+              "| for comparison: PS mode, K = 6 | 1.09 | 0.37 | 30.6 | 26 |\n\n"
+              "Errors of the test profile over all 3453 nodes and 800 time steps (RTX 3070).\n"
+              "- **Data only:** 2.1 K on the validation profile but 8.9 K on the test profile (8 % of the rise). "
+              "The test drives all chips at full power at once, which the random training loads rarely do.\n"
+              "- **Physics 2** lowers the RMSE by a factor of 11 to 0.81 K (0.8 % of the rise). Without the "
+              "collocation profiles (col = 0) 2.3 K remain: the heat balance on the sources of the test profile, "
+              "without its temperatures, is what carries the network to the new load. Even without any "
+              "temperature (α = 0) it reaches 2.0 K.\n"
+              "- **Physics 1** fails here (31.9 K): the board has copper next to a dielectric (conductivity ratio "
+              "195) and the residual with automatic differentiation ignores this jump. The log prints a warning. "
+              "On the same board as a lumped 2D field it helps (7.1 K → 2.3 K).\n"
+              "- **Coordinate network:** with 50 sensors (1.4 % of the nodes) the physics lowers the RMSE from 5.6 "
+              "to 3.2 K. The maximum error of 44 K sits in the chips, where the field is steepest and no sensor "
+              "is placed.\n"
+              "- **PS mode:** as accurate (1.09 K RMSE) and 6 times faster — for a linear board with full field "
+              "data a POD model is the better tool. The PF mode is for few sensors and loads without data.",
+         exercise=["Generate the lumped 2D field (genBoardPF.main(name='tutorial_pf2d', view='xy') or the board "
+                   "designer) and run the coordinate network with 30 sensors and physics 1: 0.30 K RMSE.",
+                   "Coordinate network: raise nSens from 50 to 200 — how does the maximum error in the chips "
+                   "change?", "Operator network: set K = 4. Which error does the missing basis cause?",
+                   "Halve the warm-up (warm = 35): why does the error at the start of the windows grow?"]),
+
+    # ------------------------------------------
     # Studies
     # ------------------------------------------
     dict(id='study_grid', mode='Study', runMode='SS', page='study', level='Intermediate', minutes=10,

@@ -157,6 +157,7 @@ setup['selPS'] = 0                                                              
 setup['selML'] = 0                                                                                                       # ML-Model (Machine Learning) (0): de-activated, (1): LR, (2): RF, (3): SVR, (4): GRP, (5): EN, (6): NN
 setup['selDL'] = 0                                                                                                       # DL-Model (Machine Learning) (0): de-activated, (1): CNN, (2): LSTM, (3): CNN+LSTM
 setup['selPI'] = 3                                                                                                       # Physics Informed DL-Model (Machine Learning) (0): de-activated, (1): CNN, (2): LSTM, (3): CNN+LSTM
+setup['selPF'] = 0                                                                                                       # Physics-Informed Field Network for 2D/3D fields (0): de-activated, (1): operator network (new load profiles), (2): coordinate network (field from sensors)
 
 # ==============================================================================
 # Python Port

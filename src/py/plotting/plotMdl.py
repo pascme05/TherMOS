@@ -5,7 +5,7 @@
 # File:         plotMdl
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.0
+# Version:      V.1.1
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -20,6 +20,8 @@ SS/PS:  poles of the discrete system in the complex plane (unit circle = stabili
 SF:     resistance matrix Rth (K/W).
 PO/PS:  singular values σ_i of the POD (log scale), captured energy and the first spatial modes φ_i (-).
 DL/PI:  training and validation loss over the iterations/epochs.
+PF:     data, physics and initial-condition loss and the validation error (K) over the epochs, relative singular
+        values σ_j/σ_1 of the heat sources (source encoding) and the sensor nodes.
 Inputs:     1) data:    training, validation and testing data
             2) mdls:    dictionary of the models {tag: mdl}
             3) setup:   includes all simulation variables
@@ -27,6 +29,9 @@ Outputs:    None
 
 V1.0: 07.11.2026, Pascal Schirmer
 - Python port of plotMdl.m; one figure per model, also for multiple selected models
+
+V1.1: 16.11.2026, Pascal Schirmer
+- PF model (physics-informed field network)
 """
 
 #######################################################################################################################
@@ -142,6 +147,38 @@ def plotMdl(data, mdls, setup):
             ax.set_title('Convergence of the %s model' % tag.upper())
             ax.legend()
             ax.grid(True, which='both')
+
+        # ==============================================================================
+        # Physics-Informed Field Network
+        # ==============================================================================
+        if tag == 'pf':
+            info = m['info']
+            ep = np.arange(1, len(info['loss']) + 1)
+            fig, ax = plt.subplots(1, 3, figsize=(16, 4.5))
+            fig.suptitle('Physics-Informed Field Network (%s)' % ('operator network' if m['var'] == 1 else
+                                                                 'coordinate network'))
+            for k, lab in (('lossData', 'Data'), ('lossPhys', 'Physics'), ('lossInit', 'Initial condition')):
+                if np.any(np.asarray(info[k]) > 0):
+                    ax[0].semilogy(ep, info[k], label=lab)
+            ax[0].set_xlabel('Epoch (-)')
+            ax[0].set_ylabel('Loss, unweighted (-)')
+            ax[0].set_title('Training Losses')
+            ax[0].legend()
+            ax[0].grid(True, which='both')
+            ax[1].semilogy(ep, np.sqrt(info['valLoss']), 'k')
+            ax[1].set_xlabel('Epoch (-)')
+            ax[1].set_ylabel('Validation RMSE (K)')
+            ax[1].set_title('Validation Error')
+            ax[1].grid(True, which='both')
+            g = np.asarray(m['geo'], dtype=float)
+            ax[2].plot(g[:, 0] * 1e3, g[:, 1] * 1e3, '.', color='0.8', ms=2, label='Nodes')
+            ax[2].plot(g[m['sens'], 0] * 1e3, g[m['sens'], 1] * 1e3, 'r.', ms=4,
+                       label='Sensors (%d)' % len(m['sens']))
+            ax[2].set_xlabel('x (mm)')
+            ax[2].set_ylabel('y (mm)')
+            ax[2].set_title('Sensor Nodes (top view), %d Source Amplitude(s)' % m['S'])
+            ax[2].legend(loc='upper right')
+            fig.tight_layout()
 
 
 #######################################################################################################################

@@ -81,7 +81,7 @@ def testing(mdls, data, setup, para, path):
         if m['tag'] not in mdls:
             name = pjoin(path['mdl'], 'mdl_' + m['tag'] + '_' + setup['name'])
             try:
-                if m['tag'] in ('dl', 'pi'):
+                if m['tag'] in ('dl', 'pi', 'pf'):
                     mdls[m['tag']] = torch.load(name + '.pt', weights_only=False)
                 else:
                     with open(name + '.pkl', 'rb') as f:

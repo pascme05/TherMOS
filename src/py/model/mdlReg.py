@@ -5,7 +5,7 @@
 # File:         mdlReg
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.0
+# Version:      V.1.1
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -19,6 +19,9 @@ function, the number of outputs (one channel for RC and ML) and the model size (
 testing loop over this registry, so that several models can be selected at the same time.
 Inputs:     1) setup:   includes all simulation variables
 Outputs:    1) reg:     list of dictionaries (tag, name, fit, sol, siso, size) of the selected models
+
+V1.1: 16.11.2026, Pascal Schirmer
+- PF model (physics-informed field network, setup['selPF'])
 """
 
 #######################################################################################################################
@@ -45,6 +48,8 @@ from src.py.model.DL.dlFit import dlFit
 from src.py.model.DL.dlSol import dlSol
 from src.py.model.PINN.pinnFit import pinnFit
 from src.py.model.PINN.pinnSol import pinnSol
+from src.py.model.PF.pfFit import pfFit
+from src.py.model.PF.pfSol import pfSol
 
 # ==============================================================================
 # External
@@ -111,6 +116,10 @@ def mdlReg(setup):
         reg.append({'tag': 'pi', 'name': 'Physics-Informed NN', 'siso': 0,
                     'fit': lambda d, v, p: pinnFit(d, v, p, setup, lg),
                     'sol': lambda m, d, p: pinnSol(m, d, p, setup, lg), 'size': _nNet})
+    if setup.get('selPF', 0) != 0:
+        reg.append({'tag': 'pf', 'name': 'Physics-Informed Field Network', 'siso': 0,
+                    'fit': lambda d, v, p: pfFit(d, v, p, setup, lg),
+                    'sol': lambda m, d, p: pfSol(m, d, p, setup, lg), 'size': _nNet})
 
     ###################################################################################################################
     # Return

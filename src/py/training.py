@@ -62,7 +62,7 @@ def training(data, setup, para, path):
         # Fitting
         # ==============================================================================
         tStart = time.time()
-        if m['tag'] == 'pi':                                                # inputs of the testing data (collocation)
+        if m['tag'] in ('pi', 'pf'):                                        # testing data (PI: collocation inputs, PF: coordinate network)
             data['tr']['_te'] = data.get('te')
         mdl = m['fit'](data['tr'], data['vl'], para)
         data['tr'].pop('_te', None)
@@ -74,7 +74,7 @@ def training(data, setup, para, path):
         # Saving
         # ==============================================================================
         name = pjoin(path['mdl'], 'mdl_' + m['tag'] + '_' + setup['name'])
-        if m['tag'] in ('dl', 'pi'):
+        if m['tag'] in ('dl', 'pi', 'pf'):
             torch.save(mdl, name + '.pt')
         else:
             with open(name + '.pkl', 'wb') as f:

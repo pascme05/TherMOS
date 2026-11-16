@@ -5,7 +5,7 @@
 # File:         main
 # Date:         07.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.1
+# Version:      V.1.2
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -28,6 +28,9 @@ V1.0: 07.11.2026, Pascal Schirmer
 
 V1.1: 07.11.2026, Pascal Schirmer
 - Figures are not opened anymore but saved as PNG files in results/<setup['name']>/ (non-interactive backend)
+
+V1.2: 16.11.2026, Pascal Schirmer
+- PF model (physics-informed field network for 2D/3D fields, setup['selPF'])
 """
 
 #######################################################################################################################
@@ -91,7 +94,7 @@ def main(setup, path):
     setup.setdefault('EWMA', [5, 50])
     setup.setdefault('EWMS', [5, 50])
     setup.setdefault('featRank', 0)
-    for k in ('selRC', 'selSS', 'selSF', 'selPO', 'selPS', 'selML', 'selDL', 'selPI'):
+    for k in ('selRC', 'selSS', 'selSF', 'selPO', 'selPS', 'selML', 'selDL', 'selPI', 'selPF'):
         setup.setdefault(k, 0)
     lg = setup['legacy']
 
@@ -113,7 +116,7 @@ def main(setup, path):
     print("Test Data:    %s" % str(setup.get('teFile')))
     print("Val Data:     %s" % str(setup.get('vlFile')))
     print("Models:       " + ', '.join(k[3:] for k in ('selRC', 'selSS', 'selSF', 'selPO', 'selPS', 'selML', 'selDL',
-                                                       'selPI') if setup[k] != 0))
+                                                       'selPI', 'selPF') if setup[k] != 0))
     print("Legacy:       %d (%s)" % (lg, 'MATLAB behaviour' if lg == 1 else 'corrected behaviour'))
     print("\n")
 
@@ -126,7 +129,7 @@ def main(setup, path):
     except (OSError, KeyError, ValueError) as e:
         sys.exit('ERROR: Configuration could not be loaded (' + str(e) + ')')
     data = loadData(para, setup, path)
-    if data['tr']['Dim'] < 2 and (setup['selPO'] != 0 or setup['selPS'] != 0):
+    if data['tr']['Dim'] < 2 and (setup['selPO'] != 0 or setup['selPS'] != 0 or setup['selPF'] != 0):
         sys.exit('ERROR: 1D data input and 2D/3D model')
     _banner("END: Loading Para and Data")
     print("\n")

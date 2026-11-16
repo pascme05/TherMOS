@@ -263,8 +263,43 @@ def _dl(cfg, sub, pinn=False):
     return f, PRE_STEPS + steps + POST_STEPS
 
 
+def _pf(cfg, sub):
+    f = Flow()
+    last = _pre(f, cfg)
+    G = _g(cfg)
+    var = int(G.get('selPF') or 1)
+    phys, b = int(forms.value('Mdl', 'pinf', 'phys') or 0), float(forms.value('Mdl', 'pinf', 'beta') or 0)
+    nS = int(forms.value('Mdl', 'pinf', 'nSens') or 0)
+    on = phys > 0 and b > 0
+    f.node('src', 'Source encoding', ["Q ≈ Σ Uⱼ(x)·pⱼ(t)", f"σⱼ/σ₁ > {val('Mdl', 'pinf', 'srcTol')}"])
+    f.node('sens', 'Sensors', ["all nodes" if nS == 0 else f"{nS} nodes, farthest-point"])
+    f.node('phy', 'Physics loss', [{0: 'none', 1: 'heat equation, autodiff', 2: 'finite-volume operator'}.get(phys, ''),
+                                   f"α = {val('Mdl', 'pinf', 'alpha')}, β = {val('Mdl', 'pinf', 'beta')}, "
+                                   f"γ = {val('Mdl', 'pinf', 'gamma')}"], kind='opt', active=on)
+    if var == 2:
+        f.node('net', 'Train coordinate network', [f"(x, t) → T, {val('Mdl', 'pinf', 'depth')} × "
+                                                   f"{val('Mdl', 'pinf', 'width')} tanh",
+                                                   f"{val('Mdl', 'dl', 'epoch')} epochs × "
+                                                   f"{val('Mdl', 'pinf', 'steps')} steps", "testing profile only"])
+    else:
+        f.node('net', 'Train operator network', [f"branch × trunk, K = {val('Mdl', 'pinf', 'K')}",
+                                                 f"W = {val('Mdl', 'dl', 'W')}, warm-up {val('Mdl', 'pinf', 'warm')}",
+                                                 f"{val('Mdl', 'dl', 'epoch')} epochs, lr {val('Mdl', 'dl', 'initLr')}"])
+    f.edge(last, 'src').edge('src', 'sens').edge('sens', 'net').edge('phy', 'net', active=on)
+    _post(f, cfg, 'net', 'pf')
+    steps = [('Source encoding', "the heat generation of all nodes is reduced to a few amplitudes pⱼ(t), one per "
+                                 "independently driven source (SVD); they are the inputs of the network."),
+             ('Sensors', "nodes whose temperatures enter the data loss: all, or a few spread evenly over the domain."),
+             ('Physics loss', "residual of the heat equation: with automatic differentiation at random points "
+                              "(physics 1) or with the finite-volume operator of the data file (physics 2)."),
+             ('Train network', "operator network: windows of all training profiles, validation profiles predicted "
+                               "as in testing. Coordinate network: sensors of the testing profile, every fifth "
+                               "held out for the validation.")]
+    return f, PRE_STEPS + steps + POST_STEPS
+
+
 WORKFLOWS = {'RC': _rc, 'SS': _ss, 'SF': _sf, 'PO': _po, 'PS': lambda c, s: _po(c, s, True), 'ML': _ml,
-             'DL': _dl, 'PI': lambda c, s: _dl(c, s, True)}
+             'DL': _dl, 'PI': lambda c, s: _dl(c, s, True), 'PF': _pf}
 
 
 #######################################################################################################################

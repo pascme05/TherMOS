@@ -333,15 +333,24 @@ def pod_view(data, setup, key):
     zs = zslice(D['geo'], key, z0)
     z0 = z0 if zs is None else zs
 
-    # Mode shapes
+    # Mode shapes (PF: basis functions of the trunk at the nodes of the training mesh)
     Phi = m.get('rPhi')
+    pf = Phi is None and m.get('phi') is not None and len(np.asarray(m['phi'])) == len(np.asarray(D['geo']))
+    Phi = m.get('phi') if pf else Phi
     if Phi is not None:
         Phi = np.asarray(Phi, dtype=float)
-        k = st.slider("Mode shape φₖ", 1, Phi.shape[1], 1, key=f"{key}|k")
+        k = st.slider("Basis function φₖ of the trunk" if pf else "Mode shape φₖ", 1, Phi.shape[1], 1,
+                      key=f"{key}|k")
         [F, x, y] = _grid(Phi[:, k - 1], D, z0)
         a = float(np.nanmax(np.abs(F))) or 1.0
-        show(heat(F[0] if F.ndim == 3 else F, x, y, f"Mode {k}", '-', DIV, [-a, a], 0), height=360,
-             key=f"{key}|phi", info="**Spatial POD mode φₖ.** Mode 1 is the dominant heating pattern; higher modes "
+        show(heat(F[0] if F.ndim == 3 else F, x, y, f"{'Basis function' if pf else 'Mode'} {k}", '-', DIV, [-a, a],
+                  0), height=360, key=f"{key}|phi",
+             info=("**Learned basis function φₖ(x) of the trunk.** The field is T(x, t) = T_ref + ΔT·Σ bₖ(t)·φₖ(x). "
+                   "Unlike POD modes these functions are not ordered by importance and not orthogonal: each one "
+                   "is a pattern the network found useful, typically the heating around one chip or the spreading "
+                   "into the board. Noisy, patchy functions point to too little data or too many functions K.")
+             if pf else
+             "**Spatial POD mode φₖ.** Mode 1 is the dominant heating pattern; higher modes "
              "describe how the heat spreads in time (sign changes = heat moving from one region to another). The "
              "field is T(x, t) ≈ T̄(x) + Σ aₖ(t)·φₖ(x).")
 
@@ -496,6 +505,116 @@ def dl_view(data, setup, key):
                 st.caption(f"Architecture not available: {e}")
 
 
+def pf_findings(info, m, err):
+    """Plain-language findings of a PF run [(topic, sentence)] (results view; tested in tests/test_gui_pf.py)."""
+    dT = float(info.get('dT', 1.0))
+    ld, lp = float(info['lossData'][-1]), float(info['lossPhys'][-1])
+    a, b = float(info.get('alpha', 1)), float(info.get('beta', 0))
+    vl = np.sqrt(np.asarray(info['valLoss'], dtype=float))
+    ib = int(np.argmin(vl))
+    mae, mx = float(np.nanmean(err['MAE'])), float(np.nanmax(err['MAX']))
+    out = [('Verdict', f"Mean absolute error over all nodes **{fmt(mae)} K = {100 * mae / dT:.1f} % of the "
+                       f"temperature scale ΔT = {fmt(dT)} K**; the worst single node and sample is off by "
+                       f"{fmt(mx)} K. " + ("Below 2 % of ΔT: the field is reproduced well." if mae < 0.02 * dT else
+                                           "Between 2 % and 5 % of ΔT: usable for trends, not for limits."
+                                           if mae < 0.05 * dT else
+                                           "Above 5 % of ΔT: the model does not describe this profile."))]
+    val = 'held-out sensors' if int(m.get('var', 1)) == 2 else 'validation profiles'
+    out.append(('Training', f"Best validation RMSE {fmt(float(vl[ib]))} K ({val}) in epoch {ib + 1} of {len(vl)}. "
+                + ("The training stopped while the validation error was still falling: more epochs will help."
+                   if ib >= len(vl) - 3 else "The network of that epoch is kept (early stopping).")))
+    if b > 0 and lp > 0:
+        rp, rd = 100 * np.sqrt(lp), 100 * np.sqrt(ld)
+        out.append(('Physics', f"Last epoch: data RMS {rd:.2f} % of ΔT, physics residual RMS {rp:.2f} % of ΔT "
+                    f"(as a temperature error); weighted β·L_phys = {fmt(b * lp)} vs. α·L_data = {fmt(a * ld)}. "
+                    + ("The physics term dominates the loss: the network follows the heat equation more than "
+                       "the data. If the test error is high the physics may not match the data (physics 1 on "
+                       "layered boards) — reduce β." if b * lp > 3 * a * ld else
+                       "The data term dominates: the physics acts as a regulariser; raise β to enforce it more."
+                       if a * ld > 3 * b * lp else "Data and physics are balanced.")))
+    else:
+        out.append(('Physics', "No physics loss (physics 0 or β = 0): the network only interpolates the measured "
+                               "temperatures. Expect a much larger error for loads that the training data do not "
+                               "contain; switch the physics on (Parameters › pinf › Physics)."))
+    if float(vl[ib]) > 0 and mae > 3 * float(vl[ib]) and int(m.get('var', 1)) == 1:
+        out.append(('Action', f"The test error is more than three times the validation error ({fmt(float(vl[ib]))} "
+                              f"K): the testing loads differ from the training loads. Use the physics with "
+                              f"collocation profiles (pinf › col = 1) or add training profiles that cover them."))
+    if int(m.get('var', 1)) == 2:
+        n, N = len(np.asarray(m.get('sens', []))) + len(np.asarray(m.get('sensVal', []))), len(np.asarray(m['geo']))
+        out.append(('Sensors', f"The field of {N} nodes was reconstructed from {n} sensor nodes ({100 * n / N:.1f} "
+                               f"%); the error above is evaluated at all nodes, also those the network never saw."))
+    return out
+
+
+def pf_view(data, setup, key):
+    tag = _tag(data)
+    m = data['mdls'].get(tag, {})
+    info = m.get('info') or {}
+    if info.get('loss'):
+        from gui.views.tools import _common as cm
+        cm.findings([f"**{t}.** {s}" for t, s in pf_findings(info, m, data['results'][tag]['err']['tot'])])
+        ep = np.arange(1, len(info['loss']) + 1)
+        tabs = st.tabs(["Did the training converge?", "Which data did the network see?"])
+        with tabs[0]:
+            fig = make_subplots(specs=[[{'secondary_y': True}]])
+            for i, (k, lab) in enumerate((('lossData', 'L_data'), ('lossPhys', 'L_phys'), ('lossInit', 'L_init'))):
+                v = np.asarray(info.get(k) or [], dtype=float)
+                if len(v) and np.any(v > 0):
+                    fig.add_trace(line(ep, np.maximum(v, 1e-30), lab, i), secondary_y=False)
+            fig.add_trace(line(ep, np.sqrt(np.asarray(info['valLoss'], dtype=float)), 'validation RMSE (K)', 6,
+                               dash='dot'), secondary_y=True)
+            fig.update_yaxes(type='log', title_text='loss (relative to ΔT²)', secondary_y=False)
+            fig.update_yaxes(type='log', title_text='validation RMSE (K)', secondary_y=True, showgrid=False)
+            fig.update_xaxes(title_text='Epoch')
+            show(fig, height=360, key=f"{key}|pfloss", info="**Losses over the epochs** (unweighted, log scale). "
+                 "Left axis: data, physics and initial-condition loss, all relative to ΔT² (10⁻⁴ = RMS of 1 % of "
+                 "ΔT). Right axis, dotted: validation error in kelvin. The validation error decides which network "
+                 "is kept. Data loss falling while the validation error rises = overfitting; a physics loss that "
+                 "stays high = the network cannot satisfy the heat equation (too small, or β too low).")
+            lr = np.asarray(info.get('learnRate') or [0.0], dtype=float)
+            st.caption(f"{len(ep)} epochs in {fmt(float(info['time'][-1]))} s on {info.get('device', '?')}; "
+                       f"learning rate {fmt(float(lr[0]))} → {fmt(float(lr[-1]))}; weights α = "
+                       f"{fmt(info.get('alpha', 1))}, β = {fmt(info.get('beta', 0))}, γ = {fmt(info.get('gamma', 0))}; "
+                       f"ΔT = {fmt(info.get('dT', 1))} K.")
+        with tabs[1]:
+            g = np.asarray(m.get('geo'), dtype=float)
+            sens = np.asarray(m.get('sens', []), dtype=int)
+            c = st.columns([3, 2])
+            with c[0]:
+                step = max(len(g) // 6000, 1)
+                fig = go.Figure(go.Scattergl(x=g[::step, 0] * 1e3, y=g[::step, 1] * 1e3, mode='markers',
+                                             name='nodes', marker=dict(color='#d9d8d2', size=3)))
+                if len(sens) < len(g):
+                    fig.add_trace(go.Scattergl(x=g[sens, 0] * 1e3, y=g[sens, 1] * 1e3, mode='markers',
+                                               name='sensors (training)', marker=dict(color=color(1), size=7)))
+                    sv_ = np.asarray(m.get('sensVal', []), dtype=int)
+                    if len(sv_):
+                        fig.add_trace(go.Scattergl(x=g[sv_, 0] * 1e3, y=g[sv_, 1] * 1e3, mode='markers',
+                                                   name='sensors (validation)', marker=dict(color=color(2), size=7)))
+                fig.update_layout(xaxis_title='x (mm)', yaxis_title='y (mm)', yaxis=dict(scaleanchor='x'))
+                show(fig, height=340, key=f"{key}|pfsens", info="**Nodes and sensors (top view).** Grey: all nodes "
+                     "of the mesh. Coloured: nodes whose temperatures were used in the data loss (and, for the "
+                     "coordinate network, the held-out sensors of the validation). Without coloured points all "
+                     "nodes were used.")
+            with c[1]:
+                st.metric("Sensor nodes", f"{len(sens)} of {len(g)}",
+                          help="Nodes whose temperatures entered the data loss (Mdl › pinf › nSens; 0 = all).")
+                st.metric("Source amplitudes S", int(m.get('S', 0)),
+                          help="Inputs of the network: independent heat sources found by the SVD of the heat "
+                               "generation (Theory › How many sources are there?).")
+                if int(m.get('var', 1)) == 1:
+                    st.metric("Basis functions K", int(m.get('K', 0)), help="Products b_k(t)·φ_k(x) of the operator "
+                                                                            "network (Mdl › pinf › K).")
+                    st.caption(f"{info.get('nWin', '?')} training windows of W = {m.get('W')} samples, warm-up "
+                               f"{m.get('warm')} samples; physics {m.get('phys')}.")
+                else:
+                    st.caption(f"One profile of {m.get('Nt')} samples ({fmt(float(m.get('tEnd', 0)))} s); "
+                               f"physics {m.get('phys')}.")
+    st.divider()
+    pod_view(data, setup, key)
+
+
 #######################################################################################################################
 # Render functions per mode
 #######################################################################################################################
@@ -520,4 +639,5 @@ RENDER = {
     'ML': _make(scatter),
     'DL': _make(dl_view, scatter),
     'PI': _make(dl_view, scatter),
+    'PF': _make(pf_view),
 }

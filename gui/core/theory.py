@@ -52,5 +52,6 @@ THEORY = {
     'ML': _lazy('theory_dl', 'theory_ml'),
     'DL': _lazy('theory_dl', 'theory_dl'),
     'PI': _lazy('theory_dl', 'theory_pi'),
+    'PF': _lazy('theory_pf', 'theory_pf'),
 }
 

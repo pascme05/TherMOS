@@ -90,7 +90,7 @@ RUN_SECTION = 'Run'                                                   # section 
 CONFIG_VAR = 'config'                                                 # run setting naming the config workbook
 MODE_VAR = 'mode'                                                     # run setting of the operating mode
 SEL = {'RC': 'selRC', 'SS': 'selSS', 'SF': 'selSF', 'PO': 'selPO', 'PS': 'selPS', 'ML': 'selML', 'DL': 'selDL',
-       'PI': 'selPI'}
+       'PI': 'selPI', 'PF': 'selPF'}
 RUN = {'user': 'Pascal Schirmer', 'name': 'default', 'config': '/default/default', 'mode': 'SS',
        'plotOut': 1, 'plotMdl': 0, 'featRank': 0, 'save': 0, 'train': 1, 'test': 1,
        'format': 'mat', 'datDim': 1, 'datSep': 1,
@@ -98,8 +98,9 @@ RUN = {'user': 'Pascal Schirmer', 'name': 'default', 'config': '/default/default
        'trSheet': ['train-1', 'train-2', 'train-3'], 'teSheet': 'test', 'vlSheet': ['val'],
        'trID': [], 'teID': [], 'vlID': [], 'rTr': 0.7, 'rVl': 0.2,
        'inp': ['P1', 'P2', 'P3'], 'out': ['T1', 'T2', 'T3'], 'ref': ['R1', 'R2', 'R3'],
-       'selRC': 1, 'selSS': 1, 'selSF': 2, 'selPO': 1, 'selPS': 1, 'selML': 1, 'selDL': 1, 'selPI': 3,
-       'featRoll': 0, 'EWMA': [5, 50], 'EWMS': [5, 50], 'legacy': 0, 'archDL': None, 'archPI': None, 'physPI': None}
+       'selRC': 1, 'selSS': 1, 'selSF': 2, 'selPO': 1, 'selPS': 1, 'selML': 1, 'selDL': 1, 'selPI': 3, 'selPF': 1,
+       'featRoll': 0, 'EWMA': [5, 50], 'EWMS': [5, 50], 'legacy': 0, 'archDL': None, 'archPI': None, 'physPI': None,
+       'archPF': None}
 # (var, kind, label, help): kind 'text', 'toggle', 'int', 'select:a|b|c', 'expert:<kind>'; the data settings
 # (files, sheets, IDs, ratios, channels) have their own form on the Setup page (gui/views/project.py)
 RUN_FIELDS = [
@@ -166,6 +167,14 @@ MODES = {
                     "physics residual (α·data + β·physics + γ·initial condition).",
                pick=('selPI', {1: 'CNN', 2: 'LSTM', 3: 'CNN + LSTM'}), cats=['gen', 'dl'],
                script='setup/tutorial/tutorial_PI.py'),
+    'PF': dict(title='Physics-informed field network (2D/3D)', section='Mdl', extra=['Dat', 'Exp', 'Par'],
+               icon=':material/blur_on:',
+               text="Physics-informed neural network (PINN) for 2D/3D temperature fields with heat sources that vary "
+                    "in space and time. It learns from finite-element / finite-volume data and from the heat "
+                    "equation (loss α·data + β·physics + γ·initial condition). Operator network: one model for "
+                    "many load profiles. Coordinate network: the field of one profile from a few sensors.",
+               pick=('selPF', {1: 'Operator network (new load profiles)', 2: 'Coordinate network (field from sensors)'}),
+               cats=['gen', 'dl', 'pinf'], script='setup/tutorial/tutorial_PF.py'),
 }
 
 #######################################################################################################################

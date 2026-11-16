@@ -89,9 +89,19 @@ pip install -r gui/requirements.txt      # streamlit, plotly, openpyxl (optional
 python start_gui.py                      # opens http://localhost:8501
 ```
 
-- **Operating modes:** one page per model family (RC, SS, SF, PO, PS, ML, DL, PI). Each page has the views
+- **Operating modes:** one page per model family (RC, SS, SF, PO, PS, ML, DL, PI, PF). Each page has the views
   workflow, parameters, inputs, theory, run and interactive results. The theory views of DL and PI draw the network
   architecture and the physics loss.
+- **PF mode (field PINN, 2D/3D):** a physics-informed network for temperature fields with heat sources that vary in
+  space and time, trained on FE/FV data (`setup['selPF']`, parameters `Mdl › pinf`, Python only).
+  - Variant 1, operator network: T̂(x, t) = T_ref + ΔT·Σ b_k(t)·φ_k(x) with a sequence network for b (input: source
+    amplitudes) and a fully connected network for φ (input: position); predicts new load profiles.
+  - Variant 2, coordinate network (x, t) → T: reconstructs the field of one profile from a few sensor nodes.
+  - Physics loss (`phys`): 0 none, 1 heat equation with automatic differentiation (any mesh, homogeneous domains),
+    2 finite-volume operator stored in the data file (board designer export, exact at material interfaces).
+  - Tutorial: `python setup/tutorial/genBoardPF.py`, then `python setup/tutorial/tutorial_PF.py`. Measured on the 3D
+    tutorial board (3453 nodes, maximum rise 107 K, new load profile): RMSE 8.9 K with data only, 0.81 K with
+    physics 2 (PS mode on the same data: 1.09 K, 6 times faster). Details: `docu/GUI.md`, section *PF mode*.
 - **Study:** grid search, optimisation (built-in or Optuna) and forward feature selection on the validation data.
 - **Theory & Tools:**
   - power losses and thermal stack;
@@ -103,9 +113,10 @@ python start_gui.py                      # opens http://localhost:8501
   - numerics (time integration, quadrature weights, calibration of the reduced matrices);
   - the **board designer**: chips on an editable stack-up (FR4 2/4/6-layer, IMS, DBC/AMB) with averaged thermal
     vias and layers below the board (gap filler, heat sink), top view and cross-section, POD reduced model, and
-    export of the data as a TherMOS data set for the PO/PS modes.
+    export of the data as a TherMOS data set for the PO/PS modes and, with the finite-volume operator (2D lumped or
+    3D layer-resolved), for the PF mode.
 - **Field insight:** line profiles, z slices and probes over time for all 2D/3D fields.
-- **GPU:** `Mdl › gen › dev = 1` trains DL/PI on CUDA (needs a CUDA build of PyTorch).
+- **GPU:** `Mdl › gen › dev = 1` trains DL/PI/PF on CUDA (needs a CUDA build of PyTorch).
 - **Tutorials:** at least one per mode, plus board → PO, grid search, optimisation and feature selection.
 
 The user guide is `docu/GUI.md`; it is also shown in the GUI under *Help › Documentation*. The theory of all model
@@ -255,7 +266,7 @@ Dr. Pascal Schirmer, Dr.-Ing. Peter Schreivogel, Marcel Koenigseder
 ## Future Work
 The following aspects will be improved in future version:
 - 3D input files for the Proper Orthogonal Decomposition (POD)
-- Physics Informed Neural Networks (PINNs) for 1D and 2D problems
+- PF mode (field PINN): new source layouts, temperature-dependent material data, MATLAB port
 - Interface to Ansys
 
 

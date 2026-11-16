@@ -28,6 +28,7 @@ from gui.views.project import files_form, file_groups, active_files
 
 import os
 
+import numpy as np
 import streamlit as st
 
 VIEW_ICONS = {'Workflow': ':material/account_tree:', 'Parameters': ':material/tune:',
@@ -171,12 +172,15 @@ def _checks(m):
     if not (dOut == dim or (dim == 3 and dOut == 2) or (dim > 1 and dOut == 1)):
         out.append(('error', f"Data reduction {dim}D → {dOut}D is not possible: set Parameters › Dat › Data "
                              f"Reduction to {dim}D (or 1D for a probe of a field)."))
-    if m in ('PO', 'PS') and (dim == 1 or dOut == 1):
-        out.append(('error', "PO/PS need 2D or 3D field data (Setup › Data › Dimension) and Data Reduction ≥ 2D."))
-    if m not in ('PO', 'PS') and dim > 1 and dOut == 1:
+    if m in ('PO', 'PS', 'PF') and (dim == 1 or dOut == 1):
+        out.append(('error', "PO/PS/PF need 2D or 3D field data (Setup › Data › Dimension) and Data Reduction ≥ "
+                             "2D (Parameters › Dat)."))
+    if m == 'PF':
+        out += _checks_pf(G)
+    if m not in ('PO', 'PS', 'PF') and dim > 1 and dOut == 1:
         out.append(('info', f"The {dim}D field is reduced to the probe (inpX, inpY) → (outX, outY) of the Dat "
                             f"parameters for this 1D model."))
-    if m not in ('PO', 'PS') and dOut > 1:
+    if m not in ('PO', 'PS', 'PF') and dOut > 1:
         out.append(('error', f"The {A.MODES[m]['title']} model works on 1D signals; set Data Reduction to 1D."))
     if m == 'PS' and dim == 3 and int(G.get('selPS') or 1) != 2:
         out.append(('warning', "3D data with the 2D variant: choose the 3D variant under Parameters."))
@@ -190,9 +194,54 @@ def _checks(m):
         if not any(os.path.isfile(x) for x in f):
             out.append(('warning', f"Training is off, but no stored model mdl/mdl_{tag}_{G.get('name')}.pkl/.pt "
                                    f"was found; train the model first."))
-    if m in ('DL', 'PI') and G.get('train'):
+    if m in ('DL', 'PI', 'PF') and G.get('train') and int(forms.value('Mdl', 'gen', 'dev') or 0) != 1:
         out.append(('info', "Deep learning on the CPU: a training run can take from minutes to hours "
-                            "(epochs, window length, data size)."))
+                            "(epochs, window length, data size). Parameters › gen › Compute Device selects the "
+                            "GPU."))
+    return out
+
+
+def _checks_pf(G):
+    """Checks of the PF mode: raw units, sensors of the coordinate network, operator in the data file."""
+    from gui.core import dataset
+    out = []
+    var, phys = int(G.get('selPF') or 1), int(forms.value('Mdl', 'pinf', 'phys') or 0)
+    nS = int(forms.value('Mdl', 'pinf', 'nSens') or 0)
+    if int(forms.value('Par', 'gen', 'normX') or 1) != 1 or int(forms.value('Par', 'gen', 'normY') or 1) != 1:
+        out.append(('error', "The PF mode works in raw units: set Parameters › Par › Data Normalisation X and y to "
+                             "1 (none)."))
+    if var == 2 and nS == 0:
+        out.append(('warning', "Coordinate network with n_Sens = 0: all nodes are sensors, the network only fits "
+                               "the data. Set Parameters › pinf › Sensor Nodes (e.g. 50) to reconstruct the field "
+                               "from few measurements."))
+    if var == 2:
+        out.append(('info', f"The coordinate network is trained on the sensors of the testing file "
+                            f"'{G.get('teFile')}' only; the training files are not used."))
+    if phys == 2 and G.get('format') == 'mat':
+        name = G.get('teFile') if var == 2 else (list(G.get('trFile') or [None])[0])
+        try:
+            import scipy.io as sio
+            keys = {k[0] for k in sio.whosmat(dataset.path(name, 'mat'))}
+            if not {'Cn', 'Gi', 'Gj', 'Gv', 'Vn'} <= keys:
+                out.append(('error', f"Physics 2 needs the finite-volume operator in the data file, '{name}' has "
+                                     f"none (only files exported by the board designer do). Set Parameters › pinf "
+                                     f"› Physics to 1 (automatic differentiation)."))
+        except Exception:
+            pass
+    if phys == 1 and G.get('format') == 'mat':
+        name = G.get('teFile') if var == 2 else (list(G.get('trFile') or [None])[0])
+        try:
+            d = dataset.field(name)
+            k = np.concatenate([np.ravel(d[x]) for x in ('k',) if x in d])
+            if len(k) and float(np.max(k) / max(np.min(k), 1e-300)) > 10:
+                out.append(('warning', f"Physics 1 on a domain with material interfaces (conductivity "
+                                       f"{float(np.min(k)):.3g} … {float(np.max(k)):.3g} W/mK in '{name}'): the "
+                                       f"residual with automatic differentiation neglects the jump of k between "
+                                       f"the materials and can pull the network away from the data. Use physics "
+                                       f"2 if the file has the operator, else physics 0 (tutorial board: 31.9 K "
+                                       f"RMSE with physics 1 against 8.9 K without)."))
+        except Exception:
+            pass
     return out
 
 

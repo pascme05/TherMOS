@@ -27,7 +27,7 @@ python start_gui.py                      # opens http://localhost:8501
 | **Sidebar** | Expert switch, configuration manager (load / save / download / import / reset), the runs of this session |
 | **Project › Setup** | Ready-made setups (tutorials, journal, lecture), project settings (name, output, numerics, train/test switches), data (format, dimension, split, files, channels) |
 | **Project › Input data** | 1D time series and 2D/3D fields of the data sets, read with the toolkit loader (`DataLoader`) |
-| **Operating modes** | One page per model family (RC, SS, SF, PO, PS, ML, DL, PI) plus the **Study** page |
+| **Operating modes** | One page per model family (RC, SS, SF, PO, PS, ML, DL, PI, PF) plus the **Study** page |
 | **Theory & Tools** | Power losses, Thermal stack, Hand calculator, Thermal networks, MOR & POD, Numerics, Neural networks, Board designer |
 | **Results** | Browser of all results folders, including runs started from the start scripts |
 | **Help** | Tutorials and this guide |
@@ -59,6 +59,7 @@ Every page has the views below:
 | ML | Static regression on (rolled) features | LR, tree, SVR, GPR, ensemble, MLP | 1D | Linear regression with and without EWMA features |
 | DL | CNN / LSTM / CNN + LSTM on windows | 3 networks | 1D | **Architecture diagram from the network code** (layers, shapes, parameters), windows over a profile |
 | PI | CNN + LSTM with a physics loss | – | 1D | **Network and loss graph** (data loss + residual of the lumped stator model), residual explorer |
+| PF | Field PINN: network for T(x, t) with the heat equation as physics loss | operator / coordinate network | 2D/3D | Both structures, loss with symbol table, source footprints and sensor placement on your data, measured reference results |
 
 **Network view of the DL mode**
 - Shows the network that will be trained: parameters, receptive field, output shape, a layer table (output shape and
@@ -143,7 +144,83 @@ Every page has the views below:
     - `pi_board` (three chips of the board designer, coupled Cauer network with 6 nodes, β = 1, col = 3): mean MAE
       0.82 K vs 1.47 K without physics. The data are generated with `python setup/tutorial/genBoardPINN.py`, or with
       *Export for the PI mode* in the board designer.
-- DL and PI training on the CPU takes minutes to hours. `Mdl › gen › dev = 1` trains on the GPU (CUDA). This needs
+
+**PF mode (field PINN for 2D/3D data)**
+- **What it does.** A physics-informed neural network (PINN) learns the temperature field T(x, t) for heat sources
+  Q(x, t) that vary in space and time from finite-element or finite-volume data and, at the same time, has to satisfy
+  the heat equation `ρc·∂θ/∂t = Σ ∂/∂x_i(k_i·∂θ/∂x_i) − h_v·θ + Q` for the rise θ = T − T_ref.
+- **Data.** Field files (`.mat`) as for PO/PS: `X` heat generation (W/m³, time × nodes), `y` temperatures (°C), `geo`
+  node coordinates (m, 2 or 3 columns), material per node (`k`, `ky`, `kz` in W/(m K), `rho` in kg/m³, `Cp` in
+  J/(kg K), `hv` in W/(m³ K)). Files of the board designer also hold the finite-volume operator (`Cn` capacitances in
+  Ws/K, `Gi`, `Gj`, `Gv` conductances in W/K as triplets, `Vn` control volumes in m³). Normalisation must be off
+  (`normX = normY = 1`); every profile starts in equilibrium with the ambient.
+- **Variants** (`Run › selPF`):
+  - 1 = operator network. `T̂(x, t) = T_ref + ΔT·Σ_k b_k(t)·φ_k(x)`, k = 1 … K. The branch (LSTM) maps the source
+    amplitudes p(t) to the coefficients b, the trunk (fully connected) maps the position to the basis functions φ.
+    Trained on all training profiles, it predicts other load profiles with the same source footprints.
+  - 2 = coordinate network `(x, t) → T` for ONE profile: it reconstructs the field of the testing profile from its
+    temperatures at `nSens` sensor nodes; the other nodes only serve to compute the error. Every 5th sensor is held
+    out for early stopping.
+- **Source encoding.** The heat generation is decomposed as `Q(x, t) ≈ Σ_j U_j(x)·p_j(t)` (SVD, tolerance `srcTol`).
+  For chips with fixed footprints S = number of independently driven chips. A testing profile with sources outside
+  these footprints gives a warning with the encoding error.
+- **Loss.** `L = α·L_data + β·L_phys + γ·L_init`, all parts relative to ΔT² (ΔT = 99 % quantile of the training
+  rise): L = 10⁻⁴ is an RMS error of 1 % of ΔT.
+- **Physics** (`Mdl › pinf › phys`):
+  - 0 = none (data only);
+  - 1 = heat equation with automatic differentiation at `nCol` random points per batch. Works for any mesh. The
+    material of a point is that of its nearest node; the jump of k at material interfaces and the boundary
+    conditions are not in the residual. Use it for homogeneous or lumped domains; a warning appears if the
+    conductivity ratio in the data is above 10;
+  - 2 = residual of the finite-volume operator of the data file, `r = (G⁻¹·C·dθ/dt + θ − G⁻¹·V·Q)/ΔT`: exact at
+    interfaces, cooling included, and r is directly the temperature error caused by the imbalance.
+- **Parameters `Mdl › pinf`:**
+
+  | Parameter | Meaning | Default | Typical |
+  |---|---|---|---|
+  | `phys` | physics loss, see above | 1 | 2 for board designer data |
+  | `alpha`, `beta`, `gamma` | weights of data, physics and initial-condition loss (–) | 1, 1, 0.1 | β 0.1 … 1; α = 0 trains without temperatures |
+  | `K` | basis functions of the operator network (–) | 16 | 8 … 32 |
+  | `nSens` | sensor nodes in the data loss, farthest-point sampling from the hottest node; 0 = all nodes | 0 | 20 … 200 for variant 2 |
+  | `nDat`, `nCol` | data and collocation points per batch | 4096, 1024 | – |
+  | `col` | 1: physics loss also on the sources of the validation and testing profiles (no temperatures used) | 1 | 1 |
+  | `warm` | operator network: samples at the start of every window excluded from the loss; also prepended as zero load to every profile | 50 | ≈ 3·τ_max/Ts, at most W/2 |
+  | `branch` | sequence network of the branch (1 CNN, 2 LSTM, 3 CNN + LSTM) | 2 | 2 |
+  | `width`, `depth`, `fourier` | neurons per layer, layers and Fourier frequencies of the fully connected network | 64, 4, 4 | fourier 3 … 6 for sharp chip edges |
+  | `steps` | coordinate network: batches per epoch | 100 | – |
+  | `srcTol`, `seed` | tolerance of the source encoding (relative singular value), random seed | 1e-6, 42 | – |
+
+  Training settings are those of `Mdl › dl` (W, stride, epoch, batch, initLr, lrAdapt, lrDropPr, lrDropFa, valPat,
+  gradTh).
+- **Board designer** (*Theory & Tools › Board designer*, section *Export for the PF mode*): simulates random training
+  profiles, a validation and a test profile of the current board and writes the data files with the operator (cross
+  section view: layer-resolved 3D field; top view: lumped 2D field) and a ready configuration.
+- **Results:** key figures, a plain-language verdict (error relative to ΔT, balance of data and physics loss,
+  sensors, what to change), loss history with the data and physics parts, the field explorer against the reference
+  and the learned basis functions φ_k (variant 1) or the sensor map (variant 2).
+- **Tutorial `pf_board`** (data: `python setup/tutorial/genBoardPF.py`; three chips on an IMS board, 3453 nodes, test
+  profile with a maximum rise of 107 K; errors over all nodes and time steps, RTX 3070):
+
+  | Run | RMSE (K) | MAE (K) | Training (s) |
+  |---|---|---|---|
+  | operator network, physics 0 | 8.94 | 8.46 | 22 |
+  | operator network, physics 2 (tutorial) | 0.81 | 0.58 | 159 |
+  | operator network, physics 2, col = 0 | 2.32 | 2.11 | 108 |
+  | operator network, physics 2, α = 0 (no temperatures) | 1.98 | 1.20 | 82 |
+  | operator network, physics 1, β = 0.01 | 31.9 | 30.8 | 66 |
+  | coordinate network, 50 sensors, physics 0 / 2 | 5.64 / 3.18 | 3.12 / 2.31 | 42 / 245 |
+  | PS mode, K = 6 | 1.09 | 0.37 | 26 |
+
+  Same board as a lumped 2D field (maximum rise 79 K): operator network 7.06 K (physics 0), 2.31 K (physics 1),
+  0.65 K (physics 2); coordinate network with 30 sensors 3.99 / 0.30 / 2.08 K; PS mode 0.44 K.
+- **Reading the numbers.** Temperatures alone do not carry the network to a new load (8.9 K); the physics loss does
+  (0.81 K), mostly through the collocation profiles. Physics 1 is harmful on the layered 3D board (copper next to
+  dielectric) and helpful on the lumped 2D board. For a linear board with full field data the PS mode is as accurate
+  and faster; use PF for few sensors or loads without temperature data.
+- **Limits.** Fixed source footprints (no new layouts), constant material data, profiles start in equilibrium, no
+  MATLAB version.
+
+- DL, PI and PF training on the CPU takes minutes to hours. `Mdl › gen › dev = 1` trains on the GPU (CUDA). This needs
   a CUDA build of PyTorch, e.g. `pip install torch==2.15.0 --index-url https://download.pytorch.org/whl/cu132`; otherwise a
   warning is printed and the CPU is used. The ML models (scikit-learn) always run on the CPU.
 
