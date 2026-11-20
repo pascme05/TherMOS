@@ -217,13 +217,13 @@ def _checks_pf(G):
     if var == 2:
         out.append(('info', f"The coordinate network is trained on the sensors of the testing file "
                             f"'{G.get('teFile')}' only; the training files are not used."))
-    if phys == 2 and G.get('format') == 'mat':
+    if phys >= 2 and G.get('format') == 'mat':
         name = G.get('teFile') if var == 2 else (list(G.get('trFile') or [None])[0])
         try:
             import scipy.io as sio
             keys = {k[0] for k in sio.whosmat(dataset.path(name, 'mat'))}
             if not {'Cn', 'Gi', 'Gj', 'Gv', 'Vn'} <= keys:
-                out.append(('error', f"Physics 2 needs the finite-volume operator in the data file, '{name}' has "
+                out.append(('error', f"Physics {phys} needs the finite-volume operator in the data file, '{name}' has "
                                      f"none (only files exported by the board designer do). Set Parameters › pinf "
                                      f"› Physics to 1 (automatic differentiation)."))
         except Exception:

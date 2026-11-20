@@ -5,7 +5,7 @@
 # File:         pfFit
 # Date:         16.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.0
+# Version:      V.1.1
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -58,6 +58,10 @@ Outputs:    1) mdl:     model {'sys': network, 'var', 'info': training history, 
 
 V1.0: 16.11.2026, Pascal Schirmer
 - Initial version
+
+V1.1: 20.11.2026, Pascal Schirmer
+- Physics 2 with temperature-dependent conductivity (kT of the data file), physics 3: inverse finite-volume operator
+  with learned factors of conduction and cooling (info['sK'], info['sH'])
 """
 
 #######################################################################################################################
@@ -70,7 +74,7 @@ from src.py.model.DL.dlNet import dlNet
 from src.py.model.PF.pfNet import pfOperator, pfCoord
 from src.py.model.PF.pfData import pfPara, checkNorm, geoScale, toHat, rise, encodeSrc, projectSrc, mapNodes, \
     selSensors, material, VARIANTS, PHYS
-from src.py.model.PF.pfPhys import basisLap, resOperator, resOperatorFV, coordDeriv, coordRate, solveG
+from src.py.model.PF.pfPhys import basisLap, resOperator, resOperatorFV, fvTerm, coordDeriv, coordRate, solveG
 from src.py.model.PINN.pinnFit import lrSchedule
 from src.py.general.getDevice import getDevice
 
@@ -111,16 +115,47 @@ def _physics(mat, U, sc, phys, dev):
         print("WARN: Physics 1 on a domain with material interfaces (conductivity ratio %.0f): the residual with "
               "automatic differentiation neglects the jump of k between the materials and can pull the network away "
               "from the data; use physics 2 (board designer data) or physics 0" % kr)
-    if phys == 2:
+    ph['kT'], ph['ls'], ph['H'] = 0.0, None, None
+    if phys >= 2:
         if mat['op'] is None:
-            sys.exit("ERROR: PF mode: physics 2 needs the finite-volume operator in the data file (Cn, Gi, Gj, Gv, "
-                     "Vn, written by the board designer); use physics 1 (automatic differentiation) for other data")
+            sys.exit("ERROR: PF mode: physics %d needs the finite-volume operator in the data file (Cn, Gi, Gj, Gv, "
+                     "Vn, written by the board designer); use physics 1 (automatic differentiation) for other data"
+                     % phys)
         import scipy.sparse.linalg as spl
         lu = spl.splu(mat['op']['G'].tocsc())
         ph['C'] = _t(mat['op']['C'], dev)
         ph['solve'] = solveG(lu)
         ph['Tss'] = _t(lu.solve(mat['op']['V'][:, None] * U), dev)
+        ph['kT'] = float(mat.get('kT', 0.0) or 0.0)
+        if ph['kT']:
+            print("INFO: Temperature-dependent conductivity of the data file: k = k0·(1 − %.4g·θ), residual in the "
+                  "Kirchhoff variable u = θ − κ·θ²/2" % ph['kT'])
+        if phys == 3:
+            ph['H'] = _t(np.asarray(mat['op']['G'].sum(axis=1)).ravel(), dev)     # cooling: row sums of G
+            ph['ls'] = torch.zeros(2, device=dev, requires_grad=True)             # log s_k, log s_h
     return ph
+
+
+def factors(ph):
+    """Learned factors (s_k, s_h) of conduction and cooling (phys = 3) as a tensor, or None."""
+    return None if ph['ls'] is None else torch.exp(ph['ls'])
+
+
+def _optimiser(net, ph, lr):
+    """Adam for the network and, for phys = 3, the log factors of the operator with SLR times the learning rate."""
+    groups = [{'params': list(net.parameters()), 'fac': 1.0}]
+    if ph['ls'] is not None:
+        groups.append({'params': [ph['ls']], 'lr': lr * SLR, 'fac': SLR})
+    return torch.optim.Adam(groups, lr=lr)
+
+
+def _factors(info, s):
+    """Stores and prints the learned factors of conduction and cooling (phys = 3) of the kept network."""
+    if s is None:
+        return
+    info['sK'], info['sH'] = float(s[0]), float(s[1])
+    print("INFO: Learned factors of the finite-volume operator: conduction s_k = %.3f, cooling s_h = %.3f (1 = data "
+          "file)" % (s[0], s[1]))
 
 
 def contrast(mat):
@@ -253,10 +288,10 @@ def _fitOperator(data, val, para, setup, pp, dl, dev):
     sd[sd < 1e-12 * max(np.max(np.abs(pAll)), 1e-300)] = 1.0
     branch = dlNet(pp['branch'], S, K, 0, pAll.mean(axis=0), sd, arch=setup.get('archPF') or None)
     net = pfOperator(branch, d, K, pp['width'], pp['depth'], pp['fourier']).to(dev)
-    opt = torch.optim.Adam(net.parameters(), lr=lr)
-    [lrStep, _, _, _] = lrSchedule(dl, lr)
     xhT, iS = _t(xh, dev), torch.as_tensor(idxS, dtype=torch.long, device=dev)
     ph = _physics(mat, U, sc, phys, dev)
+    opt = _optimiser(net, ph, lr)
+    [lrStep, _, _, _] = lrSchedule(dl, lr)
     print("INFO: Branch %s (%d inputs → %d coefficients), trunk %d x %d tanh, %d Fourier frequencies (%d → %d basis "
           "functions), %d parameters" % ({1: 'CNN', 2: 'LSTM', 3: 'CNN-LSTM'}.get(pp['branch'], 'user-defined')
                                          if not setup.get('archPF') else 'user-defined', S, K, pp['depth'],
@@ -284,7 +319,9 @@ def _fitOperator(data, val, para, setup, pp, dl, dev):
             else:
                 phi = net.basis(xhT)
                 idc = torch.randperm(N, device=dev)[0:min(nC, N)]
-                r = resOperatorFV(bm, db, phi[idc], ph['solve'](ph['C'][:, None] * phi)[idc], Pk, ph['Tss'][idc], dT)
+                Hphi = ph['solve'](ph['H'][:, None] * phi)[idc] if phys == 3 else None
+                r = resOperatorFV(bm, db, phi[idc], ph['solve'](ph['C'][:, None] * phi)[idc], Pk, ph['Tss'][idc], dT,
+                                  ph['kT'], Hphi, factors(ph))
             lP = torch.mean(r[:, warm:] ** 2)
         return wD * lD + wP * lP + wI * lI, lD, lP, lI
 
@@ -300,7 +337,7 @@ def _fitOperator(data, val, para, setup, pp, dl, dev):
     # ==============================================================================
     # Training
     # ==============================================================================
-    best, bestNet, wait = np.inf, copy.deepcopy(net.state_dict()), 0
+    best, bestNet, wait, bestS = np.inf, copy.deepcopy(net.state_dict()), 0, None
     info = _history()
     t0 = time.time()
     for ep in range(0, epoch):
@@ -325,9 +362,10 @@ def _fitOperator(data, val, para, setup, pp, dl, dev):
         new = lrStep(lv)
         if new is not None:
             for g in opt.param_groups:
-                g['lr'] = new
+                g['lr'] = new * g['fac']
         if lv < best:
             best, bestNet, wait = lv, copy.deepcopy(net.state_dict()), 0
+            bestS = None if ph['ls'] is None else factors(ph).detach().cpu().numpy()
         else:
             wait = wait + 1
             if wait >= valPat:
@@ -339,6 +377,7 @@ def _fitOperator(data, val, para, setup, pp, dl, dev):
     # ==============================================================================
     net.load_state_dict(bestNet)
     info.update({'best': best, 'nWin': len(st), 'valMode': 'validation profiles predicted as in testing'})
+    _factors(info, bestS if ph['ls'] is not None else None)
     with torch.no_grad():
         phi = net.eval().basis(xhT).cpu().numpy()                       # basis functions at the training nodes
     return {'sys': net.to('cpu').eval(), 'info': info, 'U': U, 'phi': phi, 'geo': geo.astype(np.float32), 'W': W, 'S': S, 'K': K,
@@ -346,6 +385,7 @@ def _fitOperator(data, val, para, setup, pp, dl, dev):
 
 
 SVN = 20                                                                # stored singular values of the sources
+SLR = 10.0                                                              # learning rate factor of the operator factors
 KMAX = 10.0                                                             # conductivity ratio above which physics 1 warns
 
 
@@ -400,7 +440,8 @@ def _fitCoord(data, para, pp, dl, dev):
     # Network
     # ==============================================================================
     net = pfCoord(d, pp['width'], pp['depth'], pp['fourier']).to(dev)
-    opt = torch.optim.Adam(net.parameters(), lr=lr)
+    ph = _physics(mat, U, sc, phys, dev)
+    opt = _optimiser(net, ph, lr)
     [lrStep, _, _, _] = lrSchedule(dl, lr)
     xhT, pT = _t(xh, dev), _t(p, dev)
     tH = _t(2 * np.arange(Nt) * Ts / tEnd - 1, dev)                     # scaled time of every sample
@@ -408,7 +449,6 @@ def _fitCoord(data, para, pp, dl, dev):
     ThT, ThV = _t(th[:, idxT] / dT, dev), _t(th[:, idxV], dev)
     iT = torch.as_tensor(idxT, dtype=torch.long, device=dev)
     xV = xhT[torch.as_tensor(idxV, dtype=torch.long, device=dev)]
-    ph = _physics(mat, U, sc, phys, dev)
     nD, nC = max(pp['nDat'], 1), max(pp['nCol'], 1)
     nT = int(min(max(nC // N, 1), 8))                                   # phys = 2: time samples per step
     print("INFO: Network %d x %d tanh, %d Fourier frequencies, %d parameters; %d data and %d physics point(s) per "
@@ -434,7 +474,10 @@ def _fitCoord(data, para, pp, dl, dev):
         elif wP > 0:
             k = torch.randint(1, Nt, (nT,), device=dev)                 # middle of the step k − 1 → k
             [f, ft] = coordRate(net, xhT, tH[k] - 1.0 / (Nt - 1))
-            r = sT * ph['solve'](ph['C'][:, None] * ft.T).T + f - pT[k] @ ph['Tss'].T / dT
+            u = fvTerm(f, None, ph['kT'], dT, None)
+            Hu = ph['solve'](ph['H'][:, None] * u.T).T if phys == 3 else None
+            r = sT * ph['solve'](ph['C'][:, None] * ft.T).T + fvTerm(f, Hu, ph['kT'], dT, factors(ph)) \
+                - pT[k] @ ph['Tss'].T / dT
             lP = torch.mean(r ** 2)
         return wD * lD + wP * lP + wI * lI, lD, lP, lI
 
@@ -450,7 +493,7 @@ def _fitCoord(data, para, pp, dl, dev):
     # ==============================================================================
     # Training
     # ==============================================================================
-    best, bestNet, wait = np.inf, copy.deepcopy(net.state_dict()), 0
+    best, bestNet, wait, bestS = np.inf, copy.deepcopy(net.state_dict()), 0, None
     info = _history()
     t0 = time.time()
     for ep in range(0, epoch):
@@ -471,9 +514,10 @@ def _fitCoord(data, para, pp, dl, dev):
         new = lrStep(lv)
         if new is not None:
             for g in opt.param_groups:
-                g['lr'] = new
+                g['lr'] = new * g['fac']
         if lv < best:
             best, bestNet, wait = lv, copy.deepcopy(net.state_dict()), 0
+            bestS = None if ph['ls'] is None else factors(ph).detach().cpu().numpy()
         else:
             wait = wait + 1
             if wait >= valPat:
@@ -485,6 +529,7 @@ def _fitCoord(data, para, pp, dl, dev):
     # ==============================================================================
     net.load_state_dict(bestNet)
     info.update({'best': best, 'valMode': 'held-out sensors' if hold.any() else 'training sensors'})
+    _factors(info, bestS if ph['ls'] is not None else None)
     return {'sys': net.to('cpu').eval(), 'info': info, 'U': U, 'geo': geo.astype(np.float32), 'S': S, 'Nt': Nt,
             'tEnd': tEnd, 'sens': idxT, 'sensVal': idxV if hold.any() else np.zeros(0, dtype=int), 'sv': sv[0:SVN],
             'dT': dT, 'sc': sc, 'Ts': Ts}

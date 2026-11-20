@@ -7,3 +7,4 @@ results/**/gui_*/
 data/board/
 config/gui/board_*.json
 .ai/
+docu/paper/

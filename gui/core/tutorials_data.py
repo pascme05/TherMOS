@@ -24,6 +24,8 @@ of that page).
 #######################################################################################################################
 # Tutorials
 #######################################################################################################################
+COORD = {'Run.selPF': 2, 'Mdl.dl.epoch': 150, 'Mdl.dl.valPat': 40, 'Mdl.dl.lrDropPr': 15}     # coordinate network
+
 TUTORIALS = [
     # ------------------------------------------
     # RC
@@ -393,6 +395,100 @@ TUTORIALS = [
                    "Coordinate network: raise nSens from 50 to 200 — how does the maximum error in the chips "
                    "change?", "Operator network: set K = 4. Which error does the missing basis cause?",
                    "Halve the warm-up (warm = 35): why does the error at the start of the windows grow?"]),
+    dict(id='pf_compare', mode='PF', level='Advanced', minutes=30, base='tutorial_PF',
+         title="Operator or coordinate network? The same 50 sensors, two ways to use them",
+         story="The board of the tutorial *Field PINN of a board* (3D, 3453 nodes, three chips). This time only 50 "
+               "nodes carry a temperature sensor (1.4 % of the nodes, the same nodes in every profile). Both networks "
+               "see only these sensors and are scored on all nodes of the same test profile. The operator network "
+               "learns from the sensors of the four training profiles and has never seen a temperature of the test "
+               "profile. The coordinate network learns from the sensors of the test profile itself, but only for "
+               "this one profile.",
+         goals=["compare a model of the board (operator network) with a reconstruction of one measurement "
+                "(coordinate network)", "see how the number of sensors and the physics loss act on each",
+                "decide which network fits which task"],
+         changes={'Mdl.pinf.nSens': 50, 'Mdl.pinf.phys': 2},
+         runs=[dict(label="operator network, 50 sensors, physics 2 (tutorial configuration)", changes={}),
+               dict(label="coordinate network, 50 sensors, physics 2", changes={**COORD}),
+               dict(label="operator network, 50 sensors, physics 0", changes={'Mdl.pinf.phys': 0}),
+               dict(label="coordinate network, 50 sensors, physics 0", changes={**COORD, 'Mdl.pinf.phys': 0}),
+               dict(label="operator network, 200 sensors, physics 2", changes={'Mdl.pinf.nSens': 200}),
+               dict(label="coordinate network, 200 sensors, physics 2", changes={**COORD, 'Mdl.pinf.nSens': 200})],
+         steps=["Generate the data once: `python setup/tutorial/genBoardPF.py`.",
+                "Open *Theory* › *Where are the sensors?*: the 50 sensors start at the hottest node and spread over "
+                "the board. Both networks use exactly these nodes.",
+                "*Run* the tutorial configuration (operator network, 50 sensors, physics 2), then *Load this run* "
+                "for the coordinate network with the same sensors and compare the results.",
+                "Repeat both without physics and with 200 sensors (rows of the table)."],
+         look="| run (50 sensors unless stated) | RMSE (K) | MAE (K) | MAX (K) | training (s) |\n"
+              "|---|---|---|---|---|\n"
+              "| **operator network, physics 2 (tutorial)** | **0.99** | **0.78** | 19.3 | 144 |\n"
+              "| coordinate network, physics 2 | 3.18 | 2.31 | 43.9 | 247 |\n"
+              "| operator network, physics 0 | 9.71 | 7.85 | 51.0 | 13 |\n"
+              "| coordinate network, physics 0 | 5.64 | 3.12 | 44.9 | 49 |\n"
+              "| operator network, 200 sensors, physics 2 | 0.86 | 0.61 | 24.9 | 119 |\n"
+              "| coordinate network, 200 sensors, physics 2 | 2.95 | 2.13 | 33.8 | 280 |\n"
+              "| for comparison: operator network, all 3453 nodes, physics 2 | 0.81 | 0.58 | 19.8 | 159 |\n\n"
+              "Errors of the test profile over all nodes and time steps (maximum rise 107 K, RTX 3070).\n"
+              "- **The operator network wins with physics:** 0.99 K from 50 sensors of other profiles, almost as good "
+              "as with all nodes (0.81 K). The finite-volume operator fills the field between the sensors; the "
+              "sensors only have to anchor it. It predicts any further load profile in 0.07 s.\n"
+              "- **The coordinate network sees the test profile itself and is still 3 times worse** (3.18 K). Its "
+              "largest error (44 K) sits in the chips, where the field changes fastest in space and time; 200 "
+              "sensors barely help (2.95 K). The limit is the network that has to represent the whole field over "
+              "x, y, z and t, not the number of sensors. Every new profile needs a new training of 4 min.\n"
+              "- **Without physics the order flips:** the operator network has never seen the test load and fails "
+              "(9.7 K), the coordinate network interpolates its own sensors (5.6 K).\n"
+              "- **Which one?** A model of the board for many loads: operator network with physics 2. A one-off "
+              "reconstruction of a measurement for which no training profiles exist: coordinate network.",
+         exercise=["Reduce the sensors to 10 for both networks: which one degrades first?",
+                   "Coordinate network: raise the epochs to 600. How much of the gap to the operator network is "
+                   "training time?", "Operator network: set col = 0. How much do the sources of the test profile "
+                   "(without temperatures) contribute when only 50 sensors are measured?"]),
+    dict(id='pf_compare2d', mode='PF', level='Advanced', minutes=30, base='tutorial_PF',
+         title="Operator or coordinate network on a lumped 2D board: which physics for which network?",
+         story="The same three chips, exported as a lumped 2D field (one temperature per point of the top view, 651 "
+               "nodes; conductivity and cooling vary smoothly over the board). Both networks see only 30 sensors "
+               "(5 % of the nodes) and are scored on all nodes of the test profile. Here both physics losses are "
+               "valid: the residual with automatic differentiation (physics 1, needs only the material data) and "
+               "the finite-volume operator (physics 2).",
+         goals=["compare both networks with both physics losses", "see that the best physics depends on the network"],
+         changes={'Run.trFile': ['tutorial_pf2d_train1', 'tutorial_pf2d_train2', 'tutorial_pf2d_train3',
+                                 'tutorial_pf2d_train4'],
+                  'Run.vlFile': ['tutorial_pf2d_val'], 'Run.teFile': 'tutorial_pf2d_test', 'Run.datDim': 2,
+                  'Dat.gen.dOut': 2, 'Mdl.pinf.nSens': 30, 'Mdl.pinf.phys': 1},
+         runs=[dict(label="operator network, physics 1 (tutorial configuration)", changes={}),
+               dict(label="coordinate network, physics 1", changes={**COORD}),
+               dict(label="operator network, physics 2", changes={'Mdl.pinf.phys': 2}),
+               dict(label="coordinate network, physics 2", changes={**COORD, 'Mdl.pinf.phys': 2}),
+               dict(label="operator network, physics 0", changes={'Mdl.pinf.phys': 0}),
+               dict(label="coordinate network, physics 0", changes={**COORD, 'Mdl.pinf.phys': 0})],
+         steps=["Generate the data once: `python setup/tutorial/genBoardPF.py tutorial_pf2d 4 20 xy` (or *Export for "
+                "the PF mode* of the board designer, top view).",
+                "Open *Theory*: the three source footprints and the 30 sensors on the top view.",
+                "*Run* the tutorial configuration (operator network, physics 1), then load the other rows."],
+         look="| run (30 sensors) | RMSE (K) | MAE (K) | MAX (K) | training (s) |\n|---|---|---|---|---|\n"
+              "| operator network, physics 1 (tutorial) | 2.83 | 2.32 | 10.8 | 62 |\n"
+              "| **coordinate network, physics 1** | **0.30** | **0.23** | 2.0 | 581 |\n"
+              "| operator network, physics 2 | 0.95 | 0.79 | 5.2 | 36 |\n"
+              "| coordinate network, physics 2 | 2.08 | 1.60 | 14.9 | 197 |\n"
+              "| operator network, physics 0 | 9.63 | 8.59 | 26.0 | 9 |\n"
+              "| coordinate network, physics 0 | 3.99 | 2.88 | 20.0 | 28 |\n\n"
+              "Errors of the test profile over all 651 nodes and time steps (maximum rise 79 K, RTX 3070).\n"
+              "- **The best physics depends on the network.** The coordinate network is best with automatic "
+              "differentiation (0.30 K, 0.4 % of the rise): the network is a smooth function of x and t, so its "
+              "derivatives are exact everywhere, and the lumped 2D field has no material jumps. The operator network "
+              "is best with the finite-volume operator (0.95 K): its time functions are sampled at the time steps "
+              "of the data, which is what the discrete operator expects.\n"
+              "- **The coordinate network with the finite-volume operator** (2.08 K) gets only one time instant per "
+              "step for the residual (the operator acts on all 651 nodes at once), against 1024 random space-time "
+              "points with automatic differentiation.\n"
+              "- **Without physics** both fail (9.6 K and 4.0 K): 30 sensors do not describe the field.\n"
+              "- **Cost:** the best coordinate network trains for almost 10 min for this one profile; the operator "
+              "network with physics 2 trains in 36 s and then predicts any load in 0.01 s.",
+         exercise=["Coordinate network, physics 2: raise pinf › nCol to 8192 (8 time instants per step). Does the "
+                   "gap to physics 1 close?", "Operator network, physics 1: raise nCol to 4096. How much of the gap "
+                   "is the number of collocation points?", "Run both networks with 10 sensors: where does the "
+                   "physics help more?"]),
 
     # ------------------------------------------
     # Studies

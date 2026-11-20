@@ -98,7 +98,9 @@ python start_gui.py                      # opens http://localhost:8501
     amplitudes) and a fully connected network for φ (input: position); predicts new load profiles.
   - Variant 2, coordinate network (x, t) → T: reconstructs the field of one profile from a few sensor nodes.
   - Physics loss (`phys`): 0 none, 1 heat equation with automatic differentiation (any mesh, homogeneous domains),
-    2 finite-volume operator stored in the data file (board designer export, exact at material interfaces).
+    2 finite-volume operator stored in the data file (board designer export, exact at material interfaces; nonlinear
+    if the file holds a temperature coefficient of the conductivity), 3 as 2 with learned conduction and cooling
+    factors for measured boards that differ from the design (studies: `setup/tutorial/genBoardPFStudy.py`).
   - Tutorial: `python setup/tutorial/genBoardPF.py`, then `python setup/tutorial/tutorial_PF.py`. Measured on the 3D
     tutorial board (3453 nodes, maximum rise 107 K, new load profile): RMSE 8.9 K with data only, 0.81 K with
     physics 2 (PS mode on the same data: 1.09 K, 6 times faster). Details: `docu/GUI.md`, section *PF mode*.

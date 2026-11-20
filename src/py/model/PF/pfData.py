@@ -60,7 +60,8 @@ import numpy as np
 # Settings
 #######################################################################################################################
 VARIANTS = {1: 'operator network (branch x trunk)', 2: 'coordinate network T(x, t)'}
-PHYS = {0: 'none (data only)', 1: 'heat equation, automatic differentiation', 2: 'finite-volume operator of the data'}
+PHYS = {0: 'none (data only)', 1: 'heat equation, automatic differentiation', 2: 'finite-volume operator of the data',
+        3: 'finite-volume operator with learned conduction and cooling factors (inverse)'}
 SMAX = 32                                                               # maximum number of source amplitudes
 DEFAULTS = {'phys': 1, 'alpha': 1.0, 'beta': 1.0, 'gamma': 0.1, 'K': 16, 'nSens': 0, 'nDat': 4096, 'nCol': 1024,
             'srcTol': 1e-6, 'width': 64, 'depth': 4, 'fourier': 4, 'warm': 50, 'branch': 2, 'steps': 100, 'seed': 42,
@@ -189,7 +190,8 @@ def selSensors(geoHat, n, seed=42, first=None):
 def material(D, d):
     """
     Material of the nodes: {'rc' (N) (J/m³K), 'k' (N x d) (W/mK), 'hv' (N) (W/m³K), 'h' (d) node spacing (m),
-    'op': None or {'C' (N) (Ws/K), 'G' (scipy sparse N x N) (W/K), 'V' (N) (m³)}}.
+    'op': None or {'C' (N) (Ws/K), 'G' (scipy sparse N x N) (W/K), 'V' (N) (m³)}, 'kT': temperature coefficient κ
+    of the conductivity, k = k₀·(1 − κ·θ) (1/K), 0 if the data file has none}.
     """
     N = np.asarray(D['geo']).shape[0]
 
@@ -202,7 +204,8 @@ def material(D, d):
     kx = vec('k', 1.0)
     ks = [kx, vec('ky', kx), vec('kz', kx)][0:d]
     out = {'rc': vec('rho', 1.0) * vec('Cp', 1.0), 'k': np.column_stack(ks), 'hv': vec('hv', 0.0),
-           'h': np.array([float(np.ravel(D.get(k, 0.0))[0]) for k in ('dx', 'dy', 'dz')[0:d]]), 'op': None}
+           'h': np.array([float(np.ravel(D.get(k, 0.0))[0]) for k in ('dx', 'dy', 'dz')[0:d]]), 'op': None,
+           'kT': float(np.ravel(D.get('kT', 0.0))[0]) if np.size(D.get('kT', 0.0)) else 0.0}
     if all(k in D for k in ('Cn', 'Gi', 'Gj', 'Gv', 'Vn')) and np.size(D['Cn']) == N:
         import scipy.sparse as sp
         G = sp.coo_matrix((np.ravel(D['Gv']), (np.ravel(D['Gi']).astype(int), np.ravel(D['Gj']).astype(int))),

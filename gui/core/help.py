@@ -189,7 +189,11 @@ HELP = {
         "works for any field data, but material interfaces and boundary conditions are not part of the residual. "
         "2: residual of the finite-volume operator stored in the data file (Cn, Gi, Gj, Gv, Vn; written by the board "
         "designer), exact at interfaces and boundaries and scaled as a temperature error — the most accurate "
-        "choice when available. See Theory for measured results.",
+        "choice when available. If the file holds a temperature coefficient kT (k = k₀·(1 − kT·θ)), the residual "
+        "is nonlinear (Kirchhoff variable u = θ − kT·θ²/2). 3: as 2, but the conduction and the cooling of the "
+        "operator get factors s_k, s_h that are learned from the temperatures — for measured boards that differ "
+        "from the design in the file (e.g. a degraded heat sink); the identified factors appear in the results. "
+        "See Theory for measured results.",
     'Mdl.pinf.alpha':
         "Weight α of the data loss (mean squared temperature error at the sensor nodes relative to ΔT²). α = 0 "
         "trains with the physics only, without any temperature; useful to check how far the physics alone carries.",

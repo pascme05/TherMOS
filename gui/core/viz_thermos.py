@@ -544,6 +544,13 @@ def pf_findings(info, m, err):
         n, N = len(np.asarray(m.get('sens', []))) + len(np.asarray(m.get('sensVal', []))), len(np.asarray(m['geo']))
         out.append(('Sensors', f"The field of {N} nodes was reconstructed from {n} sensor nodes ({100 * n / N:.1f} "
                                f"%); the error above is evaluated at all nodes, also those the network never saw."))
+    if 'sK' in info:
+        sk, sh = float(info['sK']), float(info['sH'])
+        out.append(('Calibration', f"Physics 3 identified the operator of the measured board: conduction × {sk:.2f}, "
+                                   f"cooling × {sh:.2f} of the nominal design in the data file ("
+                                   f"{'thermal resistances higher' if min(sk, sh) < 0.95 else 'close to the design'})."
+                                   f" Use the factors to correct the design model, e.g. a cooling factor of {sh:.2f} "
+                                   f"means {100 * (1 - sh):.0f} % less heat transfer to the heat sink than designed."))
     return out
 
 

@@ -62,8 +62,21 @@ REFERENCE2D = pd.DataFrame([
     ('2 · Coordinate network', '1 · automatic differentiation', 'testing profile, 30 sensors', 0.30, 0.23, 2.0, 492),
     ('2 · Coordinate network', '2 · finite-volume operator', 'testing profile, 30 sensors', 2.08, 1.60, 14.9, 202),
 ], columns=COLS)
+# Studies on the same board (setup/tutorial/genBoardPFStudy.py), operator network unless stated, RMSE of the test
+STUDIES = pd.DataFrame([
+    ('1 · k falls with T (κ = 0.003 1/K)', 'PS mode (linear model), all nodes', 1.73),
+    ('1 · k falls with T (κ = 0.003 1/K)', 'physics 2 assuming a constant k, all nodes', 3.52),
+    ('1 · k falls with T (κ = 0.003 1/K)', 'physics 2 with κ, all nodes', 1.09),
+    ('1 · k falls with T (κ = 0.003 1/K)', 'physics 2 with κ, 50 sensors', 1.63),
+    ('2 · sensors (linear board, physics 2)', 'operator network, 10 sensors', 1.40),
+    ('2 · sensors (linear board, physics 2)', 'coordinate network, 10 sensors', 3.03),
+    ('3 · measured board ≠ design (k × 0.85, cooling × 0.6)', 'design model (simulation)', 26.7),
+    ('3 · measured board ≠ design (k × 0.85, cooling × 0.6)', 'physics 2 with the design operator, 50 sensors', 27.8),
+    ('3 · measured board ≠ design (k × 0.85, cooling × 0.6)', 'physics 3, 50 sensors (learned 0.89 / 0.60)', 2.70),
+    ('3 · measured board ≠ design (k × 0.85, cooling × 0.6)', 'design model calibrated on the 50 sensors', 0.00),
+], columns=['study', 'run', 'RMSE (K)'])
 
-DOT = '''digraph G {
+DOT ='''digraph G {
   rankdir=LR; bgcolor="transparent"; nodesep=0.3; ranksep=0.45;
   node [fontname="Helvetica", fontsize=11, shape=box, style="filled,rounded", fillcolor="#f4f3ee", color="#898781",
         margin="0.14,0.07"];
@@ -94,7 +107,9 @@ PARAMS = [
     ('Model variant', 'Run › selPF', "1: operator network — trained on several profiles, predicts other load "
      "profiles. 2: coordinate network — reconstructs the field of the testing profile from its sensors."),
     ('Physics', 'pinf › phys', "0: none. 1: heat equation with automatic differentiation (any data). 2: "
-     "finite-volume operator of the data file (board designer export), the most accurate."),
+     "finite-volume operator of the data file (board designer export), the most accurate; nonlinear if the file "
+     "holds kT. 3: as 2 with learned factors of conduction and cooling, for measured boards that differ from "
+     "the design."),
     ('α, β, γ', 'pinf › alpha, beta, gamma', "Weights of the data, physics and initial-condition loss. All three "
      "losses are relative to ΔT², so β = 1 weights data and physics equally. α = 0 trains without temperatures."),
     ('Basis functions K', 'pinf › K', "Operator network: number of products b_k(t)·φ_k(x). 8–32; more than the "
@@ -207,6 +222,15 @@ def theory_pf(cfg):
          r"\frac{G^{-1} C\,\dot{\hat\theta} + \hat\theta - \theta_{ss}}{\Delta T}",
          "Needs the operator in the data file (board designer). Multiplying the heat balance by G⁻¹ turns it into "
          "the temperature error it causes: r = 0.01 is an error of 1 % of ΔT."),
+        ("Temperature-dependent conductivity (kT in the data file)",
+         r"k = k_0\,(1-\kappa\,\bar\theta),\qquad G(\theta)\,\theta = G\,u,\qquad u = \theta - \tfrac{\kappa}{2}\theta^2",
+         "Every conductance is scaled at the mean rise of its two nodes (ambient: θ = 0). The heat balance is then "
+         "linear in the Kirchhoff variable u, and physics 2 replaces θ̂ by û in the residual."),
+        ("Physics 3: inverse operator with learned factors",
+         r"r = \frac{G^{-1} C\,\dot{\hat\theta} + s_k\,\hat u + (s_h - s_k)\,G^{-1}H\hat\theta - \theta_{ss}}{\Delta T},"
+         r"\qquad H = \mathrm{diag}(G\,\mathbf 1)",
+         "G = L + H: conduction L (row sums zero) and cooling H. The factors s_k, s_h start at 1 and are trained "
+         "together with the network, so the sensors of a measured board correct the nominal design of the file."),
         ("Loss", [r"L = \alpha\,L_{data} + \beta\,L_{phys} + \gamma\,L_{init}",
                   r"L_{data} = \overline{\left(\tfrac{\hat\theta - \theta}{\Delta T}\right)^2}\ \text{(sensors)},"
                   r"\quad L_{phys} = \overline{r^2},\quad L_{init} = \overline{\left(\tfrac{\hat\theta}"
@@ -230,6 +254,10 @@ def theory_pf(cfg):
                     '(data file: Cn, Gi/Gj/Gv, Vn)', 'Ws/K, W/K, m³'),
         ('θ_ss', 'steady-state rise for the present sources, G⁻¹·V·Q', 'K'),
         ('α, β, γ', 'weights of the data, physics and initial-condition loss (pinf › alpha, beta, gamma)', '–'),
+        ('κ', 'temperature coefficient of the conductivity (data file, kT; 0 if absent); silicon ≈ 0.003', '1/K'),
+        ('u', 'Kirchhoff variable θ − κ·θ²/2 (equal to θ for κ = 0)', 'K'),
+        ('L, H', 'conduction part of G (row sums zero) and cooling to the ambient diag(G·1)', 'W/K'),
+        ('s_k, s_h', 'learned factors of conduction and cooling (physics 3; 1 = design of the data file)', '–'),
     ], title="Equations and symbols", expanded=True)
 
     # ==============================================================================
@@ -308,11 +336,21 @@ def theory_pf(cfg):
     cm.section(4, "What to expect: measured on the tutorial board",
                "3D board with three chips (3453 nodes), four random training profiles of 20 s, tested on a designed "
                "pulse/sine profile of 40 s with a maximum rise of 107 K (tutorial *PF: field PINN of a board*).")
-    tabs = st.tabs(["3D board, layer-resolved (maximum rise 107 K)", "Same board as a lumped 2D field (79 K)"])
+    tabs = st.tabs(["3D board, layer-resolved (maximum rise 107 K)", "Same board as a lumped 2D field (79 K)",
+                    "Nonlinear, few sensors, measured ≠ design"])
     with tabs[0]:
         table(REFERENCE, hide_index=True)
     with tabs[1]:
         table(REFERENCE2D, hide_index=True)
+    with tabs[2]:
+        table(STUDIES, hide_index=True)
+        st.caption("Same board and load profiles, data of setup/tutorial/genBoardPFStudy.py. 1: with a conductivity "
+                   "that falls with temperature the matching physics beats the linear PS model (1.09 vs 1.73 K). "
+                   "2: the operator network keeps 1.4 K with 10 sensors (0.3 % of the nodes), where a POD model "
+                   "cannot be trained at all. 3: physics 3 identifies the two factors of the measured board within "
+                   "4 % (true 0.85 / 0.60) and lowers the error from 27 K to 2.7 K; when the mismatch is exactly a "
+                   "few global factors, a direct calibration of the simulation is exact, physics 3 additionally "
+                   "gives a surrogate that predicts any load in 0.07 s.")
     st.caption("Columns: RMSE, MAE and MAX are the root-mean-square, mean absolute and largest error of the testing "
                "profile over all nodes and time steps (the error at nodes without a sensor included). *Temperatures "
                "used* are the data in the loss; the physics loss needs none. Training time on an RTX 3070; operator "

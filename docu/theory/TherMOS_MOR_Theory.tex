@@ -100,7 +100,7 @@ is the key to the whole guide: it explains why a thermal system can be reduced a
 state-space models and POD models are three views of the same thing. \Cref{sec:lumped,sec:ss,sec:sf} treat the
 \emph{lumped} models that reproduce a few temperatures (RC, SS, SF modes). \Cref{sec:pod,sec:ps,sec:board} treat the
 \emph{field} models that reproduce the whole temperature field (PO and PS modes, board designer).
-\Cref{sec:data,sec:pinn} treat the \emph{data-driven} and \emph{hybrid} models (ML, DL, PI modes).
+\Cref{sec:data,sec:pinn,sec:pf} treat the \emph{data-driven} and \emph{hybrid} models (ML, DL, PI, PF modes).
 \Cref{sec:select} compares all options and gives a selection guide; \cref{sec:metrics} defines the error metrics.
 Every section ends with a box that names the configuration parameters (sheet \cfg{Mdl} of the configuration workbook,
 GUI view \emph{Parameters}).
@@ -785,6 +785,114 @@ makes the network follow the wrong physics; $\beta=0.01$--$1$ is the useful rang
 \end{cfgbox}
 
 %######################################################################################################################
+\section{Physics-informed field network (PF mode)}\label{sec:pf}
+%######################################################################################################################
+The PF mode extends the PINN to 2D and 3D temperature fields with heat sources $Q(\bm x,t)$ that vary in space and
+time \cite{cai,raissi}. It learns from FE/FV data and is penalised for violating the heat equation of the rise
+$\theta=T-T_{\mathrm{ref}}$,
+\begin{equation}
+  \rho c\,\frac{\partial\theta}{\partial t}=\sum_i\frac{\partial}{\partial x_i}\Bigl(k_i\frac{\partial\theta}
+  {\partial x_i}\Bigr)-h_v\,\theta+Q .
+\end{equation}
+\textbf{Source encoding.} The heat generation of the training data is decomposed by an SVD,
+$Q(\bm x,t)\approx\sum_{j=1}^{S}U_j(\bm x)\,p_j(t)$ with orthonormal footprints $U_j$; for chips with fixed footprints
+$S$ is the number of independently driven chips and the encoding is exact. Testing sources are projected on $U$.
+
+\textbf{Variant 1, operator network} \cite{lu} (\cfg{selPF}~$=1$): a sequence network (branch) maps the amplitudes
+$\bm p(t)$ to $K$ coefficients $b_k(t)$, a fully connected network (trunk, with Fourier features) maps the scaled
+position $\hat{\bm x}\in[-1,1]^d$ to $K$ basis functions,
+\begin{equation}
+  \hat T(\bm x,t)=T_{\mathrm{ref}}(\bm x)+\Delta T\sum_{k=1}^{K}b_k(t)\,\varphi_k(\bm x).
+\end{equation}
+The trunk is the learned counterpart of the POD modes, the branch that of the modal state space of the PS mode. It
+predicts new load profiles with the footprints of the training data.
+
+\textbf{Variant 2, coordinate network} (\cfg{selPF}~$=2$): one network $(\hat{\bm x},\hat t)\mapsto\hat\theta/\Delta T$
+for one profile, trained on the temperatures at $n_{\mathrm{Sens}}$ sensor nodes (farthest-point sampling); the heat
+equation fills the field between the sensors.
+
+\textbf{Loss.} As in the PI mode, $L=\alpha L_{\mathrm{data}}+\beta L_{\mathrm{phys}}+\gamma L_{\mathrm{init}}$, all
+relative to $\Delta T^2$ ($\Delta T$: 99\,\% quantile of the training rise). Two residuals are available:
+\begin{align}
+  \text{phys 1:}\quad r&=\frac{\rho c\,\partial_t\hat\theta-\sum_i k_i\,\partial^2_{x_i}\hat\theta+h_v\hat\theta-Q}
+  {g\,\Delta T},\qquad g=\sum_i\frac{2k_i}{\ell_i^2}+h_v,\\
+  \text{phys 2:}\quad \bm r&=\frac{\mat G^{-1}\mat C\,\dot{\hat{\bm\theta}}+\hat{\bm\theta}-\mat G^{-1}\mat V\bm Q}
+  {\Delta T}.
+\end{align}
+Physics 1 uses automatic differentiation at random collocation points (any mesh; $\ell_i$ half the domain extent; the
+material of a point is that of its nearest node, so the jump of $k$ at interfaces and the boundary conditions are not
+part of $r$). Physics 2 uses the finite-volume operator ($\mat C$ capacitances, $\mat G$ conductances incl.\ cooling,
+$\mat V$ control volumes) of the board designer export; multiplied by $\mat G^{-1}$, $r$ is the temperature error that
+the imbalance causes. The time derivative is taken at the step midpoint (consistent with the sample-and-hold sources
+of the data). With \cfg{col}~$=1$ the physics loss is also evaluated on the sources of the validation and testing
+profiles, whose temperatures are never used.
+
+\textbf{Temperature-dependent conductivity.} If the data file holds $\kappa$ (\cfg{kT}), every conductance is
+scaled with $k(\bar\theta)/k_0=1-\kappa\bar\theta$ at the mean rise $\bar\theta$ of its two nodes (ambient:
+$\theta=0$). The flux $g\,(1-\kappa\frac{\theta_i+\theta_j}{2})(\theta_i-\theta_j)=g\,(u_i-u_j)$ is linear in the
+Kirchhoff variable $u=\theta-\frac{\kappa}{2}\theta^2$, so $\mat G(\bm\theta)\bm\theta=\mat G\bm u$ exactly and physics
+2 replaces $\hat{\bm\theta}$ by $\hat{\bm u}$ in the residual.
+
+\textbf{Physics 3, inverse operator.} With $\mat G=\mat L+\mat H$ (conduction $\mat L$ with zero row sums, cooling
+$\mat H=\mathrm{diag}(\mat G\bm 1)$) the operator of the measured board is modelled as $s_k\mat L+s_h\mat H$ with two
+factors learned together with the network (10 times its learning rate):
+\begin{equation}
+  \bm r=\frac{\mat G^{-1}\mat C\,\dot{\hat{\bm\theta}}+s_k\hat{\bm u}+(s_h-s_k)\,\mat G^{-1}\mat H\hat{\bm\theta}
+  -\mat G^{-1}\mat V\bm Q}{\Delta T}.
+\end{equation}
+
+\begin{table}[h]\centering\footnotesize
+\caption{Studies on the tutorial board (\texttt{genBoardPFStudy.py}); operator network unless stated, RMSE of the
+testing profile over all nodes.}\label{tab:pfstudy}
+\begin{tabular}{@{}lllc@{}}\toprule
+Study & Data & Model & RMSE (K) \\\midrule
+$k(T)$, $\kappa=0.003$\,1/K & all nodes & PS mode (linear), $K=6$ & 1.73 \\
+ & all nodes & physics 2, constant $k$ assumed & 3.52 \\
+ & all nodes & physics 2 with $\kappa$ & 1.09 \\
+ & 50 sensors & physics 2 with $\kappa$ & 1.63 \\\midrule
+sensors (linear board) & 10 / 50 / all & physics 2 & 1.40 / 0.99 / 0.81 \\
+ & 10 / 50 / 200 & coordinate network, physics 2 & 3.03 / 3.18 / 2.95 \\\midrule
+measured $\neq$ design & -- & design model (simulation) & 26.7 \\
+($s_k=0.85$, $s_h=0.6$) & 50 sensors & physics 2, design operator & 27.8 \\
+ & 50 sensors & physics 3 ($s_k=0.886$, $s_h=0.597$) & 2.70 \\
+ & 10 sensors & physics 3 ($s_k=0.65$, $s_h=0.65$) & 8.67 \\
+ & 50 sensors & design model calibrated (2 factors) & 0.00 \\\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]\centering\footnotesize
+\caption{PF mode on the 3D tutorial board (three chips on IMS, 3453 nodes, testing profile with a maximum rise of
+\SI{107}{\kelvin}; errors over all nodes and time steps).}\label{tab:pf}
+\begin{tabular}{@{}llccc@{}}\toprule
+Model & Physics & RMSE (K) & MAE (K) & Training (s) \\\midrule
+Operator network & none & 8.94 & 8.46 & 22 \\
+Operator network & 2 (FV operator) & 0.81 & 0.58 & 159 \\
+Operator network & 2, no collocation profiles & 2.32 & 2.11 & 108 \\
+Operator network & 2, $\alpha=0$ (no temperatures) & 1.98 & 1.20 & 82 \\
+Operator network & 1, $\beta=0.01$ & 31.9 & 30.8 & 66 \\
+Coordinate network, 50 sensors & none / 2 & 5.64 / 3.18 & 3.12 / 2.31 & 42 / 245 \\
+PS mode, $K=6$ & -- & 1.09 & 0.37 & 26 \\\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{keybox}[When the PF mode helps]
+Temperatures alone do not carry the network to a new load (Table~\ref{tab:pf}: \SI{8.9}{\kelvin}); the heat balance
+on the sources of that load does (\SI{0.81}{\kelvin}). Physics 1 is harmful on layered boards (copper next to a
+dielectric, conductivity ratio 195) and helpful on smooth domains (same board lumped to 2D: \SI{7.1}{\kelvin}
+$\to$ \SI{2.3}{\kelvin}; coordinate network with 30 sensors: \SI{4.0}{\kelvin} $\to$ \SI{0.30}{\kelvin}). For a linear
+problem with full field data the PS mode is as accurate and faster; the PF mode is for few sensors, loads without
+temperature data and nonlinear material laws (Table~\ref{tab:pfstudy}). An operator that does not describe the
+measured board is worse than no physics; physics 3 corrects global factors from 50 sensors, a direct calibration
+of the simulation is the better choice when the mismatch is exactly such a factor.
+\end{keybox}
+
+\begin{cfgbox}
+\cfg{Mdl › pinf › phys} (0/1/2), \cfg{alpha}, \cfg{beta}, \cfg{gamma}, \cfg{K}, \cfg{nSens}, \cfg{nDat}, \cfg{nCol},
+\cfg{col}, \cfg{warm}, \cfg{branch}, \cfg{width}, \cfg{depth}, \cfg{fourier}, \cfg{steps}, \cfg{srcTol}, \cfg{seed};
+training \cfg{Mdl › dl}; setup \cfg{selPF}.
+\end{cfgbox}
+
+%######################################################################################################################
 \section{Comparison and selection guide}\label{sec:select}
 %######################################################################################################################
 \begin{table}[h]\centering\footnotesize
@@ -800,7 +908,8 @@ PO & FE snapshots + material data & full field & $\approx 2K^2+K$ & yes & +++ (p
 PS & FE snapshots + losses & full field & $K_s^2+2K_sK$ + modes & yes & ++ & field without material data \\
 ML & operating data & 1 temperature & model-dependent & -- & + & motors, quick static estimates \\
 DL & much operating data & $M$ temperatures & $10^4$--$10^5$ & -- & + & nonlinear systems, rich data \\
-PI & data + lumped physics & $M$ temperatures & $10^4$--$10^5$ & yes & + to ++ & little data, known structure \\\bottomrule
+PI & data + lumped physics & $M$ temperatures & $10^4$--$10^5$ & yes & + to ++ & little data, known structure \\
+PF & FE/FV fields (+ FV operator) & full field & $10^4$--$10^5$ & yes & + to ++ & few sensors, loads without data \\\bottomrule
 \end{tabularx}
 \end{table}
 
@@ -897,6 +1006,11 @@ with MAE, RMSE, MAX and NRMSE.
   Resistance Junction-to-Case of Semiconductor Devices with Heat Flow Through a Single Path}, 2010.
 \bibitem{raissi} M.\ Raissi, P.\ Perdikaris, G.\ E.\ Karniadakis, ``Physics-informed neural networks,''
   \emph{J.\ Comput.\ Phys.}, vol.\ 378, pp.\ 686--707, 2019.
+\bibitem{cai} S.\ Cai, Z.\ Wang, S.\ Wang, P.\ Perdikaris, G.\ E.\ Karniadakis, ``Physics-informed neural networks for
+heat transfer problems,'' \emph{J.\ Heat Transfer}, vol.\ 143, no.\ 6, 060801, 2021.
+\bibitem{lu} L.\ Lu, P.\ Jin, G.\ Pang, Z.\ Zhang, G.\ E.\ Karniadakis, ``Learning nonlinear operators via DeepONet
+based on the universal approximation theorem of operators,'' \emph{Nature Machine Intelligence}, vol.\ 3,
+pp.\ 218--229, 2021.
 \bibitem{kirchgaessner} W.\ Kirchgässner, O.\ Wallscheid, J.\ Böcker, ``Electric Motor Temperature'' data set, Kaggle,
   CC BY-SA 4.0.
 \bibitem{thermos} P.\ A.\ Schirmer, ``TherMOS: A Robust Low-Resolution 2D Spatial Thermal Model Order Reduction

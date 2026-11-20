@@ -1267,7 +1267,8 @@
    "options": {
     "0": "none: data only",
     "1": "heat equation with automatic differentiation at random collocation points (mesh-free, works for any field data; material interfaces and boundaries are not part of the residual)",
-    "2": "finite-volume operator stored in the data file (board designer export; exact at interfaces and boundaries)"
+    "2": "finite-volume operator stored in the data file (board designer export; exact at interfaces and boundaries)",
+    "3": "finite-volume operator with learned factors of conduction and cooling (inverse: the data file holds the nominal design, the factors are identified from the temperatures)"
    },
    "nested": true,
    "optional": false,

@@ -187,6 +187,66 @@ def test_fit_operator(tmp_path):
     assert np.allclose(pfSol(m2, te, para, {'selPF': 1})['y'], out['y'], atol=1e-4)
 
 
+def _study():
+    """Simulators of the PF studies (setup/tutorial/genBoardPFStudy.py)."""
+    import importlib.util
+    import os
+    import sys
+    f = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'setup', 'tutorial',
+                     'genBoardPFStudy.py')
+    sys.path.insert(0, os.path.dirname(f))
+    spec = importlib.util.spec_from_file_location('genBoardPFStudy', f)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def test_residual_nonlinear_and_inverse():
+    """Kirchhoff residual (k = k₀·(1 − κ·θ)) and residual with factors of conduction and cooling are zero for the
+    fields simulated with that physics and clearly not zero with the nominal physics."""
+    from src.py.model.PF.pfPhys import fvTerm
+    import scipy.sparse.linalg as spl
+    S = _study()
+    D = genBoard(dict(LAY, view='xz'))
+    [C, G, Bp] = calcBoardMat(D)
+    t = np.arange(121) * TS
+    P = np.column_stack([genProfile('random', c['P'], t, {'period': 2.0, 'hold': 0.5}, seed=i)
+                         for i, c in enumerate(D['chips'])])
+    lu = spl.splu(G.tocsc())
+    H = np.asarray(G.sum(axis=1)).ravel()
+    [L, Hm] = S.split(G)
+    assert np.allclose((L + Hm - G).toarray(), 0) and np.allclose(np.asarray(L.sum(axis=1)).ravel(), 0)
+
+    def res(T, kT, s):
+        th = T - LAY['Ta']
+        dT = float(np.max(th))
+        f, k = th / dT, np.arange(1, len(th))
+        fm = torch.as_tensor(0.5 * (f[k] + f[k - 1]))
+        u = fvTerm(fm, None, kT, dT, None).numpy()
+        Hf = None if s is None else torch.as_tensor(lu.solve((H[:, None] * u.T)).T)
+        r = (lu.solve((C[:, None] * (f[k] - f[k - 1]).T / TS)).T + fvTerm(fm, Hf, kT, dT, s).numpy()
+             - lu.solve((Bp @ P[k].T)).T / dT)
+        return float(np.sqrt(np.mean(r ** 2)))
+
+    T = S.simNonlin(C, G, Bp, P, TS, LAY['Ta'], 0.003)
+    assert res(T, 0.003, None) < 0.01 and res(T, 0.0, None) > 3 * res(T, 0.003, None)
+    [T, _] = simBoard(C, (0.8 * L + 0.5 * Hm).tocsr(), Bp, P, TS, LAY['Ta'], 4, steady=False)
+    s = torch.tensor([0.8, 0.5], dtype=torch.float64)
+    assert res(T, 0.0, s) < 0.01 and res(T, 0.0, torch.ones(2, dtype=torch.float64)) > 10 * res(T, 0.0, s)
+
+
+def test_fit_inverse(tmp_path):
+    """Physics 3 trains the factors of conduction and cooling with both networks."""
+    tr = _split(tmp_path, 'xz', 'tr', 'random', 3)
+    te = _split(tmp_path, 'xz', 'te', 'pulse', 0)
+    for var, pinf in ((1, {'K': 6, 'warm': 20}), (2, {'nSens': 20, 'steps': 5})):
+        para = _para(dict({'phys': 3, 'width': 16, 'depth': 2, 'nCol': 64, 'nDat': 256}, **pinf), epoch=3)
+        mdl = pfFit(dict(tr if var == 1 else te, _te=te), tr, para, {'selPF': var})
+        info = mdl['info']
+        assert np.isfinite(info['sK']) and np.isfinite(info['sH']) and info['lossPhys'][-1] > 0
+        assert (info['sK'], info['sH']) != (1.0, 1.0)                    # the factors are trained
+
+
 def test_fit_coordinate(tmp_path):
     te = _split(tmp_path, 'xy', 'te', 'random', 5, n=81)                # lumped 2D board
     assert material(te['Data'], 2)['op'] is not None

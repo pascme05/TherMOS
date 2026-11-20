@@ -5,7 +5,7 @@
 # File:         pfPhys
 # Date:         16.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.0
+# Version:      V.1.1
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -46,11 +46,21 @@ relative to the temperature scale ΔT of the training data:
    that this imbalance causes in the whole field, r = 0.01 is an error of 1 % of ΔT, also for smooth errors.
    θ_ss is the steady-state rise for the present sources; for the encoded sources θ_ss = Σ_j Θ_j·p_j with the
    steady-state fields Θ = G⁻¹·(V·U) (N x S) of the source footprints.
+   Temperature-dependent conductivity (kT = κ in the data file): every conductance (also to the ambient, θ = 0) is
+   scaled with k(θ̄)/k₀ = 1 − κ·θ̄ at the mean rise θ̄ of its two nodes. The flux g·(1 − κ·(θ_i + θ_j)/2)·(θ_i − θ_j)
+   = g·(u_i − u_j) is then linear in the Kirchhoff variable u = θ − κ·θ²/2, i.e. G(θ)·θ = G·u exactly and
+       r = (G⁻¹·C·dθ̂/dt + û − θ_ss) / ΔT
+3) Inverse finite-volume operator (phys = 3): the operator of the data is the nominal design; the conduction part L
+   (G without the cooling H = diag(G·1)) and the cooling H get learned factors s_k, s_h (initial 1), identified from
+   the temperature data together with the network:
+       r = (G⁻¹·C·dθ̂/dt + s_k·û + (s_h − s_k)·G⁻¹·H·θ̂ − θ_ss) / ΔT
+   (operator network: θ̂ in the cooling correction, coordinate network: û; equal for κ = 0).
 The functions take the coefficients / time derivatives they are given; the time discretisation (residual in the
 middle of every sampling step, sources of the step) is chosen in pfFit.
 Functions:  basisLap(trunk, x, kap):    Σ_i κ_i·∂²φ_k/∂x̂_i² (n x K) of the trunk of the operator network
             resOperator(...):           residual 1) of the operator network (batch x W x n)
-            resOperatorFV(...):         residual 2) of the operator network (batch x W x n)
+            fvTerm(f, Hf, kT, dT, s):   conduction and cooling term of the residuals 2) and 3)
+            resOperatorFV(...):         residual 2) or 3) of the operator network (batch x W x n)
             solveG(lu):                 differentiable function x → G⁻¹·x for the factorisation lu of G
             coordDeriv(net, z):         value (n), gradient (n x (d + 1)) and second derivatives (n x (d + 1)) of the
                                         coordinate network with respect to its inputs z = (x̂, t̂)
@@ -59,6 +69,9 @@ Functions:  basisLap(trunk, x, kap):    Σ_i κ_i·∂²φ_k/∂x̂_i² (n x K) 
 
 V1.0: 16.11.2026, Pascal Schirmer
 - Initial version
+
+V1.1: 20.11.2026, Pascal Schirmer
+- Temperature-dependent conductivity (Kirchhoff variable) and inverse operator with learned factors (phys = 3)
 """
 
 #######################################################################################################################
@@ -94,12 +107,23 @@ def resOperator(b, db, phi, lap, p, rc, hv, Uc, g, dT):
     return db @ (phi * rc[:, None] * w).T + b @ ((phi * hv[:, None] - lap) * w).T - p @ (Uc * w / dT).T
 
 
-def resOperatorFV(b, db, phi, Mphi, p, Tss, dT):
+def fvTerm(f, Hf, kT, dT, s):
+    """
+    Conduction and cooling term G⁻¹·G(θ)·θ / ΔT of the finite-volume residual for the scaled rise f = θ/ΔT:
+    u/ΔT = f − κ·ΔT·f²/2 (Kirchhoff variable, κ = kT) and, with learned factors s = (s_k, s_h) (phys = 3),
+    s_k·u/ΔT + (s_h − s_k)·Hf with Hf = G⁻¹·H·f (or G⁻¹·H·u/ΔT).
+    """
+    u = f - 0.5 * kT * dT * f ** 2 if kT else f
+    return u if s is None else s[0] * u + (s[1] - s[0]) * Hf
+
+
+def resOperatorFV(b, db, phi, Mphi, p, Tss, dT, kT=0.0, Hphi=None, s=None):
     """
     Residual of the finite-volume operator (batch x W x n, dimensionless): φ and G⁻¹·C·φ (n x K) at the selected
-    nodes, steady-state fields Θ = G⁻¹·V·U (n x S) of the source footprints.
+    nodes, steady-state fields Θ = G⁻¹·V·U (n x S) of the source footprints; optional temperature coefficient of the
+    conductivity κ = kT (1/K), and for phys = 3 G⁻¹·H·φ (n x K) and the learned factors s = (s_k, s_h).
     """
-    return db @ Mphi.T + b @ phi.T - p @ (Tss / dT).T
+    return db @ Mphi.T + fvTerm(b @ phi.T, None if Hphi is None else b @ Hphi.T, kT, dT, s) - p @ (Tss / dT).T
 
 
 def solveG(lu):

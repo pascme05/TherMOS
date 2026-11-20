@@ -173,12 +173,18 @@ Every page has the views below:
     conditions are not in the residual. Use it for homogeneous or lumped domains; a warning appears if the
     conductivity ratio in the data is above 10;
   - 2 = residual of the finite-volume operator of the data file, `r = (G⁻¹·C·dθ/dt + θ − G⁻¹·V·Q)/ΔT`: exact at
-    interfaces, cooling included, and r is directly the temperature error caused by the imbalance.
+    interfaces, cooling included, and r is directly the temperature error caused by the imbalance. If the data file
+    holds a temperature coefficient `kT` = κ (1/K) of the conductivity, k = k₀·(1 − κ·θ̄) at the mean rise θ̄ of
+    every conductance, the residual uses the Kirchhoff variable u = θ − κ·θ²/2 instead of θ (exact for this law);
+  - 3 = as 2, inverse: the conduction L and the cooling H = diag(G·1) of the operator in the file (the nominal
+    design) get factors s_k, s_h that are learned together with the network,
+    `r = (G⁻¹·C·dθ/dt + s_k·u + (s_h − s_k)·G⁻¹·H·θ − G⁻¹·V·Q)/ΔT`. The factors are trained with 10 times the
+    learning rate of the network; the identified values appear in the log and in the results (*Calibration*).
 - **Parameters `Mdl › pinf`:**
 
   | Parameter | Meaning | Default | Typical |
   |---|---|---|---|
-  | `phys` | physics loss, see above | 1 | 2 for board designer data |
+  | `phys` | physics loss, see above | 1 | 2 for board designer data, 3 for measured boards |
   | `alpha`, `beta`, `gamma` | weights of data, physics and initial-condition loss (–) | 1, 1, 0.1 | β 0.1 … 1; α = 0 trains without temperatures |
   | `K` | basis functions of the operator network (–) | 16 | 8 … 32 |
   | `nSens` | sensor nodes in the data loss, farthest-point sampling from the hottest node; 0 = all nodes | 0 | 20 … 200 for variant 2 |
@@ -217,8 +223,41 @@ Every page has the views below:
   (0.81 K), mostly through the collocation profiles. Physics 1 is harmful on the layered 3D board (copper next to
   dielectric) and helpful on the lumped 2D board. For a linear board with full field data the PS mode is as accurate
   and faster; use PF for few sensors or loads without temperature data.
-- **Limits.** Fixed source footprints (no new layouts), constant material data, profiles start in equilibrium, no
-  MATLAB version.
+- **Tutorials `pf_compare` and `pf_compare2d`:** operator and coordinate network with the same sensors on the same
+  test profile. 3D board, 50 sensors, physics 2: operator 0.99 K, coordinate 3.18 K (200 sensors: 0.86 / 2.95 K;
+  without physics 9.71 / 5.64 K). Lumped 2D board, 30 sensors: the best physics depends on the network — coordinate
+  network with physics 1 0.30 K (physics 2: 2.08 K), operator network with physics 2 0.95 K (physics 1: 2.83 K).
+- **Studies** (data: `python setup/tutorial/genBoardPFStudy.py`; same board and load profiles; operator network
+  unless stated):
+
+  | Study | Run | RMSE (K) |
+  |---|---|---|
+  | 1 · conductivity falls with temperature (κ = 0.003 1/K, max rise 129 K), all nodes | PS mode (linear), K = 6 | 1.73 |
+  | | physics 0 | 10.5 |
+  | | physics 2 assuming a constant k | 3.52 |
+  | | **physics 2 with κ (Kirchhoff residual)** | **1.09** |
+  | | physics 2 with κ, 50 sensors | 1.63 |
+  | | coordinate network, 50 sensors, with κ / constant k | 3.89 / 4.68 |
+  | 2 · number of sensors (linear board, physics 2) | operator: 10 / 25 / 50 / 100 / 200 / all sensors | 1.40 / 1.35 / 0.99 / 1.00 / 0.86 / 0.81 |
+  | | coordinate: 10 / 25 / 50 / 100 / 200 sensors | 3.03 / 4.00 / 3.18 / 2.68 / 2.95 |
+  | 3 · measured board ≠ design (conduction × 0.85, cooling × 0.6, max rise 146 K), 50 sensors | design model (finite-volume simulation) | 26.7 |
+  | | physics 0 / physics 2 (design operator) | 19.3 / 27.8 |
+  | | **physics 3 (learned s_k = 0.886, s_h = 0.597)** | **2.70** |
+  | | physics 3, 10 sensors (s_k = 0.65, s_h = 0.65) | 8.67 |
+  | | coordinate network, physics 3 (s_k = 0.55, s_h = 0.62) | 5.73 |
+  | | design model calibrated on the 50 sensors (2 factors, 130 simulations, 570 s) | 0.00 |
+  | | PS mode trained on all nodes of the measured board (reference) | 1.25 |
+
+  Reading: (1) with a temperature-dependent conductivity the PF mode with the matching physics beats the linear PS
+  model (1.09 vs 1.73 K) and needs only 50 sensors for the same accuracy; the wrong (linear) physics costs a factor 3.
+  (2) The operator network keeps 1.4 K with 10 sensors (0.3 % of the nodes); the PS mode cannot be trained from
+  sensors at all, the coordinate network stays near 3 K. (3) The design operator is useless for the measured board
+  (27.8 K, worse than no physics); physics 3 identifies both factors within 4 % from 50 sensors and reaches 2.7 K,
+  with 10 sensors the two factors are no longer separable. When the mismatch is exactly a few global factors, a
+  direct calibration of the finite-volume model is better still (exact here); physics 3 gives the factors and a
+  surrogate that predicts any load in 0.07 s in one training of 2 min.
+- **Limits.** Fixed source footprints (no new layouts), conductivity law k₀·(1 − κ·θ) only for physics 2/3, global
+  factors in physics 3 (no local defects), profiles start in equilibrium, no MATLAB version.
 
 - DL, PI and PF training on the CPU takes minutes to hours. `Mdl › gen › dev = 1` trains on the GPU (CUDA). This needs
   a CUDA build of PyTorch, e.g. `pip install torch==2.15.0 --index-url https://download.pytorch.org/whl/cu132`; otherwise a

@@ -5,7 +5,7 @@
 # File:         saveBoard
 # Date:         16.11.2026
 # Author:       Dr. Pascal A. Schirmer
-# Version:      V.1.2
+# Version:      V.1.3
 # Copyright:    Pascal Schirmer
 #######################################################################################################################
 #######################################################################################################################
@@ -39,6 +39,7 @@ Inputs:     1) D:       field data of genBoard
             4) T:       temperature (Nt x N) (°C)
             5) fileName: file name incl. path (.mat)
             6) q:       constant additional losses in W per node (N) that were used in the simulation, or None
+            7) extra:   additional variables of the file (dict), e.g. {'kT': κ} (1/K), or None
 Outputs:    1) fileName: written file
 
 V1.1: 07.11.2026, Pascal Schirmer
@@ -46,6 +47,9 @@ V1.1: 07.11.2026, Pascal Schirmer
 
 V1.2: 16.11.2026, Pascal Schirmer
 - Layer-resolved 3D export, finite-volume operator (Cn, Gi, Gj, Gv, Vn), constant additional losses q in X
+
+V1.3: 20.11.2026, Pascal Schirmer
+- Additional variables (extra), e.g. the temperature coefficient of the conductivity kT
 """
 
 #######################################################################################################################
@@ -67,7 +71,7 @@ import scipy.io as sio
 #######################################################################################################################
 # Main Function
 #######################################################################################################################
-def saveBoard(D, t, P, T, fileName, q=None):
+def saveBoard(D, t, P, T, fileName, q=None, extra=None):
     ###################################################################################################################
     # Initialisation
     ###################################################################################################################
@@ -130,6 +134,7 @@ def saveBoard(D, t, P, T, fileName, q=None):
     ###################################################################################################################
     # Post-Processing
     ###################################################################################################################
+    out.update(extra or {})
     os.makedirs(os.path.dirname(os.path.abspath(fileName)), exist_ok=True)
     sio.savemat(fileName, out, do_compression=True)
     print("INFO: Board data saved to " + fileName)

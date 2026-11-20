@@ -241,7 +241,7 @@ class DataLoader:
     # ==============================================================================
     def _loadMat2D(self, fileName):
         keys = ['X', 'y', 'r', 't', 'Ts', 'geo', 'dx', 'dy', 'dz', 'Lx', 'Ly', 'Lz', 'k', 'ky', 'kz', 'rho', 'Cp', 'hc', 'hv',
-                'fl', 'Ta', 'Cn', 'Gi', 'Gj', 'Gv', 'Vn']                    # Cn … Vn: finite-volume operator (saveBoard)
+                'fl', 'Ta', 'Cn', 'Gi', 'Gj', 'Gv', 'Vn', 'kT']              # Cn … Vn: finite-volume operator (saveBoard)
         try:
             raw = sio.loadmat(self._findFile(fileName, 'mat'), variable_names=keys)
             print('INFO: ' + str(self.Dim) + 'D Matlab data successfully loaded (' + str(fileName) + ')')
