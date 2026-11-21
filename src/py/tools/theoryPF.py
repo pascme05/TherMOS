@@ -26,6 +26,8 @@ parametric PF study (pfParam, 30 x 20 mm, 3 chips, 3453 nodes, nominal condition
     residual        physics loss:   r = G⁻¹·C·dθ̂/dt + θ̂ − Θ·P = e + G⁻¹·C·de/dt (e = θ̂ − θ)
     drift           steady anchor:  a slow, unseen mode over a long profile, with and without Σ_k φ_k = Θ·P_ref
     nwidth          why positions are hard for POD: singular values of steady fields over h vs over a chip position
+    compareMor      fair comparison: POD, pMOR (fixed bases), Krylov (operator per board) and the network for a
+                    moving chip and the cooling h, with what each model needs (NEEDS_CMP)
 Inputs/outputs in SI units except mm for positions, K for rises, s for times.
 """
 
@@ -261,3 +263,122 @@ def nwidth(n=24, seed=0):
         out[tag] = {'sv': s / s[0], 'err': err, 'k1': int(np.argmax(err < 1e-2) + 1), 'k01': int(np.argmax(err < 1e-3)
                                                                                                     + 1)}
     return out
+
+
+#######################################################################################################################
+# Fair comparison of the reduced models (MOR page)
+#######################################################################################################################
+POS_CMP = [(8.0, 10.0), (26.0, 16.5), (26.0, 4.5)]                    # T1 free to move along x in 4 … 20 mm
+NEEDS_CMP = {'POD': "snapshots of one board (once) + operator of the new board (projection)",
+             'pMOR': "snapshots of 8 boards over h (once) + operator of the new board (projection)",
+             'Krylov': "operator of the new board + one sparse LU of G per board, no snapshots",
+             'Network': "only the chip positions, the condition and the losses (no operator, no solve)"}
+
+
+def _be(Cr, Gr, Br, P, Ts=TS, nSub=4):
+    """Reduced model with implicit Euler and nSub sub-steps (integrator of the FV reference)."""
+    h = Ts / nSub
+    A = np.linalg.inv(Cr / h + Gr)
+    Ah, U = A @ (Cr / h), (A @ Br) @ np.asarray(P, float).T
+    q, Q = np.zeros(len(Cr)), np.zeros((len(P), len(Cr)))
+    for k in range(1, len(P)):
+        for _ in range(0, nSub):
+            q = Ah @ q + U[:, k]
+        Q[k] = q
+    return Q
+
+
+def _proj(B, V, P):
+    return _be(V.T @ (B['C'][:, None] * V), V.T @ (B['G'] @ V), V.T @ B['Bp'], P) @ V.T
+
+
+def cmpProfile(T=20.0):
+    """Pulse losses (period 4 s, duty 0.5) at the rated losses of the three chips (L x 3) (W)."""
+    t = np.arange(0, T + TS / 2, TS)
+    return np.column_stack([P_NOM[c] * ((t % 4.0) < 2.0) * (t > 0) for c in range(3)]).astype(float)
+
+
+def cmpBases(r=12, seed=1):
+    """
+    Fixed bases built once at T1 x = 8 mm: POD of one board (nominal h, random profile) and pMOR over 8 values of h
+    (500 … 5000 W/(m²K)), each with r modes.
+    """
+    rng = np.random.default_rng(seed)
+    t = np.arange(0, 40.0 + TS / 2, TS)
+    P = randProfile(t, rng)
+
+    def snap(mu):                                                       # Krylov r = 30 snapshots (≈ FV, 20x faster)
+        B = board(mu, POS_CMP)
+        return transient(B, P, TS, q=10, nodes=np.arange(len(B['C'])))
+    S1 = snap(NOM)
+    Sp = np.concatenate([snap(dict(NOM, h=float(h))) for h in np.geomspace(500.0, 5000.0, 8)])
+    def modes(S):                                                       # method of snapshots (S Sᵀ), every 2nd sample
+        S = S[::2]
+        w, U = np.linalg.eigh(S @ S.T)
+        U = U[:, ::-1][:, 0:r] / np.sqrt(np.maximum(w[::-1][0:r], 1e-300))
+        V, _ = np.linalg.qr(S.T @ U)
+        return V
+    return {'POD': modes(S1), 'pMOR': modes(Sp)}
+
+
+def compareMor(dx=0.0, h=1500.0, bases=None, q=4, net=None, T=20.0):
+    """
+    Errors of the reduced models for T1 moved by dx (mm) from x = 8 mm and the cooling h, against the FV model
+    (implicit Euler, 4 sub-steps). Returns {model: {'rmse', 'rmseTj' (K), 'time' (s, per board incl. reduction)}},
+    the reference junction rises 'tj' (L x 3), the predicted ones per model and 'peak' (K).
+    """
+    from src.py.model.PF.pfParam import simulate
+    from src.py.model.KR.calcKrylov import basis
+    import time
+    pos = [tuple(p) for p in POS_CMP]
+    pos[0] = (pos[0][0] + float(dx), pos[0][1])
+    if not valid(pos):
+        return None
+    B = board(dict(NOM, h=float(h)), pos)
+    P = cmpProfile(T)
+    th = simulate(B, P, TS)
+    out = {'tj': junction(B, th), 'peak': float(th.max()), 'models': {}, 'tjm': {}}
+
+    def add(name, y, tm):
+        out['models'][name] = {'rmse': float(np.sqrt(np.mean((y - th) ** 2))),
+                               'rmseTj': float(np.sqrt(np.mean((junction(B, y) - out['tj']) ** 2))), 'time': tm}
+        out['tjm'][name] = junction(B, y)
+    for k, V in (bases or {}).items():
+        t0 = time.time()
+        add(k, _proj(B, V, P), time.time() - t0)
+    t0 = time.time()
+    R = basis(B['C'], B['G'], B['Bp'], q)
+    add('Krylov', _be(R['C'], R['G'], R['B'], P) @ R['V'].T, time.time() - t0)
+    if net is not None:
+        import torch
+        from src.py.model.PF.pfParamFit import prepBoard, predict
+        t0 = time.time()
+        with torch.no_grad():
+            y = predict(net[0], prepBoard(B, torch.device('cpu')), P, net[1], TS).numpy()
+        add('Network', y, time.time() - t0)
+    return out
+
+
+def krylovOrder(dx=0.0, h=1500.0, qs=(1, 2, 3, 4, 6, 8), T=20.0):
+    """
+    Krylov reduction of the board (T1 moved by dx, cooling h) for several numbers of moment blocks q: field and
+    junction RMSE against the FV model (K), states r and time of the reduction (s), and the time constants of the
+    reduced model for the largest q.
+    """
+    from src.py.model.PF.pfParam import simulate
+    from src.py.model.KR.calcKrylov import basis
+    pos = [tuple(p) for p in POS_CMP]
+    pos[0] = (pos[0][0] + float(dx), pos[0][1])
+    B = board(dict(NOM, h=float(h)), pos)
+    P = cmpProfile(T)
+    th = simulate(B, P, TS)
+    tj = junction(B, th)
+    rows = []
+    for q in qs:
+        R = basis(B['C'], B['G'], B['Bp'], q)
+        y = _be(R['C'], R['G'], R['B'], P) @ R['V'].T
+        rows.append({'q': int(q), 'r': R['r'], 'rmse': float(np.sqrt(np.mean((y - th) ** 2))),
+                     'rmseTj': float(np.sqrt(np.mean((junction(B, y) - tj) ** 2))), 'tRed': R['tRed'],
+                     'tauMin': float(R['tau'][-1])})
+    return {'rows': rows, 'tau': R['tau'], 'peak': float(th.max()), 'N': len(B['C']), 't': np.arange(len(P)) * TS,
+            'tj': tj, 'tjKr': junction(B, y)}

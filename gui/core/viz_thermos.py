@@ -622,6 +622,33 @@ def pf_view(data, setup, key):
     pod_view(data, setup, key)
 
 
+def kr_view(data, setup, key):
+    """Krylov model: states, sources, reduction time and the time constants of the reduced model."""
+    tag = _tag(data)
+    m = data['mdls'].get(tag, {})
+    p = data['pred'][tag]
+    tau = np.asarray(m.get('tau', []), dtype=float)
+    c = st.columns(4)
+    c[0].metric("States r (testing board)", int(p.get('r', m.get('r', 0)) or 0),
+                help="r = q·S: q moment blocks (Mdl › kr › q) times S heat sources of the testing profile.")
+    c[1].metric("Moment blocks q", int(m.get('q', 0)), help="Matched moments of the transfer function at s = 0.")
+    c[2].metric("Reduction (testing board)", f"{1e3 * float(p.get('tRed', 0) or 0):.0f} ms",
+                help="Sparse LU of G, q block solves and the projection, from the operator of the testing file. "
+                     "Needed again for every new design.")
+    c[3].metric("Nodes N", int(m.get('N', 0)), help="Order of the finite-volume model that is reduced.")
+    if len(tau):
+        fig = go.Figure(go.Bar(x=np.arange(1, len(tau) + 1), y=tau, marker_color=color(0)))
+        fig.update_layout(xaxis_title='reduced mode i', yaxis=dict(type='log', title='time constant τᵢ (s)'))
+        show(fig, height=300, key=f"{key}|krtau", info="**Time constants of the reduced model (training board).** "
+             "Eigenvalues of (G_r, C_r): the Krylov basis keeps the slow modes of every source first (steady state "
+             "and the first moments); higher q adds faster modes. The slowest τ sets how long a load step takes to "
+             "settle.")
+        st.caption(f"Slowest τ = {fmt(tau[0])} s, fastest τ = {fmt(tau[-1])} s with r = {len(tau)} states. The "
+                   f"model used {int(m.get('S', 0))} source footprint(s) and no temperature data.")
+    st.divider()
+    pod_view(data, setup, key)
+
+
 #######################################################################################################################
 # Render functions per mode
 #######################################################################################################################
@@ -647,4 +674,5 @@ RENDER = {
     'DL': _make(dl_view, scatter),
     'PI': _make(dl_view, scatter),
     'PF': _make(pf_view),
+    'KR': _make(kr_view),
 }

@@ -28,7 +28,11 @@ T3 can check unseen positions. Files (data/board/pfparam/, npz, see pfParam.save
     pmor    8 boards with the nominal positions, 1 random profile of 40 s (snapshots of the pMOR baseline)
     t2      6 boards, extrapolation in h and k_diel (nominal positions), designed profile
     t3      6 boards with one chip inside the band (2 per chip) plus one board with 4 chips, designed profile
-    t4      1 board, mission profile of 30 min; temperatures of all nodes every 1 s and of the die nodes every sample
+    t4      1 board, mission profile of 30 min from cold (segments 1–20 s, ramps 0–1 s, levels 0–100 %); temperatures
+            of all nodes every 1 s and of the die nodes every sample
+    t4slow  as t4 with slow segments (10–120 s, ramps 0–5 s, levels 10–100 %; first version of the study)
+    trainPos  24 labelled boards as train, but nominal condition μ (only the chip positions vary; set 'trainPos')
+    trainMu   24 labelled boards as train, but nominal chip positions (only μ varies; set 'trainMu')
 Usage:      python setup/tutorial/genBoardPFParam.py [set ...]       (default: all sets)
 """
 
@@ -75,6 +79,7 @@ BAND = (12.0, 16.0)                                                     # x_c ba
 HOLDS = (0.5, 8.0)                                                      # hold times of the random profiles (s)
 T4_END = 1800.0                                                         # length of the mission profile (s)
 T4_DEC = 20                                                             # full field every T4_DEC samples
+T4_FAST = ((1.0, 20.0), (0.0, 1.0), (0.0, 1.0))                         # t4: segments, ramps (s), levels (of P)
 
 
 #######################################################################################################################
@@ -87,13 +92,13 @@ def designed(t, chips):
     return np.column_stack([genProfile(kind[c['tech']], c['P'], t, par) for c in chips])
 
 
-def mission(t, rng, chips):
-    """Mission profile: segments of 10–120 s with ramps of 0–5 s and random levels (10–100 % of P) per chip."""
+def mission(t, rng, chips, dur=(10.0, 120.0), ramp=(0.0, 5.0), lev=(0.1, 1.0)):
+    """Mission profile: segments of dur s with ramps of ramp s and random levels (lev of P) per chip."""
     seq, tt = [], 0.0
     while tt < t[-1]:
-        s = {'segment': 's', 'duration [s]': float(rng.uniform(10, 120)), 'ramp [s]': float(rng.uniform(0, 5))}
+        s = {'segment': 's', 'duration [s]': float(rng.uniform(*dur)), 'ramp [s]': float(rng.uniform(*ramp))}
         for c in chips:
-            s[c['name'] + ' [W]'] = float(c['P'] * rng.uniform(0.1, 1.0))
+            s[c['name'] + ' [W]'] = float(c['P'] * rng.uniform(*lev))
         seq.append(s)
         tt += s['duration [s]']
     return genMission(seq, chips, t)[0]
@@ -130,7 +135,7 @@ def main(sets=None):
     sets = sets or ['train', 'phys', 'physAll', 'val', 't1', 't1f', 'pmor', 't2', 't3', 't4']
     t = np.arange(0.0, T_END + TS * 1e-9, TS)
     seeds = {'train': 1, 'phys': 2, 'physAll': 3, 'val': 4, 't1': 5, 't1f': 6, 'pmor': 7, 't2': 8, 't3': 9, 't4': 10,
-             'physExt': 11}
+             'physExt': 11, 't4slow': 10, 'trainPos': 12, 'trainMu': 13}
 
     ###################################################################################################################
     # Calculation
@@ -140,6 +145,12 @@ def main(sets=None):
         rng = np.random.default_rng(seeds[s])
         if s == 'train':
             B = [buildBoard(m, samplePos(rng, BAND)) for m in sampleMu(24, rng)]
+            B = labelled(B, [[randProfile(t, rng, HOLDS) for _ in range(0, 2)] for _ in B])
+        elif s == 'trainPos':
+            B = [buildBoard(dict(NOM), samplePos(rng, BAND)) for _ in range(0, 24)]
+            B = labelled(B, [[randProfile(t, rng, HOLDS) for _ in range(0, 2)] for _ in B])
+        elif s == 'trainMu':
+            B = [buildBoard(m, nominal()) for m in sampleMu(24, rng)]
             B = labelled(B, [[randProfile(t, rng, HOLDS) for _ in range(0, 2)] for _ in B])
         elif s in ('phys', 'physAll'):
             B = [buildBoard(m, samplePos(rng, BAND if s == 'phys' else None)) for m in sampleMu(200, rng)]
@@ -169,15 +180,15 @@ def main(sets=None):
             ch4 = CHIPS + [dict(CHIPS[2], name='M2')]
             B.append(buildBoard(mus[6], samplePos(rng, BAND, None, ch4), ch4))
             B = labelled(B, [[designed(t, Bi['chips'])] for Bi in B])
-        elif s == 't4':
+        elif s in ('t4', 't4slow'):
             tt = np.arange(0.0, T4_END + TS * 1e-9, TS)
             Bi = buildBoard(sampleMu(1, rng)[0], nominal())
-            P = mission(tt, rng, CHIPS)
+            P = mission(tt, rng, CHIPS) if s == 't4slow' else mission(tt, rng, CHIPS, *T4_FAST)
             th = simulate(Bi, P, TS)
             die = np.concatenate(Bi['die'])
             Bi['P'], Bi['th'] = [P], [th[::T4_DEC]]
             saveFam(pjoin(folder, s + '.npz'), [Bi])
-            np.savez_compressed(pjoin(folder, 't4die.npz'), th=th[:, die].astype(np.float32), die=die, dec=T4_DEC)
+            np.savez_compressed(pjoin(folder, s + 'die.npz'), th=th[:, die].astype(np.float32), die=die, dec=T4_DEC)
             print("INFO: %s: 1 board, %d samples (%.0f s), T max %.1f K, %.1f s" % (s, len(tt), tt[-1],
                                                                               float(th.max()), time.time() - t0))
             continue

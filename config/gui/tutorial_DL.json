@@ -103,6 +103,25 @@
       "Rs": 0.0141,
       "alpha": 1,
       "beta": 0
+    },
+    "pinf": {
+      "phys": 1,
+      "alpha": 1,
+      "beta": 1,
+      "gamma": 0.1,
+      "K": 16,
+      "nSens": 0,
+      "nDat": 4096,
+      "nCol": 1024,
+      "col": 1,
+      "srcTol": 1e-06,
+      "branch": 2,
+      "warm": 50,
+      "width": 64,
+      "depth": 4,
+      "fourier": 4,
+      "steps": 100,
+      "seed": 42
     }
   },
   "Par": {
@@ -189,6 +208,8 @@
     "selML": 1,
     "selDL": 3,
     "selPI": 3,
+    "selPF": 1,
+    "selKR": 1,
     "featRoll": 0,
     "EWMA": [
       5,
@@ -201,6 +222,7 @@
     "legacy": 0,
     "archDL": null,
     "archPI": null,
-    "physPI": null
+    "physPI": null,
+    "archPF": null
   }
 }

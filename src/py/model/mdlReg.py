@@ -22,6 +22,8 @@ Outputs:    1) reg:     list of dictionaries (tag, name, fit, sol, siso, size) o
 
 V1.1: 16.11.2026, Pascal Schirmer
 - PF model (physics-informed field network, setup['selPF'])
+V1.2: 21.11.2026, Pascal Schirmer
+- KR model (block Krylov reduction of the board designer operator, setup['selKR'])
 """
 
 #######################################################################################################################
@@ -50,6 +52,8 @@ from src.py.model.PINN.pinnFit import pinnFit
 from src.py.model.PINN.pinnSol import pinnSol
 from src.py.model.PF.pfFit import pfFit
 from src.py.model.PF.pfSol import pfSol
+from src.py.model.KR.krFit import krFit
+from src.py.model.KR.krSol import krSol
 
 # ==============================================================================
 # External
@@ -120,6 +124,10 @@ def mdlReg(setup):
         reg.append({'tag': 'pf', 'name': 'Physics-Informed Field Network', 'siso': 0,
                     'fit': lambda d, v, p: pfFit(d, v, p, setup, lg),
                     'sol': lambda m, d, p: pfSol(m, d, p, setup, lg), 'size': _nNet})
+    if setup.get('selKR', 0) != 0:
+        reg.append({'tag': 'kr', 'name': 'Krylov reduction', 'siso': 0,
+                    'fit': lambda d, v, p: krFit(d, v, p, lg), 'sol': lambda m, d, p: krSol(m, d, p, lg),
+                    'size': lambda m: int(np.size(m['Cr']) + np.size(m['Gr']) + np.size(m['Br']))})
 
     ###################################################################################################################
     # Return

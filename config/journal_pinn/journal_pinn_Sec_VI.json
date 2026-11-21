@@ -1,0 +1,28 @@
+{
+ "_comment": "Section VI: layout optimization through the network (VI-C) and the single-board extensions of Table tab:single (VI-E). The convergence of the losses (VI-D) uses the training histories of base, nophys and physExt (no extra run). Single-board runs call src/py/main.py (PF mode, board of the PF tutorial) with the parameters of config/other/FR4 and the overrides below; results: <out>/single.json",
+ "name": "journal_pinn_Sec_VI",
+ "section": "VI-C Layout Optimization, VI-E Single-Board Extensions",
+ "single": {
+  "Ts": 0.05,
+  "dl": {"epoch": 150, "batch": 32, "initLr": 0.003, "W": 120, "stride": 5, "valPat": 40, "lrDropPr": 15, "lrDropFa": 0.5,
+         "lrAdapt": 1, "gradTh": 1},
+  "operator": {"setup": {"selPF": 1}, "pinf": {"warm": 70}, "dl": {"epoch": 600, "valPat": 80, "lrDropPr": 30, "W": 200}},
+  "coordinate": {"setup": {"selPF": 2}, "pinf": {}, "dl": {"epoch": 150, "valPat": 40, "lrDropPr": 15}},
+  "_help": "dl: training of the PF mode; operator: operator network (Mdl > pinf, selPF = 1); coordinate: coordinate PINN (selPF = 2); pinf.phys: 0 data only, 1 strong form (automatic differentiation), 2 FV residual, 3 FV residual with learned factors s_k, s_h; nSens: number of sensors (0: all nodes)"
+ },
+ "steps": [
+  {"type": "layout", "model": "physAll", "_help": "gradient descent on the chip centres through the network physAll, FV check, FV random search over 100 layouts"},
+  {"type": "single", "name": "LIN op phys0",       "net": "operator",   "data": "tutorial_pf",    "pinf": {"phys": 0}},
+  {"type": "single", "name": "LIN op phys1",       "net": "operator",   "data": "tutorial_pf",    "pinf": {"phys": 1}},
+  {"type": "single", "name": "LIN op phys2",       "net": "operator",   "data": "tutorial_pf",    "pinf": {"phys": 2}},
+  {"type": "single", "name": "LIN PS K6",          "net": null,         "data": "tutorial_pf",    "setup": {"selPS": 2}, "ss": {"K": 6}, "pod": {"K": 6}},
+  {"type": "single", "name": "SW op n10",          "net": "operator",   "data": "tutorial_pf",    "pinf": {"phys": 2, "nSens": 10}},
+  {"type": "single", "name": "SW co n10",          "net": "coordinate", "data": "tutorial_pf",    "pinf": {"phys": 2, "nSens": 10}},
+  {"type": "single", "name": "NL PS K6",           "net": null,         "data": "tutorial_pfnl",  "setup": {"selPS": 2}, "ss": {"K": 6}, "pod": {"K": 6}},
+  {"type": "single", "name": "NL op phys2 linear", "net": "operator",   "data": "tutorial_pfnl0", "pinf": {"phys": 2}},
+  {"type": "single", "name": "NL op phys2 kT",     "net": "operator",   "data": "tutorial_pfnl",  "pinf": {"phys": 2}},
+  {"type": "single", "name": "MM PS K6",           "net": null,         "data": "tutorial_pfmm",  "setup": {"selPS": 2}, "ss": {"K": 6}, "pod": {"K": 6}},
+  {"type": "single", "name": "MM op phys2 n50",    "net": "operator",   "data": "tutorial_pfmm",  "pinf": {"phys": 2, "nSens": 50}},
+  {"type": "single", "name": "MM op phys3 n50",    "net": "operator",   "data": "tutorial_pfmm",  "pinf": {"phys": 3, "nSens": 50}}
+ ]
+}

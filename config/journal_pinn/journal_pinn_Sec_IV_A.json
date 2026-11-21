@@ -1,0 +1,19 @@
+{
+ "_comment": "Section IV-A: results inside the training domain (T1, T1f) for the proposed network, its ablations, a second seed and the baselines (FV, pMOR, pMOR with positions, Krylov); every run is also evaluated on val, t2, t3 and the mission profiles t4/t4slow",
+ "name": "journal_pinn_Sec_IV_A",
+ "section": "IV-A Comparative Results inside the Training Domain",
+ "steps": [
+  {"type": "run", "name": "base",    "train": 24, "phys": "phys", "cfg": {}, "_help": "proposed network: 24 labelled + 200 physics-only boards"},
+  {"type": "run", "name": "base2",   "train": 24, "phys": "phys", "cfg": {"seed": 7}, "_help": "second seed"},
+  {"type": "run", "name": "nophys",  "train": 24, "phys": null,   "cfg": {"beta": 0.0, "gamma": 0.0}, "_help": "data only"},
+  {"type": "run", "name": "nophys2", "train": 24, "phys": null,   "cfg": {"beta": 0.0, "gamma": 0.0, "seed": 7}, "_help": "data only, second seed"},
+  {"type": "run", "name": "K8",      "train": 24, "phys": "phys", "cfg": {"K": 8}, "_help": "8 space functions"},
+  {"type": "run", "name": "K16",     "train": 24, "phys": "phys", "cfg": {"K": 16}, "_help": "16 space functions"},
+  {"type": "run", "name": "norel",   "train": 24, "phys": "phys", "cfg": {"rel": false}, "_help": "without the coordinates relative to the chips"},
+  {"type": "run", "name": "noSS",    "train": 24, "phys": "phys", "cfg": {"gamma": 0.0}, "_help": "without the steady-state loss"},
+  {"type": "baseline", "name": "fv",      "_help": "runtime of the FV model per new board"},
+  {"type": "baseline", "name": "pmor",    "_help": "global POD basis, nominal positions (t1f, t2)"},
+  {"type": "baseline", "name": "pmorPos", "_help": "global POD basis on the superset grid of all layouts (t1, t1f, t3)"},
+  {"type": "baseline", "name": "krylov",  "_help": "per-board block Krylov reduction from the operator (q = 2, 4, 8)"}
+ ]
+}

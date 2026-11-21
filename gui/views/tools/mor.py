@@ -16,7 +16,8 @@
 """
 MOR & POD: the model order reduction families of TherMOS and an interactive comparison of POD-Galerkin and modal
 truncation on a 1D rod (full model from the Numerics page): mode shapes, singular value decay, error over the number
-of modes for a training and a different test load.
+of modes for a training and a different test load. Section 3 compares POD, pMOR, Krylov and the parametric field
+network on the IMS board for a moving chip and another cooling, together with the information each model is given.
 """
 
 #######################################################################################################################
@@ -32,6 +33,8 @@ from gui.views.tools import _common as cm
 from gui.views.tools import sketch
 from gui.views.tools.numerics import rod
 from src.py.tools.toolData import MATERIALS
+from src.py.tools import theoryPF as tp
+from gui.core import needs
 
 #######################################################################################################################
 # Settings
@@ -46,6 +49,10 @@ FAMILIES = pd.DataFrame([
     ('ML', 'Machine learning', 'regression of T on (rolled) features of P', 'data driven', '1D'),
     ('DL', 'Deep learning', 'CNN/LSTM/… on windows of P', 'data driven', '1D'),
     ('PI', 'Physics-informed NN', 'network with an RC residual in the loss', 'hybrid', '1D'),
+    ('PF', 'Field network (PINN)', 'space functions × lags learnt from data and the FV residual', 'hybrid',
+     '2D/3D'),
+    ('KR', 'Krylov reduction', 'moments G⁻¹B, (G⁻¹C)G⁻¹B, … of the FV operator of the board, Galerkin projection',
+     'projection, no data', '2D/3D'),
 ], columns=['mode', 'name', 'reduced model', 'kind', 'data'])
 
 
@@ -180,3 +187,103 @@ def page():
         f"{err['K'][kp]}; beyond that the error is limited by the time step.",
         "In TherMOS the PO mode uses exactly this projection on 2D/3D FEM fields, the PS mode identifies the reduced "
         "matrices from data instead (robust to model mismatch), and the board designer produces the training data."])
+    compare()
+
+
+#######################################################################################################################
+# Section 3: comparison on the IMS board at stated information
+#######################################################################################################################
+NET = 'results/pfparam/base.pt'
+CMP_COL = {'POD': 3, 'pMOR': 4, 'Krylov': 0, 'Network': 1}
+DXS = list(range(-4, 13, 2))
+
+
+@st.cache_resource(show_spinner="Snapshots and POD bases (once) …")
+def _bases():
+    return tp.cmpBases()
+
+
+@st.cache_resource(show_spinner=False)
+def _net(mtime):
+    import os
+    from gui import adapter as A
+    from src.py.tools import designCalc as dc
+    return dc.loadNet(os.path.join(A.ROOT, NET))
+
+
+@st.cache_data(show_spinner="Reducing the boards of the sweep …")
+def _sweep(h, q, mtime):
+    b, nd = _bases(), _net(mtime)
+    out = {}
+    for dx in DXS:
+        r = tp.compareMor(float(dx), float(h), b, q, nd)
+        if r is not None:
+            out[dx] = {k: dict(v) for k, v in r['models'].items()}
+            out[dx]['peak'] = r['peak']
+    return out
+
+
+def compare():
+    import os
+    from gui import adapter as A
+    cm.section(3, "Which model for a new design? A comparison at stated information",
+               "IMS board (30 × 20 mm, 3 chips, 3473 nodes), pulse losses for 20 s. T1 is moved along x, the cooling "
+               "can be changed. All reduced models are compared with the full finite-volume (FV) model.")
+    st.markdown("**The models do not get the same information** — read the errors together with this table:")
+    table(pd.DataFrame(list(tp.NEEDS_CMP.items()), columns=['model', 'given for every new board']), hide_index=True)
+    f = os.path.join(A.ROOT, NET)
+    mt = os.path.getmtime(f) if os.path.isfile(f) else 0.0
+    c = st.columns(3)
+    dx = c[0].select_slider("Displacement of T1 Δx (mm)", DXS, 0, key=f"{K}|cdx",
+                            help="T1 starts at x = 8 mm. POD and pMOR keep the basis built at Δx = 0; Krylov is "
+                                 "rebuilt from the operator of the moved board; the network gets the new position.")
+    h = c[1].select_slider("Cooling h (W/(m²K))", [250, 500, 1500, 5000, 8000], 1500, key=f"{K}|ch",
+                           help="The network was trained for 500–5000 W/(m²K); the pMOR basis covers 500–5000.")
+    q = c[2].select_slider("Krylov blocks q", [1, 2, 3, 4, 6], 4, key=f"{K}|cq",
+                           help="Moment blocks of the Krylov basis (r = 3·q states).")
+    sw = _sweep(h, q, mt)
+    cur = sw[dx]
+    names = [n for n in ('POD', 'pMOR', 'Krylov', 'Network') if n in cur]
+    cm.tiles([(n, f"{fmt(cur[n]['rmseTj'])} K", f"Junction RMSE at Δx = {dx} mm, h = {h}; field RMSE "
+               f"{fmt(cur[n]['rmse'])} K; {fmt(1e3 * cur[n]['time'])} ms per board. Given: {tp.NEEDS_CMP[n]}.")
+              for n in names])
+    xs = sorted(sw)
+    fig = go.Figure()
+    fig.add_vrect(x0=4, x1=8, fillcolor='rgba(255,200,0,0.15)', line_width=0,
+                  annotation_text="no training chips (network)", annotation_position="top left")
+    for n in names:
+        fig.add_trace(line(xs, [max(sw[x][n]['rmseTj'], 1e-4) for x in xs], n, CMP_COL[n], mode='lines+markers'))
+    fig.add_trace(go.Scatter(x=[dx] * len(names), y=[max(cur[n]['rmseTj'], 1e-4) for n in names], mode='markers',
+                             marker=dict(color='red', size=10), name='current'))
+    fig.update_layout(xaxis_title='displacement of T1 Δx (mm)', yaxis=dict(type='log', title='junction RMSE vs FV (K)'))
+    show(fig, height=360, key=f"{K}|cmp", info="**Junction error over the chip position** (log scale). POD and pMOR "
+         "keep the basis computed at Δx = 0 and are only projected onto the operator of the moved board. Krylov "
+         "computes a new basis from that operator. The network only receives the new position. Yellow: band of "
+         "chip centres that no training board of the network contained.")
+    if 'Network' not in cur:
+        st.caption("No trained network found (results/pfparam/base.pt): run setup/tutorial/studyPFParam.py base.")
+    k = cur['Krylov']
+    st.caption(f"At Δx = {dx} mm and h = {h} W/(m²K): Krylov {fmt(k['rmseTj'])} K, POD "
+               f"{fmt(cur['POD']['rmseTj'])} K, pMOR {fmt(cur['pMOR']['rmseTj'])} K"
+               + (f", network {fmt(cur['Network']['rmseTj'])} K" if 'Network' in cur else '') +
+               f" (peak rise {fmt(cur['peak'])} K).")
+    bad = max(sw[x]['pMOR']['rmseTj'] for x in xs)
+    net = [sw[x]['Network']['rmseTj'] for x in xs] if 'Network' in cur else []
+    cm.interpret([
+        f"**Krylov is the most accurate here ({fmt(k['rmseTj'])} K) — because it is given the operator of the "
+        f"moved board.** It solves an easier task: reduce a known model. The network solves a harder one: predict "
+        f"an unknown design from its description only.",
+        f"Fixed bases (POD, pMOR) are exact where they were built but reach {fmt(bad)} K when the chip moves: the "
+        "field of a moving source is not in the span of the old snapshots (Kolmogorov n-width). For the cooling, "
+        "which only scales entries of G, pMOR stays accurate.",
+        ("Train the parametric network to add it to this comparison." if not net else
+         f"The network stays at {fmt(min(net))}–{fmt(max(net))} K over all positions at this cooling, including "
+         "the band it never saw, and needs no matrix, factorisation or simulation per design." if 500 <= h <= 5000
+         else f"h = {h} W/(m²K) is outside the cooling range of the network's training (500–5000): its error rises "
+         f"to {fmt(min(net))}–{fmt(max(net))} K, while Krylov, which receives the operator, is unaffected. "
+         "Physics-only boards in this range (run physExt) reduce the network error without simulations."),
+        "Rule of thumb: one known linear design → Krylov (KR mode). Many designs, moving chips, no solver at "
+        "prediction time → parametric network. Snapshots of one design only → POD (PO/PS)."],
+        title="How to read this comparison")
+    with st.expander("What every TherMOS mode needs"):
+        table(needs.table(), hide_index=True)

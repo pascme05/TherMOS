@@ -1,0 +1,24 @@
+{
+ "_comment": "Section IV-C: sensitivity to the number of training samples. 'data' = [labelled family, profiles per board, profile length (s)]; null keeps all profiles of the family (2 x 40 s). Every run keeps the 200 physics-only boards unless phys is null",
+ "name": "journal_pinn_Sec_IV_C",
+ "section": "IV-C Sensitivity to the Number of Training Samples",
+ "steps": [
+  {"type": "run", "name": "n3",    "train": 3,  "phys": "phys", "cfg": {}, "_help": "3 labelled boards"},
+  {"type": "run", "name": "n6",    "train": 6,  "phys": "phys", "cfg": {}},
+  {"type": "run", "name": "n12",   "train": 12, "phys": "phys", "cfg": {}},
+  {"type": "run", "name": "n3np",  "train": 3,  "phys": null, "cfg": {"beta": 0.0, "gamma": 0.0}, "_help": "3 labelled boards, no physics"},
+  {"type": "run", "name": "n6np",  "train": 6,  "phys": null, "cfg": {"beta": 0.0, "gamma": 0.0}},
+  {"type": "run", "name": "n12np", "train": 12, "phys": null, "cfg": {"beta": 0.0, "gamma": 0.0}},
+  {"type": "run", "name": "tL10",  "train": 24, "phys": "phys", "data": ["train", 1, 10.0], "cfg": {}, "_help": "one profile of 10 s per board"},
+  {"type": "run", "name": "tL20",  "train": 24, "phys": "phys", "data": ["train", 1, 20.0], "cfg": {}},
+  {"type": "run", "name": "tP1",   "train": 24, "phys": "phys", "data": ["train", 1, 40.0], "cfg": {}, "_help": "one profile of 40 s per board"},
+  {"type": "run", "name": "pos1",  "train": 1,  "phys": "phys", "data": ["trainPos", 2, 40.0], "cfg": {}, "_help": "layouts only (nominal condition)"},
+  {"type": "run", "name": "pos3",  "train": 3,  "phys": "phys", "data": ["trainPos", 2, 40.0], "cfg": {}},
+  {"type": "run", "name": "pos6",  "train": 6,  "phys": "phys", "data": ["trainPos", 2, 40.0], "cfg": {}},
+  {"type": "run", "name": "pos24", "train": 24, "phys": "phys", "data": ["trainPos", 2, 40.0], "cfg": {}},
+  {"type": "run", "name": "mu1",   "train": 1,  "phys": "phys", "data": ["trainMu", 2, 40.0], "cfg": {}, "_help": "conditions only (nominal positions)"},
+  {"type": "run", "name": "mu3",   "train": 3,  "phys": "phys", "data": ["trainMu", 2, 40.0], "cfg": {}},
+  {"type": "run", "name": "mu6",   "train": 6,  "phys": "phys", "data": ["trainMu", 2, 40.0], "cfg": {}},
+  {"type": "run", "name": "mu24",  "train": 24, "phys": "phys", "data": ["trainMu", 2, 40.0], "cfg": {}}
+ ]
+}

@@ -158,17 +158,17 @@ def _pcbMask(X, Y, r, W, L):
     return m
 
 
-def _nRows(t, dzMax):
+def _nRows(t, dzMax, nMax=4):
     """Number of rows of a layer of thickness t (mm) in the layer-resolved model."""
-    return int(min(max(np.ceil(t * 1e-3 / dzMax - 1e-9), 1), 4))
+    return int(min(max(np.ceil(t * 1e-3 / dzMax - 1e-9), 1), nMax))
 
 
-def _rows(stack, dzMax):
+def _rows(stack, dzMax, nMax=4):
     """Rows of the layer-resolved model, bottom → top: (layer, material, dz, k_xy, k_z, ρc, FR4, ρ) per row."""
     out = []
     for l in stack:
         t = l[2] * 1e-3
-        n = _nRows(l[2], dzMax)
+        n = _nRows(l[2], dzMax, nMax)
         out += [(l[0], l[1], t / n, l[3], l[4], l[5] * l[6], l[1] == 'FR4', l[5])] * n
     return out
 
@@ -190,7 +190,8 @@ def _model3D(layout, layers, below, chips, vias, isFR4, W, L, dx, h, hTop):
     full = np.ones((ny, nx), dtype=bool)
 
     # Rows: layers below, board (bottom → top)
-    rws = _rows(list(reversed(below)) + list(reversed(layers)), 0.5e-3)
+    dzMax, nMax = layout.get('dzMax', 0.5e-3), layout.get('rowMax', 4)     # z resolution (m), rows per layer
+    rws = _rows(list(reversed(below)) + list(reversed(layers)), dzMax, nMax)
     via = _viaMask(X, Y, chips, vias) if isFR4.any() else np.zeros((ny, nx), dtype=bool)
     R = []
     for (nm, mat, dz, kxy, kz, rc, fr4, rho) in rws:
@@ -200,7 +201,7 @@ def _model3D(layout, layers, below, chips, vias, isFR4, W, L, dx, h, hTop):
         R.append({'m': full, 'dz': np.full((ny, nx), dz), 'kx': np.full((ny, nx), kxy), 'kz': KZ,
                   'rc': np.full((ny, nx), rc), 'rho': np.full((ny, nx), rho), 'name': nm or mat})
     nBoard = len(rws)
-    nBelow = len(_rows(list(reversed(below)), 0.5e-3)) if below else 0
+    nBelow = len(_rows(list(reversed(below)), dzMax, nMax)) if below else 0
 
     # Rows: die attach and die over the chip footprints
     ra = {'m': np.zeros((ny, nx), dtype=bool), 'dz': np.ones((ny, nx)), 'kx': np.ones((ny, nx)),
@@ -281,7 +282,7 @@ def _model3D(layout, layers, below, chips, vias, isFR4, W, L, dx, h, hTop):
 
     # Additional losses in the board (row → layer index of the stack-up, 0 = top)
     q = np.zeros(N)
-    lid = [None] * nBelow + [li for li in reversed(range(len(layers))) for _ in range(_nRows(layers[li][2], 0.5e-3))]
+    lid = [None] * nBelow + [li for li in reversed(range(len(layers))) for _ in range(_nRows(layers[li][2], dzMax, nMax))]
     for p in layout.get('pcb') or []:
         if float(p.get('P') or 0.0) == 0.0:
             continue

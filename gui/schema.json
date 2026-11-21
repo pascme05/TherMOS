@@ -1488,6 +1488,35 @@
    "nested": true,
    "optional": false,
    "default": 42
+  },
+  {
+   "cat": "kr",
+   "var": "q",
+   "name": "Moment Blocks KR",
+   "desc": "Krylov mode: number q of moment blocks of the basis V = orth[Θ, M·Θ, …, M^(q-1)·Θ], Θ = G⁻¹·B (steady-state fields of the sources), M = G⁻¹·C. The reduced model has r = q·S states (S: number of sources) and matches the first q moments of the transfer function at s = 0. Typical 2 ... 8; 4 is accurate to about 0.1 % of the rise on the board designer models",
+   "unit": null,
+   "type": "int",
+   "percent": false,
+   "options": null,
+   "nested": true,
+   "optional": false,
+   "default": 4
+  },
+  {
+   "cat": "kr",
+   "var": "hold",
+   "name": "Source Hold KR",
+   "desc": "Krylov mode: interpolation of the heat sources between the samples",
+   "unit": null,
+   "type": "int",
+   "percent": false,
+   "options": {
+    "0": "zero-order hold (constant over the step, as the board designer simulation)",
+    "1": "linear between the samples"
+   },
+   "nested": true,
+   "optional": false,
+   "default": 0
   }
  ],
  "Par": [

@@ -172,15 +172,17 @@ def _checks(m):
     if not (dOut == dim or (dim == 3 and dOut == 2) or (dim > 1 and dOut == 1)):
         out.append(('error', f"Data reduction {dim}D → {dOut}D is not possible: set Parameters › Dat › Data "
                              f"Reduction to {dim}D (or 1D for a probe of a field)."))
-    if m in ('PO', 'PS', 'PF') and (dim == 1 or dOut == 1):
-        out.append(('error', "PO/PS/PF need 2D or 3D field data (Setup › Data › Dimension) and Data Reduction ≥ "
+    if m in ('PO', 'PS', 'PF', 'KR') and (dim == 1 or dOut == 1):
+        out.append(('error', "PO/PS/PF/KR need 2D or 3D field data (Setup › Data › Dimension) and Data Reduction ≥ "
                              "2D (Parameters › Dat)."))
     if m == 'PF':
         out += _checks_pf(G)
-    if m not in ('PO', 'PS', 'PF') and dim > 1 and dOut == 1:
+    if m == 'KR':
+        out += _checks_kr(G)
+    if m not in ('PO', 'PS', 'PF', 'KR') and dim > 1 and dOut == 1:
         out.append(('info', f"The {dim}D field is reduced to the probe (inpX, inpY) → (outX, outY) of the Dat "
                             f"parameters for this 1D model."))
-    if m not in ('PO', 'PS', 'PF') and dOut > 1:
+    if m not in ('PO', 'PS', 'PF', 'KR') and dOut > 1:
         out.append(('error', f"The {A.MODES[m]['title']} model works on 1D signals; set Data Reduction to 1D."))
     if m == 'PS' and dim == 3 and int(G.get('selPS') or 1) != 2:
         out.append(('warning', "3D data with the 2D variant: choose the 3D variant under Parameters."))
@@ -198,6 +200,30 @@ def _checks(m):
         out.append(('info', "Deep learning on the CPU: a training run can take from minutes to hours "
                             "(epochs, window length, data size). Parameters › gen › Compute Device selects the "
                             "GPU."))
+    return out
+
+
+def _checks_kr(G):
+    """Checks of the KR mode: operator in the training and testing files, raw units."""
+    from gui.core import dataset
+    out = []
+    if int(forms.value('Par', 'gen', 'normX') or 1) != 1 or int(forms.value('Par', 'gen', 'normY') or 1) != 1:
+        out.append(('error', "The KR mode works in raw units: set Parameters › Par › Data Normalisation X and y to "
+                             "1 (none)."))
+    if G.get('format') != 'mat':
+        out.append(('error', "The KR mode needs board designer data (.mat with the finite-volume operator)."))
+        return out
+    import scipy.io as sio
+    for name in [G.get('teFile')] + list(G.get('trFile') or [])[0:1]:
+        try:
+            keys = {k[0] for k in sio.whosmat(dataset.path(name, 'mat'))}
+        except Exception:
+            continue
+        if not {'Cn', 'Gi', 'Gj', 'Gv', 'Vn'} <= keys:
+            out.append(('error', f"'{name}' has no finite-volume operator (Cn, Gi, Gj, Gv, Vn): the Krylov reduction "
+                                 f"needs the operator of every board it predicts (board designer export)."))
+    out.append(('info', "The Krylov model is rebuilt from the operator of the testing file: it does not learn from "
+                        "the training temperatures and is exact for every board whose operator is given."))
     return out
 
 

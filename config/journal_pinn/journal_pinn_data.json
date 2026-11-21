@@ -1,0 +1,11 @@
+{
+ "_comment": "Section III-A: board families of the paper (setup/tutorial/genBoardPFParam.py -> data/board/pfparam/*.npz) and the single-board data of Section VI-E (genBoardPF.py, genBoardPFStudy.py -> data/board/tutorial_pf*)",
+ "name": "journal_pinn_data",
+ "section": "III-A Test Case and Data Sets",
+ "steps": [
+  {"type": "data", "sets": ["train", "phys", "physAll", "physExt", "val", "t1", "t1f", "pmor", "t2", "t3", "t4", "t4slow",
+                            "trainPos", "trainMu"],
+   "_help": "train 24 labelled boards, phys/physAll/physExt 200 physics-only boards, val 6, t1 10 (T1), t1f 10 (nominal positions), pmor 8 (pMOR snapshots), t2 6 (extrapolation), t3 7 (unseen positions, 4 chips), t4/t4slow 30 min mission profiles, trainPos/trainMu 24 labelled boards with fixed condition / fixed positions (IV-C)"},
+  {"type": "data", "single": true, "_help": "board of the PF tutorial (tutorial_pf) and the variants with k(T) (tutorial_pfnl, tutorial_pfnl0) and with a model mismatch (tutorial_pfmm)"}
+ ]
+}

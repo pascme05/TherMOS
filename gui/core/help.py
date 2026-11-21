@@ -469,12 +469,13 @@ RELEVANT = {
             'dl': lambda c: _mode(c) in ('DL', 'PI', 'PF'),
             'pinn': lambda c: _mode(c) == 'PI',
             'pinf': lambda c: _mode(c) == 'PF',
+            'kr': lambda c: _mode(c) == 'KR',
             'sf': lambda c: _mode(c) == 'SF'},
 }
 CATEGORY_TITLES = {'gen': 'General', 'rc': 'RC network', 'ss': 'State space', 'pod': 'POD',
                    'knn': 'K nearest neighbours', 'dt': 'Regression tree', 'svm': 'Support vector regression',
                    'gpr': 'Gaussian process', 'en': 'Ensemble', 'nn': 'Neural network (MLP)', 'dl': 'Deep learning',
-                   'pinn': 'Physics (PINN)', 'pinf': 'Field network (PF)', 'loss': 'Temperature-dependent losses', 'sf': 'Coupled network (SF)'}
+                   'pinn': 'Physics (PINN)', 'pinf': 'Field network (PF)', 'kr': 'Krylov reduction (KR)', 'loss': 'Temperature-dependent losses', 'sf': 'Coupled network (SF)'}
 
 
 #######################################################################################################################

@@ -298,8 +298,30 @@ def _pf(cfg, sub):
     return f, PRE_STEPS + steps + POST_STEPS
 
 
+def _kr(cfg, sub):
+    f = Flow()
+    last = _pre(f, cfg)
+    f.node('op', 'Operator of the board', ["C, G, V from the data file", "no temperatures used"], kind='inp')
+    f.node('src', 'Source encoding', ["Q ≈ Σ Uⱼ(x)·pⱼ(t)", f"σⱼ/σ₁ > {val('Mdl', 'pinf', 'srcTol')}"])
+    f.node('kry', 'Krylov basis', [f"q = {val('Mdl', 'kr', 'q')} moment blocks",
+                                   "V = orth[Θ, G⁻¹C·Θ, …], Θ = G⁻¹V·U"])
+    f.node('gal', 'Galerkin projection', ["C_r = VᵀCV, G_r = VᵀGV", "exact solution, " +
+                                          {0: 'zero-order hold', 1: 'linear sources'}.get(
+                                              int(forms.value('Mdl', 'kr', 'hold') or 0), '')])
+    f.edge(last, 'src').edge('op', 'kry').edge('src', 'kry').edge('kry', 'gal')
+    _post(f, cfg, 'gal', 'kr')
+    steps = [('Operator', "capacitances C, conductance matrix G (incl. cooling) and control volumes V of the board, "
+                          "written by the board designer; the testing board brings its own operator."),
+             ('Source encoding', "the heat generation is reduced to a few amplitudes pⱼ(t), one per source."),
+             ('Krylov basis', "steady-state fields Θ of the sources and q − 1 further moments (G⁻¹C)ᵏΘ, "
+                              "orthonormalised: r = q·S states; one sparse LU factorisation of G."),
+             ('Galerkin projection', "the FV model is projected onto the basis and solved exactly; rebuilt for the "
+                                     "testing board.")]
+    return f, PRE_STEPS + steps + POST_STEPS
+
+
 WORKFLOWS = {'RC': _rc, 'SS': _ss, 'SF': _sf, 'PO': _po, 'PS': lambda c, s: _po(c, s, True), 'ML': _ml,
-             'DL': _dl, 'PI': lambda c, s: _dl(c, s, True), 'PF': _pf}
+             'DL': _dl, 'PI': lambda c, s: _dl(c, s, True), 'PF': _pf, 'KR': _kr}
 
 
 #######################################################################################################################

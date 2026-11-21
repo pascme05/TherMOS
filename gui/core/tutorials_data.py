@@ -583,6 +583,53 @@ TUTORIALS = [
                    "Which time constant does the die attach change, and why is the slowest one unchanged?"]),
 
     # ------------------------------------------
+    # KR
+    # ------------------------------------------
+    dict(id='kr_operator', mode='KR', level='Intermediate', minutes=10, base='tutorial_KR',
+         title="Krylov reduction: a board model from its operator, without any temperature",
+         story="The board of the tutorial *Field PINN of a board* (IMS, three chips, 3453 finite-volume nodes, designed "
+               "pulse/sine test profile of 40 s with a maximum rise of 107 K). The KR mode does not learn from "
+               "temperatures: it takes the matrices C and G of the board and the heat sources of the test file and "
+               "builds a reduced model that matches the steady state and the first delays of the transfer function "
+               "(moment matching). q is the number of moment blocks; every block adds one state per heat source.",
+         goals=["relate the number of moment blocks q to the error and the number of states",
+                "see what the reduction needs: the operator of every board it predicts, not a training data set",
+                "compare it with the learned models of the same board (PF, PS)"],
+         changes={},
+         runs=[dict(label="q = 1 (steady state only)", changes={'Mdl.kr.q': 1}),
+               dict(label="q = 2", changes={'Mdl.kr.q': 2}),
+               dict(label="q = 4 (tutorial configuration)", changes={}),
+               dict(label="q = 4, first-order hold", changes={'Mdl.kr.hold': 1})],
+         steps=["Generate the data once: `python setup/tutorial/genBoardPF.py` (the same files as the PF tutorial).",
+                "Open *Inputs*: the box *What this mode needs* lists the operator of the testing file; no temperature "
+                "of the training files is used.",
+                "Open *Theory*: the three steps (steady state, delay moments, projection) and the tool *error over q* "
+                "for a moved chip and another cooling.",
+                "*Run* the tutorial configuration (q = 4), then load the other rows of the table.",
+                "Open *Results*: number of states, the time constants τ of the reduced model and the field against "
+                "the reference."],
+         look="| run | states r | RMSE (K) | MAE (K) | MAX (K) | reduction (s) |\n|---|---|---|---|---|---|\n"
+              "| q = 1 (steady state only) | 2 | 5.21 | 4.00 | 33.2 | 0.06 |\n"
+              "| q = 2 | 4 | 0.56 | 0.30 | 4.5 | 0.06 |\n"
+              "| **q = 4 (tutorial)** | **8** | **0.099** | **0.041** | 2.5 | 0.06 |\n"
+              "| q = 4, first-order hold | 8 | 0.46 | 0.31 | 9.5 | 0.07 |\n"
+              "| for comparison: PF operator network, physics 2 | – | 0.81 | 0.58 | 19.8 | 159 (training) |\n\n"
+              "Errors of the test profile over all 3453 nodes and 801 time steps. The test profile has two heat "
+              "sources, so every moment block adds two states.\n"
+              "- **q = 1** matches only the steady state: the slowest time constant of the reduced model is 2.0 s "
+              "instead of 2.8 s, and the error during the pulses is 5 K.\n"
+              "- **q = 4** (8 states) is 50 times more accurate (0.1 K, 0.1 % of the rise) and takes 0.06 s, "
+              "including the sparse factorisation of G. The maximum error of 2.5 K sits at the load steps: the "
+              "reference integrates with implicit Euler, the reduced model with an exact zero-order hold.\n"
+              "- **First-order hold** is worse here (0.46 K), because the losses of the test profile are steps.\n"
+              "- **The price:** the reduction needs C and G of the board it predicts. For a new layout, cooling or "
+              "material it is rebuilt from that board's operator. The PF network instead predicts new boards from "
+              "the chip positions and the condition alone (Theory & Tools › MOR & POD, section 3).",
+         exercise=["Set q = 6: how much does the error still drop, and how many states does it cost?",
+                   "Theory tool: move the chip by 12 mm. Why does the Krylov error stay small while a fixed POD basis "
+                   "fails?"]),
+
+    # ------------------------------------------
     # Studies
     # ------------------------------------------
     dict(id='study_grid', mode='Study', runMode='SS', page='study', level='Intermediate', minutes=10,

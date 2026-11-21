@@ -22,6 +22,10 @@ This script runs the studies of the parametric PF network on the board families 
         n3/n6/n12   3/6/12 labelled boards + 200 physics-only boards; n3np/n6np/n12np without physics
         K8/K16      8/16 space functions (default 32); norel: without the coordinates relative to the chips;
                     noSS: without the steady-state loss
+        tL10/tL20   24 labelled boards with one profile of 10/20 s; tP1: one profile of 40 s (base: two of 40 s)
+        pos<n>      n = 1/3/6/24 labelled boards of trainPos (nominal μ, only the positions vary)
+        mu<n>       n = 1/3/6/24 labelled boards of trainMu (nominal positions, only μ varies)
+    eval:<run>[,<run>...]  re-evaluates the mission profiles t4 and t4slow with the saved network of the run
     layout[:run]    layout optimisation through the network <run> (default physAll): gradient descent on the chip
                     centres, check with the FV model, FV random search for comparison
     baselines:
@@ -41,7 +45,7 @@ Usage:      python setup/tutorial/studyPFParam.py <run|fv|pmor> [...] [--out DIR
 # ==============================================================================
 # Path
 # ==============================================================================
-from os.path import dirname, abspath, isdir, join as pjoin
+from os.path import dirname, abspath, isdir, isfile, join as pjoin
 import sys
 
 base = dirname(abspath(__file__))
@@ -84,7 +88,14 @@ RUNS = {'base': ({}, 24, 'phys'), 'nophys': (NP, 24, None), 'physAll': ({}, 24, 
         'physExt': ({}, 24, 'physExt'), 'base2': ({'seed': 7}, 24, 'phys'), 'nophys2': (dict(NP, seed=7), 24, None),
         'noSS': ({'gamma': 0.0}, 24, 'phys'), 'K8': ({'K': 8}, 24, 'phys'), 'K16': ({'K': 16}, 24, 'phys'),
         'norel': ({'rel': False}, 24, 'phys')}
+# training-sample study: (cfg, labelled boards, physics family, (labelled family, profiles per board, length (s)))
+RUNS.update({'tL10': ({}, 24, 'phys', ('train', 1, 10.0)), 'tL20': ({}, 24, 'phys', ('train', 1, 20.0)),
+             'tP1': ({}, 24, 'phys', ('train', 1, 40.0))})
+RUNS.update({'pos%d' % n: ({}, n, 'phys', ('trainPos', 2, 40.0)) for n in (1, 3, 6, 24)})
+RUNS.update({'mu%d' % n: ({}, n, 'phys', ('trainMu', 2, 40.0)) for n in (1, 3, 6, 24)})
 TESTS = ['val', 't1', 't1f', 't2', 't3']
+T4S = ['t4', 't4slow']                                                  # mission profiles (fast, slow segments)
+ZOOM = 60.0                                                             # junction traces at every sample up to (s)
 TS = 0.05
 
 
@@ -95,10 +106,10 @@ def _fam(folder, name):
     return loadFam(pjoin(folder, name + '.npz'))
 
 
-def _evalT4(net, dT, folder, dev):
+def _evalT4(net, dT, folder, dev, name='t4'):
     """Errors on the 30 min mission profile: full field every 1 s and the die nodes at every sample."""
-    B = _fam(folder, 't4')[0]
-    z = np.load(pjoin(folder, 't4die.npz'))
+    B = _fam(folder, name)[0]
+    z = np.load(pjoin(folder, name + 'die.npz'))
     dec, die, thDie = int(z['dec']), z['die'], z['th']
     P = B['P'][0]
     with torch.no_grad():
@@ -112,13 +123,16 @@ def _evalT4(net, dT, folder, dev):
             torch.cuda.synchronize()
         tm = time.time() - t0
     e, ed = y - B['th'][0], yd - thDie
+    nz = min(len(P), int(round(ZOOM / TS)) + 1)
     nd = np.cumsum([0] + [len(d) for d in B['die']])
     tj = [(yd[:, nd[c]:nd[c + 1]].max(axis=1), thDie[:, nd[c]:nd[c + 1]].max(axis=1)) for c in range(0, len(B['die']))]
     return {'rmse': float(np.sqrt(np.mean(e ** 2))), 'mae': float(np.mean(np.abs(e))), 'max': float(np.max(np.abs(e))),
             'rmseDie': float(np.sqrt(np.mean(ed ** 2))), 'maxDie': float(np.max(np.abs(ed))),
             'rmseTj': [float(np.sqrt(np.mean((a - b) ** 2))) for a, b in tj], 'time': tm, 'nSamples': len(P),
             'trace': {'t': (np.arange(len(P)) * TS)[::dec].tolist(), 'ref': tj[0][1][::dec].tolist(),
-                      'pred': tj[0][0][::dec].tolist()}}
+                      'pred': tj[0][0][::dec].tolist()},
+            'zoom': {'t': (np.arange(nz) * TS).tolist(), 'ref': [tj[c][1][:nz].tolist() for c in range(len(tj))],
+                     'pred': [tj[c][0][:nz].tolist() for c in range(len(tj))]}}
 
 
 def _summary(rows):
@@ -133,10 +147,14 @@ def _summary(rows):
 # Runs
 #######################################################################################################################
 def run(name, folder, out, epoch=None):
-    cfg, nTr, ph = RUNS[name]
+    cfg, nTr, ph, sel = (RUNS[name] + (('train', None, None),))[0:4]
     cfg = dict(cfg, **({'epoch': epoch} if epoch else {}))
     dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    train = _fam(folder, 'train')[0:nTr]
+    train = _fam(folder, sel[0])[0:nTr]
+    if sel[1]:                                                            # fewer / shorter labelled profiles
+        L = int(round(sel[2] / TS)) + 1
+        for B in train:
+            B['P'], B['th'] = [P[0:L] for P in B['P'][0:sel[1]]], [th[0:L] for th in B['th'][0:sel[1]]]
     phys = _fam(folder, ph) if ph else []
     val = _fam(folder, 'val')
     print("START: run %s (%d labelled, %s physics boards) on %s" % (name, nTr, len(phys), dev))
@@ -156,9 +174,28 @@ def run(name, folder, out, epoch=None):
         rep[s] = {'boards': rows, 'sum': _summary(rows)}
         print("INFO: %s %s: RMSE %.2f K, MAE %.2f K, MAX %.1f K, T_j RMSE %.2f K" %
               (name, s, rep[s]['sum']['rmse'], rep[s]['sum']['mae'], rep[s]['sum']['max'], rep[s]['sum']['rmseTj']))
-    rep['t4'] = _evalT4(net, dT, folder, dev)
-    print("INFO: %s t4 (30 min): RMSE %.2f K, MAX %.1f K, die RMSE %.2f K, %.2f s" %
-          (name, rep['t4']['rmse'], rep['t4']['max'], rep['t4']['rmseDie'], rep['t4']['time']))
+    rep['data'] = {'fam': sel[0], 'boards': len(train), 'profiles': int(sum(len(B['P']) for B in train)),
+                   'samples': int(sum(len(P) for B in train for P in B['P']))}
+    _t4(rep, net, dT, folder, dev)
+    with open(pjoin(out, name + '.json'), 'w') as f:
+        json.dump(rep, f, indent=1, default=float)
+
+
+def _t4(rep, net, dT, folder, dev):
+    for s in T4S:
+        if isfile(pjoin(folder, s + '.npz')):
+            rep[s] = _evalT4(net, dT, folder, dev, s)
+            print("INFO: %s %s (30 min): RMSE %.2f K, MAE %.2f K, MAX %.1f K, die RMSE %.2f K, %.2f s" %
+                  (rep['run'], s, rep[s]['rmse'], rep[s]['mae'], rep[s]['max'], rep[s]['rmseDie'], rep[s]['time']))
+
+
+def evalT4(name, folder, out):
+    """Re-evaluates the mission profiles (t4, t4slow) with a saved network; the other entries of the json are kept."""
+    dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    net, dT = _loadNet(pjoin(out, name + '.pt'), dev)
+    with open(pjoin(out, name + '.json')) as f:
+        rep = json.load(f)
+    _t4(rep, net, dT, folder, dev)
     with open(pjoin(out, name + '.json'), 'w') as f:
         json.dump(rep, f, indent=1, default=float)
 
@@ -483,6 +520,9 @@ def main(argv):
             basePMORPos(folder, out)
         elif n == 'krylov':
             baseKrylov(folder, out)
+        elif n.startswith('eval:'):
+            for r in n.split(':')[1].split(','):
+                evalT4(r, folder, out)
         elif n.startswith('layout'):
             optLayout(folder, out, n.split(':')[1] if ':' in n else 'physAll')
         else:

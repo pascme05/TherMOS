@@ -85,4 +85,14 @@ def workbook(kind, name, key, field=None):
 # Inputs per mode: mode -> function(cfg)
 #######################################################################################################################
 from gui.core.viz_data import view as _view                                 # TherMOS data viewer
-INPUTS = {m: _view for m in ('RC', 'SS', 'SF', 'PO', 'PS', 'ML', 'DL', 'PI', 'PF')}
+from gui.core import needs as _needs                                       # what every mode needs
+
+
+def _with_needs(m):
+    def f(cfg):
+        _needs.render(m)
+        _view(cfg)
+    return f
+
+
+INPUTS = {m: _with_needs(m) for m in ('RC', 'SS', 'SF', 'PO', 'PS', 'ML', 'DL', 'PI', 'PF', 'KR')}

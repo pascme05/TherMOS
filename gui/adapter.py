@@ -90,7 +90,7 @@ RUN_SECTION = 'Run'                                                   # section 
 CONFIG_VAR = 'config'                                                 # run setting naming the config workbook
 MODE_VAR = 'mode'                                                     # run setting of the operating mode
 SEL = {'RC': 'selRC', 'SS': 'selSS', 'SF': 'selSF', 'PO': 'selPO', 'PS': 'selPS', 'ML': 'selML', 'DL': 'selDL',
-       'PI': 'selPI', 'PF': 'selPF'}
+       'PI': 'selPI', 'PF': 'selPF', 'KR': 'selKR'}
 RUN = {'user': 'Pascal Schirmer', 'name': 'default', 'config': '/default/default', 'mode': 'SS',
        'plotOut': 1, 'plotMdl': 0, 'featRank': 0, 'save': 0, 'train': 1, 'test': 1,
        'format': 'mat', 'datDim': 1, 'datSep': 1,
@@ -98,7 +98,7 @@ RUN = {'user': 'Pascal Schirmer', 'name': 'default', 'config': '/default/default
        'trSheet': ['train-1', 'train-2', 'train-3'], 'teSheet': 'test', 'vlSheet': ['val'],
        'trID': [], 'teID': [], 'vlID': [], 'rTr': 0.7, 'rVl': 0.2,
        'inp': ['P1', 'P2', 'P3'], 'out': ['T1', 'T2', 'T3'], 'ref': ['R1', 'R2', 'R3'],
-       'selRC': 1, 'selSS': 1, 'selSF': 2, 'selPO': 1, 'selPS': 1, 'selML': 1, 'selDL': 1, 'selPI': 3, 'selPF': 1,
+       'selRC': 1, 'selSS': 1, 'selSF': 2, 'selPO': 1, 'selPS': 1, 'selML': 1, 'selDL': 1, 'selPI': 3, 'selPF': 1, 'selKR': 1,
        'featRoll': 0, 'EWMA': [5, 50], 'EWMS': [5, 50], 'legacy': 0, 'archDL': None, 'archPI': None, 'physPI': None,
        'archPF': None}
 # (var, kind, label, help): kind 'text', 'toggle', 'int', 'select:a|b|c', 'expert:<kind>'; the data settings
@@ -175,6 +175,12 @@ MODES = {
                     "many load profiles. Coordinate network: the field of one profile from a few sensors.",
                pick=('selPF', {1: 'Operator (new loads)', 2: 'Coordinate (sensors)'}),
                cats=['gen', 'dl', 'pinf'], script='setup/tutorial/tutorial_PF.py'),
+    'KR': dict(title='Krylov MOR (2D/3D)', section='Mdl', extra=['Dat', 'Exp'], icon=':material/compress:',
+               text="Block Krylov reduction (moment matching) of the finite-volume operator C, G of a board: "
+                    "V = orth[G⁻¹B, (G⁻¹C)G⁻¹B, …], a few states per heat source. Needs no temperature data, but the "
+                    "operator of every board it predicts (board designer data) and one sparse factorisation per "
+                    "design. The exact reference of the reduced models for one known linear board.",
+               cats=['gen', 'kr'], script='setup/tutorial/tutorial_KR.py'),
 }
 
 #######################################################################################################################

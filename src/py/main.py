@@ -31,6 +31,7 @@ V1.1: 07.11.2026, Pascal Schirmer
 
 V1.2: 16.11.2026, Pascal Schirmer
 - PF model (physics-informed field network for 2D/3D fields, setup['selPF'])
+- KR model (block Krylov reduction of the finite-volume operator, setup['selKR'])
 """
 
 #######################################################################################################################
@@ -94,7 +95,7 @@ def main(setup, path):
     setup.setdefault('EWMA', [5, 50])
     setup.setdefault('EWMS', [5, 50])
     setup.setdefault('featRank', 0)
-    for k in ('selRC', 'selSS', 'selSF', 'selPO', 'selPS', 'selML', 'selDL', 'selPI', 'selPF'):
+    for k in ('selRC', 'selSS', 'selSF', 'selPO', 'selPS', 'selML', 'selDL', 'selPI', 'selPF', 'selKR'):
         setup.setdefault(k, 0)
     lg = setup['legacy']
 
@@ -116,7 +117,7 @@ def main(setup, path):
     print("Test Data:    %s" % str(setup.get('teFile')))
     print("Val Data:     %s" % str(setup.get('vlFile')))
     print("Models:       " + ', '.join(k[3:] for k in ('selRC', 'selSS', 'selSF', 'selPO', 'selPS', 'selML', 'selDL',
-                                                       'selPI', 'selPF') if setup[k] != 0))
+                                                       'selPI', 'selPF', 'selKR') if setup[k] != 0))
     print("Legacy:       %d (%s)" % (lg, 'MATLAB behaviour' if lg == 1 else 'corrected behaviour'))
     print("\n")
 
@@ -129,7 +130,8 @@ def main(setup, path):
     except (OSError, KeyError, ValueError) as e:
         sys.exit('ERROR: Configuration could not be loaded (' + str(e) + ')')
     data = loadData(para, setup, path)
-    if data['tr']['Dim'] < 2 and (setup['selPO'] != 0 or setup['selPS'] != 0 or setup['selPF'] != 0):
+    if data['tr']['Dim'] < 2 and (setup['selPO'] != 0 or setup['selPS'] != 0 or setup['selPF'] != 0 or
+                                     setup['selKR'] != 0):
         sys.exit('ERROR: 1D data input and 2D/3D model')
     _banner("END: Loading Para and Data")
     print("\n")

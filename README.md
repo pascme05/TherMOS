@@ -89,9 +89,14 @@ pip install -r gui/requirements.txt      # streamlit, plotly, openpyxl (optional
 python start_gui.py                      # opens http://localhost:8501
 ```
 
-- **Operating modes:** one page per model family (RC, SS, SF, PO, PS, ML, DL, PI, PF). Each page has the views
+- **Operating modes:** one page per model family (RC, SS, SF, PO, PS, ML, DL, PI, PF, KR). Each page has the views
   workflow, parameters, inputs, theory, run and interactive results. The theory views of DL and PI draw the network
   architecture and the physics loss.
+- **KR mode (Krylov reduction, 2D/3D):** block Krylov moment matching of the finite-volume operator C, G of a board
+  (`setup['selKR']`, parameters `Mdl › kr`, tutorial `setup/tutorial/tutorial_KR.py`). It uses no temperature data
+  but needs the operator of every board it predicts (board designer data) and one sparse factorisation per design;
+  the reduced model is rebuilt from the operator of the testing file. The Inputs view of every mode now states what
+  the mode needs to be built, to predict a new case and for a new design.
 - **PF mode (field PINN, 2D/3D):** a physics-informed network for temperature fields with heat sources that vary in
   space and time, trained on FE/FV data (`setup['selPF']`, parameters `Mdl › pinf`, Python only).
   - Variant 1, operator network: T̂(x, t) = T_ref + ΔT·Σ b_k(t)·φ_k(x) with a sequence network for b (input: source
