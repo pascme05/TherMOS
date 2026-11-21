@@ -14,13 +14,9 @@
 # Function Description
 #######################################################################################################################
 """
-PINN journal paper (parametric modal operator network), Section IV-C (Sensitivity to the Number of Training Samples).
-Number of labelled boards with and without physics (n3 … n12np), simulated time per board (tL10, tL20, tP1), layouts
-only (pos1 … pos24) and conditions only (mu1 … mu24). Fig. samples, Table samples.
-Config:     config/journal_pinn/journal_pinn_Sec_IV_C.json
-Runtime:    ≈ 4.5 h (17 trainings)
-Usage:      python setup/journal_pinn/journal_pinn_Sec_IV_C.py [--force] [--dry] [--only a,b] [--epoch N] [--out DIR]
-            (existing results are skipped; options: see setup/journal_pinn/runPaper.py)
+This script reproduces Section IV-C (number of training samples): all methods on the medium mesh with the sensor version L and 3, 6, 12
+and 24 labelled boards. Runtime: ~1.5 h.
+Methods and data sets: config/journal_pinn/<name>.json; results: results/pfhb/<method>_<mesh>_<sensors>.json.
 """
 
 #######################################################################################################################
@@ -40,16 +36,64 @@ sys.path.insert(0, base)
 # ==============================================================================
 # Internal
 # ==============================================================================
-from setup.journal_pinn.runPaper import execute
+from setup.journal_pinn.mainPINN import main
+
+#######################################################################################################################
+# Init
+#######################################################################################################################
+setup = {}
 
 #######################################################################################################################
 # Configuration
 #######################################################################################################################
-CONFIG = 'journal_pinn_Sec_IV_C'                                                     # config/journal_pinn/<CONFIG>.json
+
+# ==============================================================================
+# General
+# ==============================================================================
+setup['user'] = 'Pascal Schirmer'                                                                                        # name of the user (string)
+setup['name'] = 'journal_pinn_Sec_IV_C'                                                                                  # name of the simulation (string)
+
+# ==============================================================================
+# Experiment
+# ==============================================================================
+setup['out'] = 'results/pfhb'                                                                                            # results folder relative to TherMOS (string)
+setup['skip'] = 1                                                                                                        # (0): recompute everything, (1): skip runs whose results exist (restart after an interruption)
+setup['epoch'] = 0                                                                                                       # (0): epochs of the configs, (N): at most N epochs (quick check of the chain, use another out)
+
+# ==============================================================================
+# Data
+# ==============================================================================
+setup['data'] = []                                                                                                       # meshes whose data sets are generated (data/board/pfhb/<mesh>): coarse, medium, fine (config data.json)
+
+# ==============================================================================
+# Runs
+# ==============================================================================
+setup['mesh'] = ['medium']                                                                                               # meshes of the runs: coarse (2 mm), medium (1 mm), fine (0.5 mm)
+setup['sens'] = ['L']                                                                                                    # sensor versions of the training labels: S (4 hot spots), L (16: hot spots, 4 NTC, 8 on the base)
+setup['methods'] = ['foster', 'pod', 'pinn', 'nophys']                                                                   # methods (config <method>.json): foster, pod (full field, one run per mesh), pinn, nophys
+setup['nTrain'] = [3, 6, 12, 24]                                                                                         # numbers of labelled training boards (first n of the training set, maximum 24)
+
+# ==============================================================================
+# Memory and Computational Load
+# ==============================================================================
+setup['scale'] = 0                                                                                                       # (0): off, (1): size, runtime and memory per mesh and profile length (scale_<mesh>.json)
+
+# ==============================================================================
+# Layout Optimisation
+# ==============================================================================
+setup['layout'] = ''                                                                                                     # network run for the layout optimisation ('': off, e.g. 'pinn_medium_L')
+setup['nStart'] = 8                                                                                                      # random start layouts of the gradient descent
+setup['nIter'] = 300                                                                                                     # gradient steps per start
+setup['nRand'] = 100                                                                                                     # layouts of the FV random search (comparison)
+
+# ==============================================================================
+# Figures (scripts in docu/paper/figures/scripts)
+# ==============================================================================
+setup['figs'] = []                                                                                                       # figure data scripts in docu/paper/figures/scripts (e.g. fighb)
+setup['build'] = 0                                                                                                       # (0): off, (1): compile the standalone figure PDFs (buildfigs.py, pdflatex)
 
 #######################################################################################################################
 # Calculations
 #######################################################################################################################
 if __name__ == '__main__':
-    execute(CONFIG)
-
+    main(setup)

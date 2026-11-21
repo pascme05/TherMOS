@@ -41,6 +41,14 @@ Loss (dimensionless, θ scaled with the 99 % quantile ΔT of the labelled rises)
    L = α·L_D + β·L_P + γ·L_S; the initial condition θ(0) = 0 holds by construction (b_0 = 0).
 Training: Adam, learning rate halved after 5 epochs without improvement of the validation RMSE, early stopping after
 'pat' epochs; the network of the best validation RMSE is kept. An epoch is 'nStep' optimiser steps.
+Sensors (cfg 'sens' > 0): the labels exist only at the first 'sens' sensor nodes of every board (B['sens'], rises at
+every sample in B['ths']), e.g. 4 hot spots or 16 points of a measured module. The data loss and the validation RMSE
+then use these nodes only, the physics and steady-state losses still act on the whole board.
+Large boards (N > 'nDense'): instead of the dense G⁻¹ only the rows of nR random residual nodes per cached board are
+computed (sparse LU, G symmetric: G⁻¹[rows, :] = (G⁻¹·E_rows)ᵀ), which keeps the cache at nR x N per board.
+Boards with different numbers of nodes (e.g. a coarse grid on which the die footprints cover a different number of
+cells depending on the position) are padded to the largest N: the padded nodes repeat node 0, have C = 0 and zero
+columns of G⁻¹, and the residual nodes are drawn per board from its own nodes, so the padding never enters a loss.
 Functions:  prepBoard(B, dev), ginv(B, dev), steady(B), predict(net, bt, P, dT, Ts, rows, tIdx), physRes(...),
             ssRes(...), fitParam(train, phys, val, cfg), evalBoard(net, B, dT, ...)
 
@@ -49,6 +57,9 @@ V1.0: 21.11.2026, Pascal Schirmer
 
 V1.1: 21.11.2026, Pascal Schirmer
 - Steady-state loss L_S and bound τ_cap of the time constants (drift over long profiles)
+
+V1.2: 21.11.2026, Pascal Schirmer
+- Sensor labels (cfg 'sens') and rows of G⁻¹ for large boards (cfg 'nDense')
 """
 
 #######################################################################################################################
@@ -74,7 +85,7 @@ import torch
 CFG = {'K': 32, 'width': 128, 'depth': 4, 'nF': 4, 'rel': True, 'alpha': 1.0, 'beta': 1.0, 'lr': 1e-3,
        'nStep': 100, 'epoch': 200, 'pat': 20, 'nbD': 4, 'nD': 1024, 'nbP': 4, 'nR': 1024, 'tP': 30.0,
        'holds': (0.5, 8.0), 'Ts': 0.05, 'seed': 42, 'clip': 1.0, 'nCache': 32, 'nNew': 8, 'gamma': 1.0, 'nbS': 8,
-       'tauCap': 80.0}
+       'tauCap': 80.0, 'sens': 0, 'nDense': 8000}
 
 
 #######################################################################################################################
@@ -82,6 +93,19 @@ CFG = {'K': 32, 'width': 128, 'depth': 4, 'nF': 4, 'rel': True, 'alpha': 1.0, 'b
 #######################################################################################################################
 def _t(a, dev):
     return torch.as_tensor(np.asarray(a), dtype=torch.float32, device=dev)
+
+
+def _pad(x, n, dim, rep0=False):
+    """Pads the tensor x along dim to the length n (zeros, or copies of entry 0 if rep0)."""
+    m = x.shape[dim]
+    if m >= n:
+        return x
+    if rep0:
+        return torch.cat([x, x.narrow(dim, 0, 1).expand(*[n - m if d == dim % x.dim() else -1
+                                                          for d in range(x.dim())])], dim=dim)
+    shp = list(x.shape)
+    shp[dim] = n - m
+    return torch.cat([x, torch.zeros(shp, dtype=x.dtype, device=x.device)], dim=dim)
 
 
 def prepBoard(B, dev):
@@ -103,6 +127,20 @@ def ginv(B, dev):
     Gi = torch.cholesky_inverse(torch.linalg.cholesky(G))
     Th = Gi @ torch.as_tensor(B['Bp'], dtype=torch.float64, device=dev)
     return {'Gi': Gi.float(), 'C': _t(B['C'], dev), 'Th': Th.float()}
+
+
+def ginvRows(B, n, rng, dev):
+    """Rows of G⁻¹ at n random nodes (n x N, sparse LU, G symmetric), C (N), the rows of Θ = G⁻¹·Bp and the nodes."""
+    from scipy.sparse.linalg import splu
+    N = len(B['C'])
+    rows = np.sort(rng.choice(N, min(n, N), replace=False))
+    lu = splu(B['G'].tocsc(), permc_spec='MMD_AT_PLUS_A')
+    E = np.zeros((N, len(rows)))
+    E[rows, np.arange(len(rows))] = 1.0
+    GiR = lu.solve(E).T
+    Th = lu.solve(np.asarray(B['Bp'], dtype=float))[rows]
+    return {'Gi': _t(GiR, dev), 'C': _t(B['C'], dev), 'Th': _t(Th, dev),
+            'rows': torch.as_tensor(rows, dtype=torch.long, device=dev)}
 
 
 def steady(B):
@@ -130,7 +168,7 @@ def predict(net, bt, P, dT, Ts, rows=None, tIdx=None, scaled=False):
 def physRes(net, xs, ctx, C, GiR, ThR, rows, P, dT, Ts):
     """
     Residual r (B x L x n) of the finite-volume model (G⁻¹ scaling) of a batch of boards at the residual nodes rows
-    (n): xs (B x nc x N x 5), ctx (B x nc x 11), C (B x N), rows of G⁻¹ (B x n x N) and of Θ = G⁻¹·Bp (B x n x nc),
+    (n, or B x n per board): xs (B x nc x N x 5), ctx (B x nc x 11), C (B x N), rows of G⁻¹ (B x n x N) and of Θ = G⁻¹·Bp (B x n x nc),
     losses P (B x L x nc) (W).
     """
     p = P.transpose(1, 2) / P_REF                                               # B x nc x L
@@ -142,7 +180,8 @@ def physRes(net, xs, ctx, C, GiR, ThR, rows, P, dT, Ts):
     nb, nc, N, K = phi.shape
     Cphi = (C[:, :, None, None] * phi.permute(0, 2, 1, 3)).reshape(nb, N, nc * K)         # B x N x nc·K
     Mr = torch.bmm(GiR, Cphi).reshape(nb, -1, nc, K).permute(0, 2, 1, 3)                  # B x nc x n x K
-    return torch.einsum('bclk,bcnk->bln', db, Mr) + torch.einsum('bclk,bcnk->bln', b, phi[:, :, rows]) \
+    phiR = phi[:, :, rows] if rows.dim() == 1 else torch.gather(phi, 2, rows[:, None, :, None].expand(-1, nc, -1, K))
+    return torch.einsum('bclk,bcnk->bln', db, Mr) + torch.einsum('bclk,bcnk->bln', b, phiR) \
         - torch.einsum('bcl,bnc->bln', p0, ThR) * (P_REF / dT)
 
 
@@ -175,22 +214,34 @@ def fitParam(train, phys, val, cfg=None, dev=None, log=print):
     # ==============================================================================
     # Data (labelled samples stacked: boards x chips x nodes)
     # ==============================================================================
-    dT = float(np.percentile(np.concatenate([np.abs(th).ravel() for B in train for th in B['th']]), 99))
+    nS = int(cfg['sens'])
+    lab = (lambda B: [x[:, 0:nS] for x in B['ths']]) if nS else (lambda B: B['th'])        # labels per profile
+    dT = float(np.percentile(np.concatenate([np.abs(th).ravel() for B in train for th in lab(B)]), 99))
     bTr = [prepBoard(B, dev) for B in train]
-    XS, CTX = torch.stack([b['xs'] for b in bTr]), torch.stack([b['ctx'] for b in bTr])
-    DIE = torch.stack([b['die'] for b in bTr])
+    Nn = [len(B['C']) for B in list(train) + list(phys)]
+    N, N0 = max(Nn), min(Nn)                                                               # padded, smallest N
+    XS = torch.stack([_pad(b['xs'], N, 1, True) for b in bTr])
+    CTX = torch.stack([b['ctx'] for b in bTr])
+    DIE = torch.stack([b['die'] for b in bTr]) if len(set(len(b['die']) for b in bTr)) == 1 else None
+    SEN = torch.stack([torch.as_tensor(np.asarray(B['sens'][0:nS]), dtype=torch.long, device=dev)
+                       for B in train]) if nS else None
     sB = torch.as_tensor([i for i, B in enumerate(train) for _ in B['P']], dtype=torch.long, device=dev)
     sP = torch.stack([_t(P, dev) for B in train for P in B['P']])                          # S x L x nc
-    sTh = torch.stack([_t(th / dT, dev) for B in train for th in B['th']])                 # S x L x N
-    N = bTr[0]['N']
+    sTh = torch.stack([_pad(_t(th / dT, dev), N if not nS else nS, 1) for B in train for th in lab(B)])
+    dense = N <= cfg['nDense']
     usePhys, useSS = wP > 0, wS > 0
     pool = (list(train) + list(phys)) if (usePhys or useSS) else []
     bPo = [prepBoard(B, dev) for B in pool]
+    for b in bPo:
+        b['xsP'] = _pad(b['xs'], N, 1, True)
     thS = [_t(steady(B), dev) for B in pool] if useSS else []
+    nR = min(cfg['nR'], N0)
     bVa = [prepBoard(B, dev) for B in val]
     cache = {}
     log("INFO: %d labelled board(s) with %d profile(s), %d physics-only board(s), %d validation board(s), "
-        "ΔT = %.2f K" % (len(train), len(sB), len(phys) if pool else 0, len(val), dT))
+        "ΔT = %.2f K, labels at %s, N = %d (%s G⁻¹)" % (len(train), len(sB), len(phys) if pool else 0, len(val), dT,
+                                                       '%d sensors' % nS if nS else 'all nodes', N,
+                                                       'dense' if dense else 'rows of'))
 
     # ==============================================================================
     # Network
@@ -206,24 +257,32 @@ def fitParam(train, phys, val, cfg=None, dev=None, log=print):
         se, n = 0.0, 0
         with torch.no_grad():
             for B, bt in zip(val, bVa):
-                for P, th in zip(B['P'], B['th']):
-                    e = predict(net, bt, P, dT, Ts) - _t(th, dev)
+                rv = torch.as_tensor(np.asarray(B['sens'][0:nS]), dtype=torch.long, device=dev) if nS else None
+                for P, th in zip(B['P'], lab(B)):
+                    e = predict(net, bt, P, dT, Ts, rows=rv) - _t(th, dev)
                     se, n = se + float(torch.sum(e ** 2)), n + e.numel()
         return np.sqrt(se / max(n, 1))
+
+    def inv(j):
+        out = ginv(pool[j], dev) if dense else ginvRows(pool[j], nR, rng, dev)
+        out['C'] = _pad(out['C'], N, 0)
+        if not dense:
+            out['Gi'] = _pad(out['Gi'], N, 1)
+        return out
 
     def refresh():
         """Replaces nNew boards of the G⁻¹ cache (all at the first call)."""
         if len(pool) <= cfg['nCache']:
             for j in range(0, len(pool)):
                 if j not in cache:
-                    cache[j] = ginv(pool[j], dev)
+                    cache[j] = inv(j)
             return
         if cache:
             for j in rng.choice(list(cache.keys()), min(cfg['nNew'], len(cache)), replace=False):
                 del cache[int(j)]
         free = [j for j in range(0, len(pool)) if j not in cache]
         for j in rng.choice(free, cfg['nCache'] - len(cache), replace=False):
-            cache[int(j)] = ginv(pool[int(j)], dev)
+            cache[int(j)] = inv(int(j))
 
     # ==============================================================================
     # Training
@@ -242,31 +301,40 @@ def fitParam(train, phys, val, cfg=None, dev=None, log=print):
             # data loss: nbD profiles, shared random nodes plus the die nodes of every board
             j = torch.as_tensor(rng.integers(0, len(sB), cfg['nbD']), dtype=torch.long, device=dev)
             bi = sB[j]
-            rows = torch.cat([torch.randint(0, N, (cfg['nD'],), device=dev)[None].expand(len(j), -1), DIE[bi]], dim=1)
+            if nS:                                                              # sensor nodes only
+                rows = SEN[bi]
+            else:
+                rows = torch.cat([torch.randint(0, N0, (cfg['nD'],), device=dev)[None].expand(len(j), -1),
+                                  DIE[bi]], dim=1)
             xs = torch.gather(XS[bi], 2, rows[:, None, :, None].expand(-1, XS.shape[1], -1, XS.shape[-1]))
             p = sP[j].transpose(1, 2) / P_REF
             phi = net.basis(xs, CTX[bi])
             b = net.coeff(p, net.rates(CTX[bi]), Ts)
             pred = torch.einsum('bclk,bcnk->bln', b, phi)
-            tgt = torch.gather(sTh[j], 2, rows[:, None, :].expand(-1, sTh.shape[1], -1))
+            tgt = sTh[j] if nS else torch.gather(sTh[j], 2, rows[:, None, :].expand(-1, sTh.shape[1], -1))
             lD = torch.mean((pred - tgt) ** 2)
             # physics loss: nbP boards of the cache with random loss profiles
             lP = torch.zeros((), device=dev)
             if usePhys:
                 ks = [keys[int(i)] for i in rng.integers(0, len(keys), cfg['nbP'])]
-                rr = torch.randperm(N, device=dev)[0:min(cfg['nR'], N)]
                 Pp = torch.stack([_t(randProfile(tP, rng, cfg['holds'], pool[k]['chips']), dev) for k in ks])
-                r = physRes(net, torch.stack([bPo[k]['xs'] for k in ks]), torch.stack([bPo[k]['ctx'] for k in ks]),
-                             torch.stack([cache[k]['C'] for k in ks]), torch.stack([cache[k]['Gi'][rr] for k in ks]),
-                             torch.stack([cache[k]['Th'][rr] for k in ks]), rr, Pp, dT, Ts)
+                if dense:                                                       # random rows per board
+                    rr = torch.stack([torch.randperm(bPo[k]['N'], device=dev)[0:nR] for k in ks])
+                    GiR = torch.stack([_pad(cache[k]['Gi'][r], N, 1) for k, r in zip(ks, rr)])
+                    ThR = torch.stack([cache[k]['Th'][r] for k, r in zip(ks, rr)])
+                else:                                                           # fixed rows per cached board
+                    rr = torch.stack([cache[k]['rows'] for k in ks])
+                    GiR, ThR = torch.stack([cache[k]['Gi'] for k in ks]), torch.stack([cache[k]['Th'] for k in ks])
+                r = physRes(net, torch.stack([bPo[k]['xsP'] for k in ks]), torch.stack([bPo[k]['ctx'] for k in ks]),
+                             torch.stack([cache[k]['C'] for k in ks]), GiR, ThR, rr, Pp, dT, Ts)
                 lP = torch.mean(r ** 2)
             # steady-state loss: nbS boards of the whole pool, random nodes
             lS = torch.zeros((), device=dev)
             if useSS:
                 ks = rng.integers(0, len(pool), cfg['nbS'])
-                rr = torch.randperm(N, device=dev)[0:min(cfg['nR'], N)]
-                rS = ssRes(net, torch.stack([bPo[k]['xs'][:, rr] for k in ks]),
-                           torch.stack([bPo[k]['ctx'] for k in ks]), torch.stack([thS[k][rr] for k in ks]), dT)
+                rr = [torch.randperm(bPo[k]['N'], device=dev)[0:nR] for k in ks]
+                rS = ssRes(net, torch.stack([bPo[k]['xs'][:, r] for k, r in zip(ks, rr)]),
+                           torch.stack([bPo[k]['ctx'] for k in ks]), torch.stack([thS[k][r] for k, r in zip(ks, rr)]), dT)
                 lS = torch.mean(rS ** 2)
             loss = wD * lD + wP * lP + wS * lS
             loss.backward()

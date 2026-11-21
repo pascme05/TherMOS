@@ -1,0 +1,22 @@
+{
+ "Title": "POD model",
+ "Description": "Global POD basis of the full-field snapshots of the training boards on the superset grid of all layouts, Galerkin projection of every test board (studyPFHB.runPOD)",
+ "Para": [
+  {
+   "Name": "Energy",
+   "Category": "Model",
+   "Description": "rank r: smallest number of POD modes that hold this fraction of the snapshot energy (sum of the squared singular values)",
+   "Variable": "energy",
+   "Value": 0.9999,
+   "Unit": "-"
+  },
+  {
+   "Name": "Maximum rank",
+   "Category": "Model",
+   "Description": "upper limit of the rank r",
+   "Variable": "rMax",
+   "Value": 256,
+   "Unit": "-"
+  }
+ ]
+}
