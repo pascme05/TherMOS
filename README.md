@@ -104,12 +104,14 @@ python start_gui.py                      # opens http://localhost:8501
   - Tutorial: `python setup/tutorial/genBoardPF.py`, then `python setup/tutorial/tutorial_PF.py`. Measured on the 3D
     tutorial board (3453 nodes, maximum rise 107 K, new load profile): RMSE 8.9 K with data only, 0.81 K with
     physics 2 (PS mode on the same data: 1.09 K, 6 times faster). Details: `docu/GUI.md`, section *PF mode*.
+  - Parametric operator (one network for a family of boards: cooling, materials and chip positions without retraining): `python setup/tutorial/genBoardPFParam.py`, then `python setup/tutorial/studyPFParam.py base --out results/pfparam`. Measured (K = 32): RMSE 0.98 K for new conditions and positions, 1.09 K for unseen chip positions, 0.57 K over a 30 min mission profile in 0.03 s.
 - **Study:** grid search, optimisation (built-in or Optuna) and forward feature selection on the validation data.
 - **Theory & Tools:**
   - power losses and thermal stack;
   - the **hand calculator**: effective h of a layer stack with contact resistances, contact resistance over the
     pressure, spreading, convection h, radiation as an equivalent h, fins, thermal vias, coolant flow, short pulses
     and pulse trains (Foster network), skin and eddy current losses of wires, bars and metal substrates;
+  - **design effects**: where the cooling, the dielectric, the die attach, the base heat capacity and the chip positions enter the FV model, their effect on the junction temperatures and time constants (sweeps, sensitivities, R_th coupling matrix, step response) and the prediction of the parametric PF network;
   - thermal networks (Foster/Cauer, structure function);
   - MOR & POD;
   - numerics (time integration, quadrature weights, calibration of the reduced matrices);

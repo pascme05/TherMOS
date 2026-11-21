@@ -28,7 +28,7 @@ python start_gui.py                      # opens http://localhost:8501
 | **Project › Setup** | Ready-made setups (tutorials, journal, lecture), project settings (name, output, numerics, train/test switches), data (format, dimension, split, files, channels) |
 | **Project › Input data** | 1D time series and 2D/3D fields of the data sets, read with the toolkit loader (`DataLoader`) |
 | **Operating modes** | One page per model family (RC, SS, SF, PO, PS, ML, DL, PI, PF) plus the **Study** page |
-| **Theory & Tools** | Power losses, Thermal stack, Hand calculator, Thermal networks, MOR & POD, Numerics, Neural networks, Board designer |
+| **Theory & Tools** | Power losses, Thermal stack, Hand calculator, Thermal networks, MOR & POD, Numerics, Neural networks, Board designer, Design effects |
 | **Results** | Browser of all results folders, including runs started from the start scripts |
 | **Help** | Tutorials and this guide |
 
@@ -59,7 +59,7 @@ Every page has the views below:
 | ML | Static regression on (rolled) features | LR, tree, SVR, GPR, ensemble, MLP | 1D | Linear regression with and without EWMA features |
 | DL | CNN / LSTM / CNN + LSTM on windows | 3 networks | 1D | **Architecture diagram from the network code** (layers, shapes, parameters), windows over a profile |
 | PI | CNN + LSTM with a physics loss | – | 1D | **Network and loss graph** (data loss + residual of the lumped stator model), residual explorer |
-| PF | Field PINN: network for T(x, t) with the heat equation as physics loss | operator / coordinate network | 2D/3D | Both structures, loss with symbol table, source footprints and sensor placement on your data, measured reference results |
+| PF | Field PINN: network for T(x, t) with the heat equation as physics loss | operator / coordinate network | 2D/3D | From POD to the network in four steps with six small tools (POD modes and Galerkin error over K, exact ZOH lag vs Euler, chip superposition, physics residual vs error, steady-state anchor vs drift, POD of moving chips vs cooling), both structures, source footprints and sensor placement on your data, measured reference results, parametric operator |
 
 **Network view of the DL mode**
 - Shows the network that will be trained: parameters, receptive field, output shape, a layer table (output shape and
@@ -298,6 +298,7 @@ Self-contained calculators. They do not change the configuration.
 | Numerics | Sketch of the rod with control volumes and its RC ladder; explicit/implicit/Crank-Nicolson, stability, stiffness, grid convergence; quadrature weights W, relative element size J (legacy) and the calibration of C_th/G_th (rcond, prior λ, SF bounds) with explorers |
 | Neural networks | DNN, CNN, LSTM, transformer (TRA) and PINN on thermal examples: sketch, live demo (Z_th fit, receptive field as truncated impulse response, forget gate = exp(−h/τ), attention as exponential memory, physics loss fixing the extrapolation), equations with symbols; data & initial state (why a constant load is ambiguous in a transient — best possible error from the chosen inputs: window length, start temperature θ₀, last temperature, time since start; coverage of the test operating points by the training profile; checklist for a training data set); training (learning rate, setup parameters) |
 | Board designer | 2D board model, POD reduced model, export to the PO/PS modes (section 6) |
+| Design effects | Effect of the cooling h, the dielectric k, the die attach, the heat capacity of the base and the chip positions on the IMS board of the parametric PF study (3D FV model, 3453 nodes), one tab per question: *Where does a change act?* (which entries of C, G, Bp change, outlined in the layer stack — affine parameters vs. position); *Cooling & materials* (steady T_j, temperature map, sweep of one parameter with the slowest τ, sensitivities per +10 %); *Move a chip* (T_j over the position, best position, R_th coupling matrix); *Transients & time constants* (10 s step, block Krylov model with 18 states vs. the nominal condition); *Parametric network* (prediction of a trained network of `results/pfparam/` against the exact model, training-range check, table of the study runs). Calculations in `src/py/tools/designCalc.py`, sketches in `gui/views/tools/design_art.py`. Tutorials *PF: Cooling, dielectric or die attach*, *Moving the IGBT*, *Time constants and the parametric network* |
 
 ## 6. Board designer
 

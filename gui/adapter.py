@@ -161,19 +161,19 @@ MODES = {
                     "Training on CPU can take long.",
                pick=('selDL', {1: 'CNN', 2: 'LSTM', 3: 'CNN + LSTM'}), cats=['gen', 'dl'],
                script='setup/tutorial/tutorial_DL.py'),
-    'PI': dict(title='Physics-informed DL', section='Mdl', extra=['Par'], icon=':material/science:',
+    'PI': dict(title='PINN (1D)', section='Mdl', extra=['Par'], icon=':material/science:',
                text="Sequence network (CNN, LSTM, CNN+LSTM or own architecture) that predicts the states of a "
                     "thermal network (Foster terms or Cauer nodes, one or several outputs); the loss adds the "
                     "physics residual (α·data + β·physics + γ·initial condition).",
                pick=('selPI', {1: 'CNN', 2: 'LSTM', 3: 'CNN + LSTM'}), cats=['gen', 'dl'],
                script='setup/tutorial/tutorial_PI.py'),
-    'PF': dict(title='Physics-informed field network (2D/3D)', section='Mdl', extra=['Dat', 'Exp', 'Par'],
+    'PF': dict(title='Field PINN', section='Mdl', extra=['Dat', 'Exp', 'Par'],
                icon=':material/blur_on:',
                text="Physics-informed neural network (PINN) for 2D/3D temperature fields with heat sources that vary "
                     "in space and time. It learns from finite-element / finite-volume data and from the heat "
                     "equation (loss α·data + β·physics + γ·initial condition). Operator network: one model for "
                     "many load profiles. Coordinate network: the field of one profile from a few sensors.",
-               pick=('selPF', {1: 'Operator network (new load profiles)', 2: 'Coordinate network (field from sensors)'}),
+               pick=('selPF', {1: 'Operator (new loads)', 2: 'Coordinate (sensors)'}),
                cats=['gen', 'dl', 'pinf'], script='setup/tutorial/tutorial_PF.py'),
 }
 
@@ -189,6 +189,7 @@ TOOLS = {
     'tools-numerics': ('numerics', 'Numerics', ':material/functions:'),
     'tools-nn': ('nn', 'Neural networks', ':material/neurology:'),
     'tools-board': ('board', 'Board designer', ':material/developer_board:'),
+    'tools-design': ('design', 'Design effects', ':material/tune:'),
 }
 TEST_PAGES = {u: f"from gui.views.tools import {m}; {m}.page()" for u, (m, _, _) in TOOLS.items()}
 TEST_PAGES['study'] = "from gui.views import study; study.page()"

@@ -178,9 +178,26 @@ def theory_pf(cfg):
                "and the data preparation on the training data of the current configuration; they do not change it.")
 
     # ==============================================================================
+    # Idea and tools
+    # ==============================================================================
+    cm.section(1, "From POD to the field network in four steps", divider=False)
+    st.markdown(
+        "1. **Space × time.** POD writes the field as a few patterns in space times amplitudes over time "
+        "(θ ≈ Σ φ_k·a_k(t)) — tab ①.\n"
+        "2. **Lags.** For a linear board every amplitude is a first-order lag of the chip losses with its own time "
+        "constant; integrated exactly, it is stable for profiles of any length — tab ②.\n"
+        "3. **Chips add up.** Each chip contributes its own patterns and lags; the field is their sum — tab ③.\n"
+        "4. **Learn what POD fixes.** POD patterns and time constants belong to one board. The network learns them "
+        "as functions of the position, the chip and the condition, and replaces the simulation by the heat balance "
+        "of the finite-volume model (physics loss, tab ④) plus a steady-state anchor against drift (tab ⑤). "
+        "Tab ⑥ shows why a fixed POD basis cannot follow a moving chip.")
+    from gui.core.theory_pf_tools import tools
+    tools(2)
+
+    # ==============================================================================
     # Structure
     # ==============================================================================
-    cm.section(1, "The two variants", "Variant %d is selected (Parameters › Model variant)." % var, divider=False)
+    cm.section(3, "The two variants for one board", "Variant %d is selected (Parameters › Model variant)." % var)
     c = st.columns(2)
     with c[0]:
         st.markdown("**1 · Operator network** — one model for many load profiles")
@@ -258,7 +275,7 @@ def theory_pf(cfg):
         ('u', 'Kirchhoff variable θ − κ·θ²/2 (equal to θ for κ = 0)', 'K'),
         ('L, H', 'conduction part of G (row sums zero) and cooling to the ambient diag(G·1)', 'W/K'),
         ('s_k, s_h', 'learned factors of conduction and cooling (physics 3; 1 = design of the data file)', '–'),
-    ], title="Equations and symbols", expanded=True)
+    ], title="All equations and symbols of the two variants", expanded=False)
 
     # ==============================================================================
     # Explorer
@@ -267,7 +284,7 @@ def theory_pf(cfg):
     names = [G.get('teFile')] if var == 2 else list(G.get('trFile') or [])
     name = names[0] if names else None
     kind = dataset.info(name, fmtD)['kind'] if name and fmtD == 'mat' else 'missing'
-    cm.section(2, "Your data: heat sources and sensors",
+    cm.section(4, "Your data: heat sources and sensors",
                f"Data set **{name}** ({'testing' if var == 2 else 'first training'} file of the configuration).")
     if kind not in ('2D', '3D'):
         st.info("The PF mode needs 2D or 3D field data (.mat with X, y, geo). Load the example of this mode "
@@ -327,13 +344,13 @@ def theory_pf(cfg):
     # ==============================================================================
     # Parameters and reference
     # ==============================================================================
-    cm.section(3, "What the settings do")
+    cm.section(5, "What the settings do")
     table(pd.DataFrame(PARAMS, columns=['setting', 'parameter', 'effect']), hide_index=True,
           column_config={'effect': st.column_config.TextColumn(width='large')})
     st.caption(f"Current configuration: variant {var}, physics {pp['phys']} ({PHYS.get(pp['phys'], '?')}), α = "
                f"{fmt(pp['alpha'])}, β = {fmt(pp['beta'])}, γ = {fmt(pp['gamma'])}, K = {pp['K']}, n_Sens = "
                f"{pp['nSens']}, warm-up {pp['warm']} samples, window W = {_get(cfg, 'Mdl', 'dl', 'W', default='?')}.")
-    cm.section(4, "What to expect: measured on the tutorial board",
+    cm.section(6, "What to expect: measured on the tutorial board",
                "3D board with three chips (3453 nodes), four random training profiles of 20 s, tested on a designed "
                "pulse/sine profile of 40 s with a maximum rise of 107 K (tutorial *PF: field PINN of a board*).")
     tabs = st.tabs(["3D board, layer-resolved (maximum rise 107 K)", "Same board as a lumped 2D field (79 K)",
@@ -381,3 +398,129 @@ def theory_pf(cfg):
         "effects that the linear reduced models cannot represent.",
     ], title="How to read these results")
     cm.refs(['Cai2021', 'Raissi2019', 'Lu2021', 'Wang2021'])
+    _parametric()
+
+
+#######################################################################################################################
+# Parametric operator (one network for many boards)
+#######################################################################################################################
+# Measured on the board family of setup/tutorial/genBoardPFParam.py (IMS 30 x 20 mm, 3 chips, 3453 nodes), runs of
+# setup/tutorial/studyPFParam.py (RMSE over all nodes and time steps, K); replaced by results/pfparam/*.json if present
+PARAM_REF = pd.DataFrame([
+    ('base', 24, 200, 0.98, 10.4, 1.09, 0.57),
+    ('nophys (no physics, no steady-state loss)', 24, 0, 2.02, 22.6, 2.03, 12.1),
+    ('physExt (physics boards over the extended range)', 24, 200, 1.27, 4.64, 1.49, 0.61),
+    ('n3 (3 labelled boards)', 3, 200, 1.60, 11.2, 1.46, 0.67),
+    ('n3np (3 labelled boards, no physics)', 3, 0, 15.0, 43.4, 11.5, 7.62),
+    ('noSS (no steady-state loss)', 24, 200, 1.12, 14.7, 1.25, 8.52),
+], columns=['run', 'labelled boards', 'physics-only boards', 'T1 (K)', 'T2 extrap. (K)', 'T3 positions (K)',
+            'T4 30 min (K)'])
+DOT3 = DOT % '''
+  mu [label=<<B>Condition μ</B><BR/>h, k<SUB>diel</SUB>, s<SUB>att</SUB>, s<SUB>ρc</SUB>>, shape=note, fillcolor="#dbe9f6", color="#4a7fb5"];
+  z [label=<<B>Chip c</B><BR/>centre, size, type>, shape=note, fillcolor="#dbe9f6", color="#4a7fb5"];
+  x [label=<<B>Node x</B><BR/>absolute, relative to chip c>, shape=note, fillcolor="#dbe9f6", color="#4a7fb5"];
+  P [label=<<B>Loss P<SUB>c</SUB>(t)</B>>, shape=note, fillcolor="#dbe9f6", color="#4a7fb5"];
+  tr [label=<<B>Trunk</B> (MLP)<BR/>φ<SUB>k</SUB>(x, z<SUB>c</SUB>, μ)>];
+  ra [label=<<B>Rate net</B><BR/>λ<SUB>k</SUB>(z<SUB>c</SUB>, μ)>];
+  lag [label=<<B>Exact lags</B><BR/>db/dt = λ·(p̂ − b)>];
+  T [label=<<B>Field</B><BR/>θ̂ = ΔT·Σ<SUB>c</SUB>Σ<SUB>k</SUB> φ<SUB>k</SUB>·b<SUB>c,k</SUB>>, fillcolor="#dcefdc", color="#4d9a4d"];
+  L [label=<<B>Loss</B><BR/>α·data + β·physics + γ·steady>, fillcolor="#fbe6cf", color="#d28a2e"];
+  O [label=<<B>Operator per board</B><BR/>C, G, B<SUB>p</SUB> (no simulation)>, shape=note];
+  mu -> tr; z -> tr; x -> tr; mu -> ra; z -> ra; ra -> lag; P -> lag; lag -> T; tr -> T; T -> L; O -> L;
+'''
+
+
+def _paramResults():
+    """Study results of results/pfparam/*.json (runs of studyPFParam) or the reference table (live flag)."""
+    import glob
+    import json
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    rows = []
+    for f in sorted(glob.glob(os.path.join(root, 'results', 'pfparam', '*.json'))):
+        try:
+            r = json.load(open(f))
+        except (OSError, ValueError):
+            continue
+        if all(k in r for k in ('run', 'train', 'phys', 't1', 't2', 't3', 't4')):
+            rows.append((r['run'], r['train'], r['phys'], round(r['t1']['sum']['rmse'], 2),
+                         round(r['t2']['sum']['rmse'], 2), round(r['t3']['sum']['rmse'], 2), round(r['t4']['rmse'], 2)))
+    if rows:
+        return pd.DataFrame(rows, columns=PARAM_REF.columns).sort_values('T1 (K)'), True
+    return PARAM_REF, False
+
+
+def _parametric():
+    cm.section(7, "Beyond one board: the parametric operator",
+               "The variants above are trained for one board. The parametric operator (src/py/model/PF/pfParam.py, "
+               "pfNet.pfModal) is ONE network for a whole family of boards: other cooling, other materials and other "
+               "chip positions without retraining. It is trained by setup/tutorial/studyPFParam.py; Theory & Tools › "
+               "Design effects shows the effect of each change on the exact model and the network side by side.")
+    c = st.columns([3, 2])
+    with c[0]:
+        st.graphviz_chart(DOT3, width='content')
+    with c[1]:
+        st.markdown("**Why this structure?** For a linear board the exact solution is a sum over the chips of "
+                    "space patterns (modes) times first-order lags of each chip's loss. The network keeps exactly "
+                    "this form and only learns how the patterns and the time constants depend on the chip and the "
+                    "condition:\n"
+                    "- the space functions move with the chip (coordinates relative to its centre),\n"
+                    "- the lags are integrated exactly (zero-order hold), so a 30 min profile is as stable as 40 s,\n"
+                    "- the physics and steady-state losses need only the matrices of a board, so hundreds of boards "
+                    "without any simulation teach the network the effect of every parameter.")
+    cm.equations([
+        ("Modal solution of a linear board (exact)",
+         r"\boldsymbol\theta(t)=\sum_{c}\sum_{m}\frac{\boldsymbol v_m\boldsymbol v_m^\top\mathbf B_{p,c}}{\lambda_m}"
+         r"\,P_{ref}\;b_{c,m}(t),\qquad\dot b_{c,m}=\lambda_m\,(\hat p_c-b_{c,m})",
+         "G·v = λ·C·v with vᵀ·C·v = 1. For a constant loss b settles at p̂: the space terms of a chip add up to its "
+         "steady-state field."),
+        ("Parametric network",
+         [r"\hat\theta(\boldsymbol x,t)=\Delta T\sum_{c=1}^{n_c}\sum_{k=1}^{K}\varphi_k(\boldsymbol x,\boldsymbol z_c,"
+          r"\boldsymbol\mu)\,b_{c,k}(t)",
+          r"\lambda_k=\frac{1}{\tau_{cap}}+e^{a_k+\Delta a_k(\boldsymbol z_c,\boldsymbol\mu)},\qquad "
+          r"b_{c,k}[n]=e^{-\lambda_kT_s}\,b_{c,k}[n-1]+\bigl(1-e^{-\lambda_kT_s}\bigr)\,\hat p_c[n]"],
+         "The lags are evaluated for the whole profile at once (FFT convolution). τ_cap bounds the slowest time "
+         "constant of the network."),
+        ("Physics loss (per board, at random nodes)",
+         r"\boldsymbol r=\frac{\mathbf G^{-1}\mathbf C\,\dot{\hat{\boldsymbol\theta}}+\hat{\boldsymbol\theta}-"
+         r"\mathbf G^{-1}\mathbf B_p\boldsymbol P}{\Delta T}", "dθ̂/dt follows analytically from the lags."),
+        ("Steady-state loss (per board and chip)",
+         r"\boldsymbol r_{ss,c}=\sum_{k}\boldsymbol\varphi_k(\boldsymbol z_c,\boldsymbol\mu)-"
+         r"\mathbf G^{-1}\mathbf B_{p,c}\,\frac{P_{ref}}{\Delta T}",
+         "Pins the slow modes that 40 s training profiles cannot determine; without it the prediction drifts by "
+         "about 8 K over 30 min."),
+        ("Loss", r"L=\alpha\,L_{data}+\beta\,\overline{r^2}+\gamma\,\overline{r_{ss}^2}", None),
+    ], sym=[
+        ('μ', 'condition: cooling h, dielectric k_diel, die-attach factor s_att, base heat-capacity factor s_ρc', '–'),
+        ('z_c', 'descriptor of chip c: centre, size (w, l), type (IGBT, diode, SiC MOSFET)', '–'),
+        ('φ_k', 'space function k of a chip (trunk output); k = 1 … K (32)', '–'),
+        ('b_c,k, λ_k', 'lag of chip c for space function k and its rate (rate network)', '–, 1/s'),
+        ('a_k, Δa_k', 'log-spaced initial log-rate (τ 0.02–40 s) and its learned correction', '–'),
+        ('τ_cap', 'bound of the time constants (80 s)', 's'),
+        ('p̂_c, P_ref', 'loss of chip c scaled with P_ref = 40 W', '–, W'),
+        ('C, G, B_p', 'capacitance and conductance matrices, distribution of the chip losses (per board)', 'J/K, W/K, –'),
+        ('v_m, λ_m', 'mode m of the board and its decay rate', '–, 1/s'),
+        ('T_s', 'sampling time (0.05 s)', 's'),
+        ('α, β, γ', 'weights of the data, physics and steady-state loss (1, 1, 1)', '–'),
+    ], title="Equations and symbols of the parametric operator")
+    df, live = _paramResults()
+    table(df, hide_index=True)
+    st.caption(("Results of your runs in results/pfparam/." if live else "Measured on the board family (RTX 3070).") +
+               " labelled boards: boards with simulated temperatures; physics-only boards: only C, G, B_p (assembled "
+               "in 3 ms, no simulation). T1: new conditions and positions inside the training range; T2: cooling and "
+               "dielectric outside it; T3: chip centres in a band never used for training; T4: 30 min mission "
+               "profile. RMSE over all nodes and time steps.")
+    cm.interpret([
+        "**One network, no retraining:** new cooling, materials and chip positions inside the training range are "
+        "predicted with 0.98 K RMSE, unseen positions with 1.09 K, a 30 min mission profile with 0.57 K in 0.03 s "
+        "(finite-volume model: 70 s).",
+        "**Physics replaces simulations:** with 3 simulated boards plus 200 physics-only boards the error (1.60 K) is "
+        "lower than with 24 simulated boards without physics (2.02 K) and 9 times lower than with 3 boards without "
+        "physics (15.0 K).",
+        "**Extrapolation needs operators, not data:** outside the training range the error grows (10.4 K), and "
+        "physics-only boards placed there lower it without any simulation (4.6 K).",
+        "**When not to use it:** for one known linear board a Krylov reduction of its own matrices (12 states) "
+        "reaches 0.03 K in 0.09 s per board — more accurate than the network. The network pays off for many designs, chip positions (where projection methods fail), long "
+        "profiles and gradient-based layout optimisation.",
+    ], title="How to read these results")
+    cm.refs(['Lu2021', 'Wang2021', 'Benner2015', 'Odabasioglu1998'])

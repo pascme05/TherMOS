@@ -35,6 +35,9 @@ from src.py.model.PF.pfData import encodeSrc, projectSrc, selSensors, geoScale, 
 from src.py.model.PF.pfPhys import basisLap, resOperator, resOperatorFV, coordDeriv, coordRate, solveG
 from src.py.model.PF.pfFit import pfFit
 from src.py.model.PF.pfSol import pfSol
+from src.py.model.PF.pfNet import pfModal
+from src.py.model.PF.pfParam import (P_REF, MU, NOM, sampleMu, samplePos, randProfile, buildBoard, simulate, muHat)
+from src.py.model.PF.pfParamFit import physRes, ssRes, steady, prepBoard, predict, fitParam, evalBoard, ginv
 
 # ==============================================================================
 # External
@@ -258,6 +261,117 @@ def test_fit_coordinate(tmp_path):
         assert np.all(np.isfinite(mdl['info']['loss'])) and mdl['info']['lossPhys'][-1] > 0
         out = pfSol(mdl, te, para, {'selPF': 2})
         assert out['y'].shape == te['y'].shape and np.all(np.isfinite(out['y']))
+
+
+#######################################################################################################################
+# Parametric Study (pfParam, pfModal, pfParamFit)
+#######################################################################################################################
+class _Exact(torch.nn.Module):
+    """Stub with the interface of pfModal that returns the exact modal solution of a small system (all modes)."""
+    def __init__(self, phi, lam):
+        super().__init__()
+        self.phi, self.lam = phi, lam
+
+    def basis(self, xs, ctx):
+        return self.phi.expand(*xs.shape[:-1], self.phi.shape[-1])
+
+    def rates(self, ctx):
+        return self.lam.expand(*ctx.shape[:-1], self.lam.shape[-1])
+
+    coeff = staticmethod(pfModal.coeff)
+
+
+def _modal(N=12, nc=2, seed=0):
+    """Random small system C·dθ/dt = −G·θ + Bp·P and its exact modal form φ_c = v·(vᵀ·Bp_c)/λ, scaled with P_REF."""
+    rng = np.random.default_rng(seed)
+    A = rng.normal(size=(N, N))
+    G = A @ A.T + N * np.eye(N)
+    C = rng.uniform(0.5, 2.0, N)
+    Bp = rng.uniform(0, 1, (N, nc))
+    w, V = np.linalg.eigh(np.diag(C ** -0.5) @ G @ np.diag(C ** -0.5))
+    V = np.diag(C ** -0.5) @ V                                          # Vᵀ·C·V = I, G·V = C·V·diag(w)
+    phi = np.stack([V * (V.T @ Bp[:, c] / w)[None, :] * P_REF for c in range(0, nc)])
+    return C, G, Bp, phi, np.tile(w, (nc, 1))
+
+
+def test_param_coeff_zoh():
+    """The FFT convolution equals the recursion b_k = a·b_{k−1} + (1 − a)·p_k with b_0 = 0."""
+    rng = np.random.default_rng(0)
+    p, lam, Ts = rng.uniform(0, 1, (2, 300)), np.array([[0.1, 3.0, 50.0], [1.0, 2.0, 0.01]]), 0.05
+    b = pfModal.coeff(torch.tensor(p, dtype=torch.float64), torch.tensor(lam, dtype=torch.float64), Ts).numpy()
+    a = np.exp(-lam * Ts)
+    ref = np.zeros((2, 300, 3))
+    for k in range(1, 300):
+        ref[:, k] = a * ref[:, k - 1] + (1 - a) * p[:, k:k + 1]
+    assert np.allclose(b, ref, atol=1e-10)
+
+
+def test_param_modal_exact():
+    """With the exact modes the physics residual vanishes and the prediction is the exact ZOH solution."""
+    from scipy.linalg import expm
+    C, G, Bp, phi, lam = _modal()
+    N, nc, Ts, L, dT = len(C), Bp.shape[1], 0.05, 80, 7.0
+    net = _Exact(torch.tensor(phi / dT), torch.tensor(lam))                # the network returns θ/ΔT
+    Gi = np.linalg.inv(G)
+    bt = {'xs': torch.zeros(nc, N, 5, dtype=torch.float64), 'ctx': torch.zeros(nc, 11, dtype=torch.float64)}
+    P = torch.tensor(np.random.default_rng(1).uniform(0, 30, (L, nc)))
+    rows = torch.arange(0, N, 2)
+    r = physRes(net, bt['xs'][None], bt['ctx'][None], torch.tensor(C)[None], torch.tensor(Gi)[rows][None],
+                torch.tensor(Gi @ Bp)[rows][None], rows, P[None], dT, Ts)
+    assert r.shape == (1, L, len(rows)) and float(torch.max(torch.abs(r))) < 1e-10
+    rS = ssRes(net, bt['xs'][None], bt['ctx'][None], torch.tensor(Gi @ Bp)[None], dT)   # Σ_k φ_k = G⁻¹·Bp·P_ref/ΔT
+    assert rS.shape == (1, nc, N) and float(torch.max(torch.abs(rS))) < 1e-10
+    Ad = expm(-np.linalg.solve(np.diag(C), G) * Ts)
+    Bd = (np.eye(N) - Ad) @ np.linalg.solve(G, Bp)                     # ZOH: (I − e^{−C⁻¹G·Ts})·G⁻¹·Bp
+    th = np.zeros((L, N))
+    for k in range(1, L):
+        th[k] = Ad @ th[k - 1] + Bd @ P[k].numpy()
+    y = predict(net, bt, P, dT, Ts).numpy()
+    assert np.allclose(y, th, atol=1e-8 * np.max(np.abs(th)))
+
+
+def test_param_family():
+    """Sampled layouts are valid, the band is respected and μ only changes the matrices it belongs to."""
+    rng = np.random.default_rng(3)
+    for inBand in (None, 0, 2):
+        pos = samplePos(rng, (12.0, 16.0), inBand)
+        assert [12.0 <= x <= 16.0 for (x, _) in pos] == [i == inBand for i in range(0, 3)]
+    mus = sampleMu(8, rng)
+    assert all(MU[k][0] <= m[k] <= MU[k][1] for m in mus for k in MU)
+    pos = samplePos(rng)
+    B0, B1 = buildBoard(NOM, pos), buildBoard(dict(NOM, h=3000.0), pos)
+    dG = (B1['G'] - B0['G']).tocoo()
+    assert np.all(dG.row == dG.col) and np.allclose(B0['C'], B1['C'])   # h: diagonal of G only
+    assert np.all(B1['geo'][dG.row, 2] == B1['geo'][:, 2].min())        # … at the bottom nodes
+    B2 = buildBoard(dict(NOM, sRc=1.2), pos)
+    assert (B2['G'] - B0['G']).nnz == 0 and not np.allclose(B2['C'], B0['C'])
+    assert np.allclose(B0['Bp'].sum(axis=0), 1.0) and all(len(d) > 0 for d in B0['die'])
+    mh = muHat(NOM)
+    assert mh.shape == (4,) and np.all(np.abs(mh) <= 1)
+    g = ginv(B0, torch.device('cpu'))                                    # dense G⁻¹ of the physics loss
+    x = np.random.default_rng(0).normal(size=len(B0['C']))
+    assert np.allclose(g['Gi'].double().numpy() @ (B0['G'] @ x), x, rtol=1e-3, atol=1e-3 * np.max(np.abs(x)))
+    assert np.allclose(steady(B0), g['Th'].double().numpy(), rtol=1e-3, atol=1e-3 * np.max(steady(B0)))
+
+
+def test_param_fit_smoke():
+    """A short training on two boards runs, the losses are finite and the prediction has the shape of the field."""
+    rng = np.random.default_rng(4)
+    t = np.arange(0.0, 4.0 + 1e-9, TS)
+    tr = []
+    for m in sampleMu(2, rng):
+        B = buildBoard(m, samplePos(rng))
+        B['P'] = [randProfile(t, rng)]
+        B['th'] = [simulate(B, B['P'][0], TS)]
+        tr.append(B)
+    cfg = {'K': 4, 'width': 16, 'depth': 2, 'nF': 1, 'nStep': 3, 'epoch': 2, 'nD': 64, 'nR': 64, 'nbD': 2, 'nbP': 2,
+           'tP': 2.0}
+    out = fitParam(tr, [buildBoard(NOM, samplePos(rng))], tr[0:1], cfg, torch.device('cpu'), log=lambda s: None)
+    assert np.all(np.isfinite(out['hist']['loss'])) and out['hist']['lossPhys'][-1] > 0 and out['hist']['lossSS'][-1] > 0
+    lam = out['net'].rates(prepBoard(tr[0], torch.device('cpu'))['ctx'])
+    assert float(lam.min().detach()) >= 1.0 / out['cfg']['tauCap']               # bound of the time constants
+    e = evalBoard(out['net'], tr[1], out['dT'], TS, torch.device('cpu'))
+    assert np.isfinite(e['rmse']) and len(e['rmseTj']) == 3
 
 
 #######################################################################################################################

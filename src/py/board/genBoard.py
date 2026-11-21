@@ -56,7 +56,8 @@ cells in the via columns.
 
 Inputs:     1) layout:  board layout {'view', 'W', 'L' (mm), 'board' (preset), 'layers' (stack-up, top → bottom,
                         optional, replaces the preset), 'h' (W/m²K), 'hTop' (W/m²K), 'Ta' (°C), 'dx' (mm), 'yCut'
-                        (mm), 'chips': [{'name', 'tech', 'x', 'y', 'w', 'l' (mm), ...}], 'chipLib' (custom chip
+                        (mm), 'chips': [{'name', 'tech', 'x', 'y', 'w', 'l' (mm), 'k_att' (W/mK, optional
+                        override of the die attach conductivity), ...}], 'chipLib' (custom chip
                         technologies, optional), 'vias': {'mode': 'none' | 'chips' | 'all', 'd' (mm), 'tpl' (µm),
                         'pitch' (mm), 'fill', 'margin' (mm)} (optional), 'below': layers below the board (top →
                         bottom, optional), 'pcb': additional losses in the board (optional) [{'name', 'layer'
@@ -86,6 +87,9 @@ V1.4: 08.11.2026, Pascal Schirmer
 V1.5: 16.11.2026, Pascal Schirmer
 - Layer-resolved model: position, control volume and material of every node (D['nod']) for the 3D field export
   (saveBoard, PF mode)
+
+V1.6: 21.11.2026, Pascal Schirmer
+- Optional die attach conductivity per chip (k_att) for the parametric PF study
 """
 
 #######################################################################################################################
@@ -122,9 +126,10 @@ def _w(n):
     return w
 
 
-def _mat(name):
-    k, rho, cp = MATERIALS[name][0:3]
-    return k, rho, cp
+def _mat(name, k=None):
+    """Conductivity (W/mK), density (kg/m³) and heat capacity (J/kgK) of a material; k: optional override."""
+    k0, rho, cp = MATERIALS[name][0:3]
+    return (k0 if k is None else float(k)), rho, cp
 
 
 def _viaMask(X, Y, chips, vias):
@@ -209,7 +214,7 @@ def _model3D(layout, layers, below, chips, vias, isFR4, W, L, dx, h, hTop):
             m = np.zeros_like(m)
             m[int(np.argmin(np.abs(y - c['y'] * 1e-3))), int(np.argmin(np.abs(x - c['x'] * 1e-3)))] = True
         m = m & ~rd['m']                                                       # overlapping chips: first one wins
-        kA, rA, cA = _mat(c['attach'])
+        kA, rA, cA = _mat(c['attach'], c.get('k_att'))
         kD, rD, cD = _mat(c['mat'])
         for r, k, rc, t, ro in ((ra, kA, rA * cA, c['t_att'], rA), (rd, kD, rD * cD, c['t'], rD)):
             r['m'] = r['m'] | m
@@ -392,7 +397,7 @@ def genBoard(layout):
                 m = np.zeros_like(m)
                 m[int(np.argmin(np.abs(y - c['y'] * 1e-3))), int(np.argmin(np.abs(x - c['x'] * 1e-3)))] = True
             kd, rd, cd = _mat(c['mat'])
-            ka, ra, ca = _mat(c['attach'])
+            ka, ra, ca = _mat(c['attach'], c.get('k_att'))
             RC[m] += (rd * cd * c['t'] + ra * ca * c['t_att']) * 1e-3 / tb
             b = np.zeros((ny, nx))
             b[m] = 1.0 / (wA[m].sum() * dx * dx * tb)

@@ -489,6 +489,98 @@ TUTORIALS = [
                    "gap to physics 1 close?", "Operator network, physics 1: raise nCol to 4096. How much of the gap "
                    "is the number of collocation points?", "Run both networks with 10 sensors: where does the "
                    "physics help more?"]),
+    dict(id='pf_design_levers', mode='PF', page='tools-design', level='Beginner', minutes=10, base='tutorial_PF',
+         title="Cooling, dielectric or die attach: which lever lowers the junction temperature?",
+         story="The IMS board of the parametric PF study (30 × 20 mm, Si IGBT T1 40 W, Si diode D1 15 W, SiC MOSFET "
+               "M1 20 W) starts with a weak cold plate (h = 500 W/(m²K)). You change one design parameter at a time "
+               "and see where it enters the thermal model and how much it moves T_j.",
+         goals=["see which entries of C and G each parameter changes", "rank the levers by their effect on T_j",
+                "see that ρc changes only the transient"],
+         changes={},
+         preset={'tl|de|mu|h': 500.0, 'de|wh|k': 'h', 'de|ma|sw': 'h'},
+         steps=["The tutorial opens Theory & Tools › *Design effects* with h = 500 W/(m²K).",
+                "Tab *Where does a change act?*: switch between Cooling h, Dielectric k, Die attach k and Base ρc and "
+                "read which node rows are outlined.",
+                "Tab *Cooling & materials*: read the tiles, then set h back to 1500 and 5000 at the top.",
+                "Sub-tab *Sweep of one parameter*: compare h, k_diel and s_att; sub-tab *Which parameter acts most?*."],
+         look="Steady junction rise of T1 above ambient (nominal positions, other parameters nominal):\n\n"
+              "| parameter | low | nominal | high | slowest τ |\n|---|---|---|---|---|\n"
+              "| h (W/(m²K)) 500 / 1500 / 5000 | 296 K | 133 K | 73 K | 8.2 / 2.8 / 0.85 s |\n"
+              "| k_diel (W/(mK)) 1 / 2 / 8 | 154 K | 133 K | 112 K | 2.8 s (unchanged) |\n"
+              "| s_att 0.5 / 1 / 2 | 134 K | 133 K | 132 K | 2.8 s (unchanged) |\n\n"
+              "- **Where:** h changes only the 651 diagonal entries of the bottom row of G; k_diel the series "
+              "conductances of the copper, dielectric and top Al rows; the die attach 49–63 nodes under the chips; "
+              "ρc only 1953 entries of C (the Al rows) — nothing in G.\n"
+              "- **Ranking (+10 % of each, nominal board):** h −8.3 K, k_diel −2.5 K, s_att −0.2 K, ρc 0 K at T1. "
+              "The cooling and the dielectric are in series with the whole heat path; the die attach acts only "
+              "under each chip.\n"
+              "- **Saturation:** at h = 5000 a better dielectric (k 2 → 8) still lowers T1 from 73 K to 52 K, while "
+              "at k_diel = 8 the cooling (1500 → 5000) lowers it from 112 K to 52 K: once one resistance is small, "
+              "the other one dominates.",
+         exercise=["Set s_att = 0.5 (voided solder): how much hotter is T1 in steady state, and in the first 0.1 s of "
+                   "the tab *Transients*?", "Which combination of h and k_diel keeps T1 below 100 K at the "
+                   "nominal losses?", "Why does ρc not appear in *Which parameter acts most?*?"]),
+    dict(id='pf_design_move', mode='PF', page='tools-design', level='Intermediate', minutes=10, base='tutorial_PF',
+         title="Moving the IGBT: edges, neighbours and the thermal coupling matrix",
+         story="Same board at nominal cooling (h = 1500 W/(m²K)). The IGBT T1 (6 × 6 mm, 40 W) is moved along the "
+               "board while the diode and the MOSFET stay in place. A position change is the one design change that "
+               "projection-based parametric reduction cannot handle well — the field moves with the chip.",
+         goals=["read the junction temperatures over the chip position", "use the R_th coupling matrix",
+                "see why a position change is different from a material change"],
+         changes={},
+         preset={'de|mv|c': 0, 'de|mv|a': 0, 'de|wh|k': 'pos'},
+         steps=["The tutorial opens *Design effects*; tab *Where does a change act?* shows the shift of T1 by 2 mm.",
+                "Tab *Move a chip*: read the curve over x, then switch the direction to y.",
+                "Sub-tab *Coupling between the chips*: read the R_th matrix.",
+                "Move T1 at the top to the best position and compare the tiles."],
+         look="- **Where:** shifting T1 by 2 mm rewires 28 diagonal and 196 off-diagonal entries of G (the links "
+              "between the die/attach cells and the copper) — no entry is scaled, the loss itself moves.\n"
+              "- **Over x** (y = 10 mm): T1 is at 143 K at x = 4 mm (1 mm from the edge), 132.3 K at x = 9–10 mm "
+              "and 133 K at x = 11 mm (closer to D1). **Over y** (x = 8 mm): 144 K at y = 4 mm, 132.8 K at y = "
+              "9–10 mm, 145 K at y = 16 mm. The board edges are adiabatic, so a chip near an edge can spread its heat "
+              "to one side only.\n"
+              "- **Coupling** (K/W, nominal layout): self-heating 2.55 (T1), 3.17 (D1), 3.26 (M1); T1 gets 1.23 K/W "
+              "from D1 and 0.87 K/W from M1, i.e. 18 K + 17 K of its 133 K come from its neighbours.\n"
+              "- **Perspective:** the position moves T1 by about 10 K, the cooling (500 → 5000) by 220 K. Positions "
+              "matter at the margin, which is why they are optimised last — with gradients of the parametric network "
+              "in the PF study.",
+         exercise=["Move M1 along y: where is the best position and why is it not in the centre?",
+                   "Halve the cooling (h = 750): does the best position of T1 change?",
+                   "Use the R_th matrix to predict T_j of D1 when T1 runs at 60 W, then check it at the top."]),
+    dict(id='pf_design_transient', mode='PF', page='tools-design', level='Intermediate', minutes=15,
+         base='tutorial_PF', title="Time constants of the board and the parametric network",
+         story="A 10 s load step of all three chips, then 10 s off. The tab *Transients* solves a block Krylov "
+               "model of the 3453-node board (18 states) for the current design and for the nominal condition. The "
+               "tab *Parametric network* runs the trained network of the PF study on the same step, for any cooling, "
+               "material or position, without retraining.",
+         goals=["relate the time constants to the cooling and the heat capacity",
+                "compare the parametric network with the exact model inside and outside its training range"],
+         changes={},
+         preset={'tl|de|mu|h': 500.0},
+         steps=["The tutorial opens *Design effects* with h = 500 W/(m²K); open the tab *Transients & time "
+                "constants*.", "Set h back to 1500, then raise the base ρc factor to 1.3.",
+                "Train the parametric network once (`python setup/tutorial/genBoardPFParam.py`, then "
+                "`python setup/tutorial/studyPFParam.py base --out results/pfparam`) and open the tab *Parametric "
+                "network*.", "Read *PF › Theory*, section 5, for the structure of the network."],
+         look="| design | τ₁ / τ₂ / τ₃ (s) | peak T1 (K) | 63 % after | T1 at t = 20 s |\n|---|---|---|---|---|\n"
+              "| nominal (h 1500) | 2.77 / 0.81 / 0.42 | 130 | 1.5 s | 2.3 K |\n"
+              "| h = 500 | 8.18 / 1.00 / 0.47 | 223 | 3.9 s | 51 K |\n"
+              "| ρc × 1.3 | 3.50 / 1.02 / 0.54 | 128 | 1.8 s | 4.6 K |\n"
+              "| s_att = 0.5 | 2.77 / 0.81 / 0.42 | 132 | 1.5 s | 2.3 K |\n\n"
+              "- **The slowest mode** is the Al base discharging through the cold plate: lower h stretches it by "
+              "3×, more heat capacity by 1.3×. After 10 s the weakly cooled board is still far from its steady "
+              "296 K — the peak (223 K) is set by the time constant, not by the steady state.\n"
+              "- **The first 0.1 s** belong to the die and the die attach: 41.5 K nominal, 42.9 K with a voided "
+              "attach — the attach matters for short pulses, not for long loads.\n"
+              "- **Parametric network (study results, K = 32):** about 1.0 K RMSE for new conditions and positions "
+              "inside the training range, 1.1 K for unseen chip positions and 0.6 K over a 30 min mission profile, "
+              "in 0.02 s; the Krylov model is exact for one known board but must be rebuilt for every design.\n"
+              "- **Network on this step test:** 0.77 K junction RMSE at the nominal design, 0.67 K with h = 3000 and "
+              "T1 moved to x = 6 mm — but 22 K at h = 250, outside the training range (500–5000): the network "
+              "extrapolates poorly in the cooling, the reason for the run *physExt* (physics-only boards there).",
+         exercise=["Set h = 250 (outside the training range): how large is the network error compared to h = 1000?",
+                   "Raise the simulated time to 60 s at h = 500: when is the steady state reached?",
+                   "Which time constant does the die attach change, and why is the slowest one unchanged?"]),
 
     # ------------------------------------------
     # Studies

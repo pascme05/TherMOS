@@ -18,8 +18,8 @@ This file holds the technology library of the board designer: board stack-ups (l
 copper coverage), chip technologies (die material, thickness, size, die attach, typical loss and maximum junction
 temperature), cooling conditions (heat transfer coefficient on the bottom of the board) and the averaged thermal vias.
 Material values are taken from src/py/tools/toolData.py (OPTELIA library, Incropera 2007, Wintrich 2015).
-Layer:  dict(layer (name), mat (material or 'FR4'), t (mm), cov (copper coverage of a Cu layer, %), kxy/kz (W/mK,
-        optional overrides))
+Layer:  dict(layer (name), mat (material or 'FR4'), t (mm), cov (copper coverage of a Cu layer, %), kxy/kz (W/mK),
+        rho (kg/m³), cp (J/kgK) (optional overrides))
 Chip:   dict(mat, t (mm), w (mm), l (mm), attach (material), t_att (mm), P (W), Tjmax (°C), note)
 
 A patterned copper layer (coverage c < 100 %, rest filled with laminate) is homogenised [3]:
@@ -117,6 +117,8 @@ def layerProps(l):
             cp = rc / rho
     kxy = kxy if _num(l.get('kxy')) is None else _num(l['kxy'])
     kz = kz if _num(l.get('kz')) is None else _num(l['kz'])
+    rho = rho if _num(l.get('rho')) is None else _num(l['rho'])
+    cp = cp if _num(l.get('cp')) is None else _num(l['cp'])
     return kxy, kz, rho, cp
 
 
