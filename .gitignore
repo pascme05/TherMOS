@@ -8,3 +8,7 @@ data/board/
 config/gui/board_*.json
 .ai/
 docu/paper/
+/temp/
+/tests/
+/plan/
+docu/literature/

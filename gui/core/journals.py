@@ -76,6 +76,8 @@ PINN = [
     dict(id='journal_pinn_Fig_13_layout', res="Fig. 13", what="Layout optimisation", time="~10 min"),
     dict(id='journal_pinn_figures', res="all figures and tables", what="Figure data and PDFs (docu/paper)",
          time="~5 min"),
+    dict(id='journal_pinn_all', res="all (setups 1-8)", what="All setups in one go (setup['setups'])",
+         time="~30 h"),
 ]
 PINN_METHODS = ['foster', 'fosterNom', 'podNom', 'pinn', 'nophys', 'deeponet']
 MESHES = ['coarse', 'medium', 'fine']
@@ -158,7 +160,15 @@ def data_sets(setup):
 
 
 def status(setup):
-    """[(file, exists)] of the expected results (data folders: exists if not empty)."""
+    """[(file, exists)] of the expected results (data folders: exists if not empty); journal_pinn_all: those of all
+    its setups (results folder of journal_pinn_all)."""
+    if setup.get('setups'):
+        res = []
+        for sid in setup['setups']:
+            if os.path.isfile(script(sid)):
+                s = dict(setup_dict(script(sid)), out=setup.get('out', 'results/pfhb'))
+                res += [r for r in status(s) if r not in res]
+        return res
     out = os.path.join(ROOT, setup.get('out', 'results/pfhb'))
     st = [(f, os.path.isdir(os.path.join(ROOT, f)) and bool(os.listdir(os.path.join(ROOT, f))))
           for f in data_sets(setup)]

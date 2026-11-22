@@ -24,6 +24,7 @@ Start with: python setup/journal_pinn/<setup>.py, in this order:
   6 journal_pinn_Tab_XI_Fig_12_load.py             memory and runtime per mesh (idle computer)                ~30 min
   7 journal_pinn_Fig_13_layout.py                  layout optimisation (network pinn_medium_L)                ~10 min
   8 journal_pinn_figures.py                        data of all figures and tables, figure PDFs (docu/paper)   ~5 min
+  journal_pinn_all.py                              all setups 1-8 in one go (list setup['setups'])           ~30 h
   mainPINN.py                                      main function of the setups (no need to edit)
 
 Times: RTX 3070 (8 GB), estimates; most of the time is the training of the networks on the fine mesh (~115 s per

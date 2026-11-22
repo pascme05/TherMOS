@@ -138,7 +138,48 @@ def runMethod(method, mesh, sens, nTr, out, epoch=0):
 #######################################################################################################################
 # Main Function
 #######################################################################################################################
+def runAll(setup):
+    """
+    Runs the setups in setup['setups'] one after another (journal_pinn_all.py) with the results folder, skip and epoch
+    of this setup; the other values are those of the setup files. setup['stop'] = 1 stops at the first failing setup,
+    0 continues with the next one. Ends with 'DONE:' or 'ERROR:' (list of the failed setups).
+    """
+    import runpy
+    import traceback
+    t0, failed, n = time.time(), [], len(setup['setups'])
+    path = {sid: pjoin(base, 'setup', 'journal_pinn', sid + '.py') for sid in setup['setups']}
+    missing = [sid for sid, p in path.items() if not isfile(p)]
+    if missing:                                                         # checked before the first (long) setup
+        raise FileNotFoundError("setups not found in setup/journal_pinn: %s" % ', '.join(missing))
+    print("------------------------------------------")
+    print("START: %s (%d setups, results in %s)" % (setup['name'], n, setup['out']))
+    print("------------------------------------------")
+    for i, sid in enumerate(setup['setups'], start=1):
+        print("=== SETUP %d/%d: %s (%s)" % (i, n, sid, time.strftime('%d.%m.%Y %H:%M:%S')))
+        try:
+            s = runpy.run_path(path[sid], run_name='all')['setup']
+            s.update({k: setup[k] for k in ('out', 'skip', 'epoch')})
+            main(s)
+        except Exception:
+            traceback.print_exc()
+            failed.append(sid)
+            if setup['stop']:
+                break
+        try:
+            import torch
+            torch.cuda.empty_cache()                                    # GPU memory of the last setup
+        except Exception:
+            pass
+    if failed:
+        print("ERROR: %s failed: %s (%.0f s); restart: existing results are skipped" %
+              (setup['name'], ', '.join(failed), time.time() - t0))
+        sys.exit(1)
+    print("DONE: %s, %d setups in %.0f s" % (setup['name'], n, time.time() - t0))
+
+
 def main(setup):
+    if setup.get('setups'):                                             # journal_pinn_all.py: several setups
+        return runAll(setup)
     from setup.tutorial import studyPFHB as st
     out = pjoin(base, setup['out'])
     skip, epoch = setup['skip'], setup['epoch']
