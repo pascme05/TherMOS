@@ -279,6 +279,7 @@ class _Exact(torch.nn.Module):
         return self.lam.expand(*ctx.shape[:-1], self.lam.shape[-1])
 
     coeff = staticmethod(pfModal.coeff)
+    seq = pfModal.seq
 
 
 def _modal(N=12, nc=2, seed=0):
@@ -377,3 +378,18 @@ def test_param_fit_smoke():
 #######################################################################################################################
 # References
 #######################################################################################################################
+
+
+def test_deeponet_branch():
+    """DeepONet baseline: b_0 = 0, causal branch (b up to n independent of later losses), db = backward difference."""
+    from src.py.model.PF.pfNet import pfDeepONet
+    torch.manual_seed(0)
+    net = pfDeepONet(5, 11, 6)
+    p, ctx = torch.rand(3, 50), torch.rand(3, 11)
+    b, db = net.seq(p, ctx, 0.05)
+    p2 = p.clone()
+    p2[:, 30:] = 0.0
+    b2, _ = net.seq(p2, ctx, 0.05)
+    assert torch.all(b[:, 0] == 0)
+    assert torch.allclose(b[:, 0:30], b2[:, 0:30], atol=1e-6)
+    assert torch.allclose(db[:, 1:], (b[:, 1:] - b[:, :-1]) / 0.05, atol=1e-5)

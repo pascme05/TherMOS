@@ -1,0 +1,78 @@
+{
+  "Info": {
+    "title": "Physics-informed DeepONet (baseline)",
+    "desc": "Physics-informed DeepONet: same trunk, data and physics loss as the proposed network, recurrent branch (GRU of the loss history) instead of the exact lags; no steady-state loss (gamma = 0)",
+    "_note": "Edit the values only. Keys starting with '_' are comments and are ignored. 'CHANGE' marks parameters that depend on the computer (GPU memory, runtime); all other values are those of the paper."
+  },
+  "Net": {
+    "K": 32,
+    "_K": "Space functions: number of space functions phi_k (trunk outputs) and time constants tau_k per chip",
+    "width": 128,
+    "_width": "Trunk width: neurons per hidden layer of the trunk network",
+    "depth": 4,
+    "_depth": "Trunk depth: number of hidden layers of the trunk network",
+    "nF": 4,
+    "_nF": "Fourier frequencies: Fourier frequencies per coordinate of the trunk input",
+    "rel": 1,
+    "_rel": "Relative coordinates: (1): coordinates relative to every chip as trunk inputs, (0): absolute coordinates only",
+    "arch": "deeponet",
+    "_arch": "Architecture: network: modal (proposed, exact lags) or deeponet (recurrent branch)",
+    "hid": 64,
+    "_hid": "Branch width: hidden units of the GRU branch",
+    "layers": 2,
+    "_layers": "Branch layers: layers of the GRU branch",
+    "tauCap": 80.0,
+    "_tauCap": "Maximum time constant: not used by the DeepONet (no time constants), kept for the common network parameters (s)"
+  },
+  "Loss": {
+    "alpha": 1.0,
+    "_alpha": "Data weight: weight of the data loss (labels at the sensor nodes)",
+    "beta": 1.0,
+    "_beta": "Physics weight: weight of the physics loss (finite-volume residual of the physics-only boards; 0: no physics)",
+    "gamma": 0.0,
+    "_gamma": "Steady-state weight: weight of the steady-state loss (0: not used, the branch coefficients do not settle at the loss by construction)",
+    "phys": 1,
+    "_phys": "Physics-only boards: (1): use the physics-only boards (physics and steady-state loss), (0): labelled boards only"
+  },
+  "Train": {
+    "epoch": 200,
+    "_epoch": "maximum number of epochs; paper value, for a quick check of the chain use setup['epoch'] in the setup file instead",
+    "pat": 20,
+    "_pat": "Patience: early stopping after pat epochs without improvement of the validation RMSE (at the sensors)",
+    "nStep": 100,
+    "_nStep": "Steps per epoch: optimiser steps per epoch",
+    "lr": 0.001,
+    "_lr": "Learning rate: initial learning rate of Adam (halved after 5 epochs without improvement)",
+    "clip": 1.0,
+    "_clip": "Gradient clipping: maximum norm of the gradient",
+    "seed": 42,
+    "_seed": "CHANGE only for a repetition with another seed (spread of the results); paper: 42",
+    "Ts": 0.05,
+    "_Ts": "Sampling time: sampling time of the profiles (s)"
+  },
+  "Samp": {
+    "nbD": 4,
+    "_nbD": "Data boards per step: labelled profiles per optimiser step",
+    "nbP": 4,
+    "_nbP": "CHANGE (GPU memory): physics-only boards per optimiser step; memory per step ~ nbP x chips x N x K",
+    "nR": 1024,
+    "_nR": "CHANGE (GPU memory, runtime): nodes of the physics residual per board and step",
+    "nbS": 8,
+    "_nbS": "Steady-state boards: boards per step of the steady-state loss",
+    "tP": 30.0,
+    "_tP": "Physics profile length: length of the random loss profiles of the physics loss (s)",
+    "holdMin": 0.5,
+    "_holdMin": "Minimum hold time: minimum hold time of the random loss profiles of the physics loss (s)",
+    "holdMax": 8.0,
+    "_holdMax": "Maximum hold time: maximum hold time of the random loss profiles of the physics loss (s)",
+    "nCache": 16,
+    "_nCache": "CHANGE (GPU memory): boards of the physics loss with G^-1 in memory; dense G^-1 needs 4 N^2 bytes per board (coarse N = 790: 2.5 MB, medium N = 3551: 50 MB, 16 boards 0.8 GB). Reduce if CUDA runs out of memory (the physics loss then sees fewer boards per epoch), increase on larger GPUs",
+    "nNew": 4,
+    "_nNew": "Cache renewal: boards of the cache replaced per epoch",
+    "nDense": 8000,
+    "_nDense": "CHANGE (GPU memory): boards with more nodes keep only nR rows of G^-1 (sparse LU) instead of the dense inverse (8000: coarse and medium dense, fine rows) (nodes)"
+  },
+  "Mesh": {
+    "_note": "values that replace the ones above on a mesh (coarse, medium, fine), e.g. \"fine\": {\"nR\": 2048, \"nCache\": 8} as in pinn.json"
+  }
+}

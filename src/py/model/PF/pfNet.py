@@ -43,6 +43,9 @@ V1.0: 16.11.2026, Pascal Schirmer
 
 V1.1: 21.11.2026, Pascal Schirmer
 - Parametric modal network pfModal (with an optional bound τ_cap of the time constants)
+
+V1.2: 22.11.2026, Pascal Schirmer
+- Physics-informed DeepONet baseline pfDeepONet (trunk of pfModal, recurrent branch instead of the exact lags)
 """
 
 #######################################################################################################################
@@ -187,9 +190,48 @@ class pfModal(nn.Module):
         b = torch.fft.irfft(torch.fft.rfft(p0, n=n)[..., None] * torch.fft.rfft(h, n=n, dim=-2), n=n, dim=-2)
         return b[..., 0:L, :]
 
+    def seq(self, p, ctx, Ts):
+        """Coefficients b (... x L x K) and their rates db/dt (... x L x K) for the scaled losses p (... x L)."""
+        lam = self.rates(ctx)
+        b = self.coeff(p, lam, Ts)
+        p0 = torch.cat([torch.zeros_like(p[..., 0:1]), p[..., 1:]], dim=-1)
+        return b, lam[..., None, :] * (p0[..., None] - b)
+
+
+#######################################################################################################################
+# Physics-Informed DeepONet (baseline)
+#######################################################################################################################
+class pfDeepONet(pfModal):
+    """
+    Physics-informed DeepONet baseline [1, 3] with the same trunk as pfModal (space functions per chip φ_k(x, z_c, μ))
+    and a learned branch instead of the exact lags: a recurrent network (GRU, causal, any profile length) of the scaled
+    loss p̂_c(t) and the context gives the coefficients
+
+        θ̂(x, t)/ΔT = Σ_c Σ_k φ_k(x, z_c, μ)·b_{c,k}(t),      b_c(t) = GRU(p̂_c(0 … t), z_c, μ)
+
+    with b_0 = 0 (θ(0) = 0) and db/dt from the backward difference (b_n − b_{n−1})/T_s (implicit Euler).
+    """
+    def __init__(self, nSp=5, nCtx=11, K=16, width=128, depth=4, nF=4, rel=True, hid=64, layers=2, **kw):
+        super().__init__(nSp, nCtx, K, width, depth, nF, rel=rel)
+        del self.rate
+        self.gru = nn.GRU(1 + nCtx, int(hid), int(layers), batch_first=True)
+        self.out = nn.Linear(int(hid), self.K)
+
+    def seq(self, p, ctx, Ts):
+        sh = p.shape                                                                # ... x L
+        x = torch.cat([p[..., None], ctx[..., None, :].expand(*sh, ctx.shape[-1])], dim=-1)
+        x = torch.cat([torch.zeros_like(x[..., 0:1, :]), x[..., 1:, :]], dim=-2)    # p_0 does not act
+        h, _ = self.gru(x.reshape(-1, sh[-1], x.shape[-1]))
+        y = self.out(h).reshape(*sh, self.K)
+        b = torch.cat([torch.zeros_like(y[..., 0:1, :]), y[..., 1:, :] - y[..., 0:1, :]], dim=-2)   # b_0 = 0
+        db = torch.cat([torch.zeros_like(b[..., 0:1, :]), b[..., 1:, :] - b[..., :-1, :]], dim=-2) / Ts
+        return b, db
+
 
 #######################################################################################################################
 # References
 #######################################################################################################################
 # [1] L. Lu et al., Learning nonlinear operators via DeepONet, Nature Machine Intelligence 3, 2021.
 # [2] M. Tancik et al., Fourier features let networks learn high frequency functions, NeurIPS 2020.
+# [3] S. Wang, H. Wang, P. Perdikaris, Learning the solution operator of parametric partial differential equations
+#     with physics-informed DeepONets, Science Advances 7, 2021.

@@ -2,8 +2,8 @@
 #######################################################################################################################
 # Title:        Thermal Model Order Reduction and Simulation (TherMOS)
 # Topic:        Power Electronics, Model Order Reduction
-# File:         journal_pinn_Sec_IV_B
-# Date:         21.11.2026
+# File:         journal_pinn_Tab_VIII_IX_Fig_6_7_8_9_medium
+# Date:         22.11.2026
 # Author:       Dr. Pascal A. Schirmer
 # Version:      V.1.0
 # Copyright:    Pascal Schirmer
@@ -14,9 +14,14 @@
 # Function Description
 #######################################################################################################################
 """
-This script reproduces Section IV-B (extrapolation: T2 cooling and materials, T3 chip positions, T4 30 min mission). The same runs as
-Section IV-A (skipped if they exist).
-Methods and data sets: config/journal_pinn/<name>.json; results: results/pfhb/<method>_<mesh>_<sensors>.json.
+This script reproduces the results of the medium mesh in Section IV-A and IV-B: Table VIII (errors, runtime and
+parameters on N1, sensors L), Table IX (errors per chip), Fig. 6 (field map of a board of N1: FV, POD, network S
+and L), Fig. 7 (spread of the error over the boards of N1, T2, T1, T3), Fig. 8 (step response of the network for
+four h) and Fig. 9 (mission profile T4). All runs of the medium mesh; they are skipped if Tables VII and X were
+run before. Runtime: ~6 h (all networks of the medium mesh), ~10 min if they exist.
+Lines marked CHANGE are the ones to adapt (name and results folder of a test, quick check, other computer); the
+parameters of the methods are in config/journal_pinn/<method>.json (CHANGE there: GPU memory). Existing results in
+setup['out'] are skipped, so the setups share the network runs (e.g. pinn_medium_L is trained once).
 """
 
 #######################################################################################################################
@@ -51,14 +56,14 @@ setup = {}
 # General
 # ==============================================================================
 setup['user'] = 'Pascal Schirmer'                                                                                        # name of the user (string)
-setup['name'] = 'journal_pinn_Sec_IV_B'                                                                                  # name of the simulation (string)
+setup['name'] = 'journal_pinn_Tab_VIII_IX_Fig_6_7_8_9_medium'                                                            # CHANGE: name of the simulation (string), e.g. a test name
 
 # ==============================================================================
 # Experiment
 # ==============================================================================
-setup['out'] = 'results/pfhb'                                                                                            # results folder relative to TherMOS (string)
+setup['out'] = 'results/pfhb'                                                                                            # CHANGE: results folder relative to TherMOS (string); another folder for a test (e.g. 'results/pfhb_test')
 setup['skip'] = 1                                                                                                        # (0): recompute everything, (1): skip runs whose results exist (restart after an interruption)
-setup['epoch'] = 0                                                                                                       # (0): epochs of the configs, (N): at most N epochs (quick check of the chain, use another out)
+setup['epoch'] = 0                                                                                                       # CHANGE: (0): epochs of the configs (paper), (N): at most N epochs (quick check of the chain, use another out)
 
 # ==============================================================================
 # Data
@@ -68,10 +73,11 @@ setup['data'] = []                                                              
 # ==============================================================================
 # Runs
 # ==============================================================================
-setup['mesh'] = ['coarse', 'medium', 'fine']                                                                             # meshes of the runs: coarse (2 mm), medium (1 mm), fine (0.5 mm)
+setup['mesh'] = ['medium']                                                                                               # CHANGE: meshes of the runs: coarse (2 mm), medium (1 mm), fine (0.5 mm; networks ~3-5 h per run)
 setup['sens'] = ['S', 'L']                                                                                               # sensor versions of the training labels: S (4 hot spots), L (16: hot spots, 4 NTC, 8 on the base)
-setup['methods'] = ['foster', 'pod', 'pinn', 'nophys']                                                                   # methods (config <method>.json): foster, pod (full field, one run per mesh), pinn, nophys
+setup['methods'] = ['fosterNom', 'podNom', 'foster', 'pinn', 'nophys', 'deeponet']                                       # methods (config <method>.json): foster/fosterNom, pod/podNom (Nom: nominal layout; pod full field), pinn, nophys, deeponet
 setup['nTrain'] = [24]                                                                                                   # numbers of labelled training boards (first n of the training set, maximum 24)
+setup['fieldmap'] = ['medium']                                                                                           # meshes of the field map (copper layer at the peak of a testing board of N1: FV, errors of POD and the networks S, L)
 
 # ==============================================================================
 # Memory and Computational Load
@@ -89,8 +95,8 @@ setup['nRand'] = 100                                                            
 # ==============================================================================
 # Figures (scripts in docu/paper/figures/scripts)
 # ==============================================================================
-setup['figs'] = []                                                                                                       # figure data scripts in docu/paper/figures/scripts (e.g. fighb)
-setup['build'] = 0                                                                                                       # (0): off, (1): compile the standalone figure PDFs (buildfigs.py, pdflatex)
+setup['figs'] = []                                                                                                       # CHANGE: figure data scripts in docu/paper/figures/scripts (fighb: tables, figoverview: Fig. 1, figsub: Figs. 2, 3, 8; needs docu/paper)
+setup['build'] = 0                                                                                                       # CHANGE: (0): off, (1): compile the standalone figure PDFs (buildfigs.py, pdflatex)
 
 #######################################################################################################################
 # Calculations

@@ -30,7 +30,12 @@ hold): x[n] = a_k·x[n−1] + (1 − a_k)·P[n], a_k = exp(−T_s/τ_k), x[0] = 
    ridge). The chip positions are not an input: a Foster model describes the layout it was fitted on, so its error grows
    with the distance of a new layout from the training layouts.
 3) Prediction (predict): parameters for the condition μ of a new board, rise at the outputs for the losses P.
-Functions:  lags(P, tau, Ts), fitBoard(Ps, Ys, K, Ts), fitFam(boards, nS, K, Ts), predict(mdl, mu, P)
+4) Joint fit (fitJoint): log τ_k and R_o,c,k linear in f(μ), fitted to all boards at once (output error, variable
+   projection), started from 2); optionally with the time constants bounded by TAU_MAX. Since the per-board fits are
+   not unique (lags may swap or compensate each other), their regression is inconsistent; the joint fit avoids this.
+   The variant (regression, joint, joint bounded) is selected with the validation boards (select).
+Functions:  lags(P, tau, Ts), fitBoard(Ps, Ys, K, Ts), fitFam(boards, nS, K, Ts), fitJoint(...), select(...),
+            predict(mdl, mu, P)
 
 V1.0: 21.11.2026, Pascal Schirmer
 - Initial version
@@ -57,6 +62,7 @@ from scipy.signal import lfilter
 TAU0 = (0.05, 40.0)                                                     # range of the start values of τ (s)
 RIDGE = 1e-6                                                            # ridge of the regression over μ
 GAP = 1.3                                                               # minimum ratio of neighbouring τ (-)
+TAU_MAX = 80.0                                                          # upper bound of τ of the family (s), as τ_cap of the network
 
 
 #######################################################################################################################
@@ -125,6 +131,67 @@ def fitFam(boards, nS, K=4, Ts=0.05):
             'fits': [{'tau': f['tau'].tolist(), 'rmse': f['rmse']} for f in fits]}
 
 
+def fitJoint(boards, nS, K=4, Ts=0.05, mdl0=None, nfev=60, tauMax=np.inf):
+    """
+    Joint Foster model of a family: log τ_k(μ) = a_k·f(μ) and R_o,c,k(μ) = w_o,c,k·f(μ) fitted to all labelled boards at
+    once (output error over all profiles). For given a, the output is linear in w (regressors x_c,k(t)·f_j(μ)), so that
+    w follows from linear least squares and only a (K x 5) is optimised (variable projection); start: the regression of
+    the per-board fits (fitFam, or mdl0); tauMax bounds the time constants (s). Returns the same structure as fitFam
+    (W: 5 x (K + nc·K·nS)) plus 'tauMax' and the training RMSE 'rmseJoint'.
+    """
+    mdl0 = mdl0 or fitFam(boards, nS, K, Ts)
+    F = np.stack([_feat(B['mu']) for B in boards])                                          # boards x 5
+    Ps = [(i, P) for i, B in enumerate(boards) for P in B['P']]
+    Y = np.concatenate([y[:, 0:nS] for B in boards for y in B['ths']])
+    nc, nf = mdl0['nc'], F.shape[1]
+
+    def design(A):
+        rows = []
+        for i, P in Ps:
+            tau = np.minimum(np.exp(F[i] @ A), tauMax)                                      # K
+            x = lags(P, tau, Ts)                                                            # L x nc x K
+            rows.append((x[..., None] * F[i][None, None, None, :]).reshape(len(P), -1))     # L x (nc·K·5)
+        return np.concatenate(rows)
+
+    def solve(A):
+        X = design(A)
+        Wr = np.linalg.lstsq(X, Y, rcond=None)[0]                                           # (nc·K·5) x nS
+        return X, Wr
+
+    def res(a):
+        X, Wr = solve(a.reshape(nf, K))
+        return (X @ Wr - Y).ravel()
+
+    a0 = mdl0['W'][:, 0:K]                                                                  # 5 x K
+    sol = least_squares(res, a0.ravel(), x_scale=1.0, max_nfev=nfev)
+    A = sol.x.reshape(nf, K)
+    X, Wr = solve(A)
+    rm = float(np.sqrt(np.mean((X @ Wr - Y) ** 2)))
+    Wr = Wr.reshape(nc, K, nf, nS).transpose(2, 0, 1, 3).reshape(nf, -1)                   # 5 x (nc·K·nS)
+    return {'W': np.concatenate([A, Wr], axis=1), 'K': K, 'nc': nc, 'nS': nS, 'Ts': Ts, 'fits': mdl0['fits'],
+            'rmseJoint': rm, 'tauMax': tauMax}
+
+
+def rmse(mdl, boards):
+    """Hot-spot RMSE (K) of a model on labelled boards (outputs of the model, all profiles)."""
+    e = np.concatenate([predict(mdl, B['mu'], P) - y[:, 0:mdl['nS']] for B in boards for P, y in zip(B['P'], B['ths'])])
+    return float(np.sqrt(np.mean(e ** 2)))
+
+
+def select(boards, val, nS, K=4, Ts=0.05):
+    """
+    Foster model of a family selected by the validation boards val among the regression of the per-board fits
+    (fitFam), the joint fit (fitJoint) and the joint fit with time constants bounded by TAU_MAX. Returns the model
+    with 'variant' and the validation RMSE of all variants ('valRmse').
+    """
+    m0 = fitFam(boards, nS, K, Ts)
+    cand = {'regression': m0, 'joint': fitJoint(boards, nS, K, Ts, m0),
+            'jointBounded': fitJoint(boards, nS, K, Ts, m0, tauMax=TAU_MAX)}
+    vr = {k: rmse(m, val) for k, m in cand.items()}
+    best = min(vr, key=vr.get)
+    return dict(cand[best], variant=best, valRmse=vr)
+
+
 #######################################################################################################################
 # Prediction
 #######################################################################################################################
@@ -132,7 +199,7 @@ def params(mdl, mu):
     """Time constants (K) (s) and resistances (nc x K x nS) (K/W) of the condition mu."""
     th = _feat(mu) @ mdl['W']
     K = mdl['K']
-    return np.exp(th[0:K]), th[K:].reshape(mdl['nc'], K, mdl['nS'])
+    return np.minimum(np.exp(th[0:K]), mdl.get('tauMax', np.inf)), th[K:].reshape(mdl['nc'], K, mdl['nS'])
 
 
 def predict(mdl, mu, P):

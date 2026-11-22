@@ -50,6 +50,35 @@ def test_family_interpolates_condition():
     assert np.sqrt(np.mean((yp - boards[1]['ths'][0]) ** 2)) < 0.05 * np.abs(boards[1]['ths'][0]).max()
 
 
+def _family(rng, hs, L=401):
+    """Boards of a synthetic family: τ and R scale with log h (R linear in log h, as the joint model)."""
+    tau0, R, P, _ = _system(rng, L)
+    out = []
+    for h in hs:
+        a = np.log(h / 1500.0)
+        tau, Rh = tau0 * np.exp(-0.3 * a), R * (1.0 - 0.3 * a)
+        out.append({'mu': dict(NOM, h=h), 'P': [P], 'ths': [np.einsum('lck,cko->lo', pf.lags(P, tau, 0.05), Rh)]})
+    return out
+
+
+def test_joint_fit_family():
+    rng = np.random.default_rng(2)
+    tr = _family(rng, (500.0, 800.0, 1300.0, 2000.0, 3200.0, 5000.0))
+    te = _family(np.random.default_rng(2), (1000.0,))
+    m0 = pf.fitFam(tr, 3, K=3)
+    mj = pf.fitJoint(tr, 3, K=3, mdl0=m0)
+    assert mj['rmseJoint'] < 0.05
+    assert pf.rmse(mj, te) <= pf.rmse(m0, te) + 1e-6
+    assert pf.rmse(mj, te) < 0.02 * np.abs(te[0]['ths'][0]).max()
+
+
+def test_select_uses_validation():
+    rng = np.random.default_rng(3)
+    tr, va = _family(rng, (500.0, 1000.0, 2000.0, 4000.0)), _family(np.random.default_rng(3), (1400.0,))
+    m = pf.select(tr, va, 3, K=3)
+    assert m['variant'] in m['valRmse'] and m['valRmse'][m['variant']] == min(m['valRmse'].values())
+
+
 def test_hbloss_matches_lossCalc():
     t = np.arange(0.0, 10.0, 0.05)
     for cp in (0.9, -0.5):

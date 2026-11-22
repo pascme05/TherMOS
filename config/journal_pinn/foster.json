@@ -1,22 +1,13 @@
 {
- "Title": "Foster model",
- "Description": "Coupled Foster model fitted on the sensor labels of every training board, parameters regressed over the condition (pfFoster.py)",
- "Para": [
-  {
-   "Name": "RC pairs",
-   "Category": "Model",
-   "Description": "number of time constants tau_k (shared by all chips and sensors)",
-   "Variable": "K",
-   "Value": 4,
-   "Unit": "-"
+  "Info": {
+    "title": "Foster model",
+    "desc": "Coupled Foster model fitted on the sensor labels of every training board, parameters regressed over the condition (pfFoster.py)",
+    "_note": "Edit the values only. Keys starting with '_' are comments and are ignored. 'CHANGE' marks parameters that depend on the computer (GPU memory, runtime); all other values are those of the paper."
   },
-  {
-   "Name": "Sampling time",
-   "Category": "Model",
-   "Description": "sampling time of the profiles",
-   "Variable": "Ts",
-   "Value": 0.05,
-   "Unit": "s"
+  "Mdl": {
+    "K": 4,
+    "_K": "RC pairs: number of time constants tau_k (shared by all chips and sensors)",
+    "Ts": 0.05,
+    "_Ts": "Sampling time: sampling time of the profiles (s)"
   }
- ]
 }

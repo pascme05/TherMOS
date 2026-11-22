@@ -32,6 +32,10 @@ training labels and hot-spot errors; the first 4 are the hot spots, sensor versi
     t2      6 boards, extrapolated h and k_diel, nominal positions, designed profile
     t3      6 boards with one chip inside the band, designed profile
     t4      1 board, nominal positions, drive-cycle mission of 30 min from cold (field every 1 s)
+Nominal layout (chips fixed at the nominal positions, only the condition μ varies; baselines of the nominal section):
+    trainNom 24 boards, LHS in μ, nominal positions, 2 random profiles of 40 s
+    valNom   6 boards as trainNom, 1 random profile of 40 s
+    n1       10 boards as trainNom, designed profile (testing inside the training range of μ)
 Usage:      python setup/tutorial/genBoardPFHB.py [mesh ...]       (default: coarse medium fine)
 """
 
@@ -81,7 +85,7 @@ NSUB = 200                                                              # sub-sa
 DEV = DEVICES['Si IGBT discrete 1200 V / 75 A (TO-247)']                # IGBT and diode of every switch
 OP = {'Vdc': 400.0, 'fs': 5000.0, 'Tj': 125.0}                          # DC link (V), switching (Hz), T_j (°C)
 SEG = {'I': (0.0, 30.0), 'fo': (0.5, 50.0), 'hold': (0.5, 8.0), 'ramp': (0.0, 1.0)}   # random operating points
-SEEDS = {'train': 1, 'val': 2, 'phys': 3, 't1': 4, 't2': 5, 't3': 6, 't4': 7}
+SEEDS = {'train': 1, 'val': 2, 'phys': 3, 't1': 4, 't2': 5, 't3': 6, 't4': 7, 'trainNom': 11, 'valNom': 12, 'n1': 13}
 SIZES = {'train': 24, 'val': 6, 'phys': 200, 't1': 10, 'nProf': 2}      # boards per set, profiles per training board
 SETS = list(SEEDS.keys())
 
@@ -208,6 +212,12 @@ def genSet(s, mesh, t):
         if s == 't1':
             return labelled(B, [[designed(t)] for _ in B])
         return labelled(B, [[randOp(t, rng) for _ in range(0, SIZES['nProf'] if s == 'train' else 1)] for _ in B])
+    if s in ('trainNom', 'valNom', 'n1'):
+        n = SIZES[{'trainNom': 'train', 'valNom': 'val', 'n1': 't1'}[s]]
+        B = [bb(m, nominal()) for m in sampleMu(n, rng)]
+        if s == 'n1':
+            return labelled(B, [[designed(t)] for _ in B])
+        return labelled(B, [[randOp(t, rng) for _ in range(0, SIZES['nProf'] if s == 'trainNom' else 1)] for _ in B])
     if s == 't2':
         mus = [dict(NOM, h=250.0), dict(NOM, h=8000.0), dict(NOM, kDiel=0.5), dict(NOM, kDiel=12.0),
                dict(NOM, h=250.0, kDiel=0.5), dict(NOM, h=8000.0, kDiel=12.0)]

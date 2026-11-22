@@ -15,17 +15,21 @@
 #######################################################################################################################
 """
 Half-bridge study of the PINN journal paper (data: genBoardPFHB.py). Three methods are trained on the same labelled
-boards (train, the first nTr of them) of one mesh and evaluated on the same test sets t1–t4:
+boards (train, the first nTr of them) of one mesh and evaluated on the same test sets n1, t1–t4:
     foster  coupled Foster model (pfFoster) fitted on the sensor labels, regressed over the condition μ
     pod     global POD basis (rank r) of the full-field snapshots of the labelled boards on the superset grid of all
             layouts, Galerkin projection of C, G, Bp of every test board (needs the full field, not only sensors)
     pinn    parametric operator network (pfParamFit) trained on the sensor labels plus the physics loss of the
             physics-only boards; 'nophys' is the same network without physics (β = γ = 0)
+Nominal layout: the baselines can also be fitted on the boards with the chips at the nominal positions (trainNom,
+run names fosterNom / podNom) and are then evaluated on the nominal test sets n1, t2, t4 only; POD requires a fixed
+layout, since the field of a moved chip is not contained in the snapshots. The network is always trained on the
+variable layouts (train) and evaluated on all test sets (addTests completes the test sets of existing runs).
 Sensor versions: S = 4 hot spots, L = 16 points (hot spots, 4 NTC positions, 8 points on the Al base).
 Errors (K) against the finite-volume model of the same mesh: hot spots (all methods, every sample) and the whole
 field (pod, pinn; every DEC-th sample): MAE, RMSE, MAX, pooled over the boards of a test set, plus the runtime per board.
 Results: results/pfhb/<run>.json (+ .pt of the networks), run = <method>_<mesh>_<sens>[_n<nTr>].
-Functions:  runNet, runFoster, runPOD, scale, optLayout
+Functions:  runNet, addTests, runFoster, podBasis, runPOD, scale, optLayout
 """
 
 #######################################################################################################################
@@ -47,8 +51,7 @@ sys.path.insert(0, base)
 # ==============================================================================
 from src.py.model.PF.pfParam import (loadFam, buildBoard, simulate, samplePos, chipCtx, muHat, _ok, CHIPS_HB, NOM,
                                      P_REF, MESH)
-from src.py.model.PF.pfParamFit import fitParam, prepBoard, predict
-from src.py.model.PF.pfNet import pfModal
+from src.py.model.PF.pfParamFit import fitParam, prepBoard, predict, buildNet
 from src.py.model.PF import pfFoster
 from setup.tutorial.studyPFParam import _peakNet, _penalty
 
@@ -72,7 +75,8 @@ warnings.filterwarnings("ignore")
 # Settings
 #######################################################################################################################
 TS = 0.05
-TESTS = ['t1', 't2', 't3', 't4']
+TESTS = ['n1', 't1', 't2', 't3', 't4']
+TESTS_NOM = ['n1', 't2', 't4']                                          # test sets with the nominal layout
 NSENS = {'S': 4, 'L': 16}
 NHOT = 4
 ZOOM = 60.0                                                             # traces at every sample up to (s)
@@ -111,7 +115,7 @@ def evaluate(pred, mesh, rep, tests=None):
     hot-spot traces (every 1 s and every sample of the first ZOOM s).
     """
     for s in tests or TESTS:
-        hot, fld, rows, tm = _acc(), _acc(), [], []
+        hot, fld, rows, tm, chip = _acc(), _acc(), [], [], [_acc() for _ in range(0, NHOT)]
         for B in fam(mesh, s):
             P = B['P'][0]
             t0 = time.time()
@@ -119,8 +123,11 @@ def evaluate(pred, mesh, rep, tests=None):
             tm.append(time.time() - t0)
             e = yh - B['ths'][0][:, 0:NHOT]
             _add(hot, e)
+            for c in range(0, NHOT):
+                _add(chip[c], e[:, c])
             b = {'mu': B['mu'], 'pos': B['pos'], 'hotRmse': float(np.sqrt(np.mean(e ** 2))),
-                 'hotMax': float(np.max(np.abs(e))), 'time': tm[-1]}
+                 'hotMax': float(np.max(np.abs(e))), 'chipRmse': np.sqrt(np.mean(e ** 2, axis=0)).tolist(),
+                 'time': tm[-1]}
             if yf is not None:
                 ef = yf - B['th'][0]
                 _add(fld, ef)
@@ -131,7 +138,8 @@ def evaluate(pred, mesh, rep, tests=None):
                 rep['trace'] = {'t': (np.arange(len(P)) * TS)[::dec].tolist(),
                                 'ref': B['ths'][0][::dec, 0:NHOT].T.tolist(), 'pred': yh[::dec].T.tolist(),
                                 'zoomRef': B['ths'][0][0:nz, 0:NHOT].T.tolist(), 'zoomPred': yh[0:nz].T.tolist()}
-        rep[s] = {'hot': _met(hot), 'field': _met(fld), 'time': float(np.mean(tm)), 'boards': rows}
+        rep[s] = {'hot': _met(hot), 'field': _met(fld), 'chip': [_met(a) for a in chip], 'time': float(np.mean(tm)),
+                  'boards': rows}
         print("INFO: %s %s: hot spots MAE %.2f K, RMSE %.2f K, MAX %.1f K%s, %.3f s per board" %
               (rep['run'], s, rep[s]['hot']['mae'], rep[s]['hot']['rmse'], rep[s]['hot']['max'],
                '' if rep[s]['field'] is None else '; field RMSE %.2f K' % rep[s]['field']['rmse'], rep[s]['time']))
@@ -153,7 +161,7 @@ def runName(method, mesh, sens, nTr=24):
 def loadNet(path, dev):
     ck = torch.load(path, map_location=dev)
     c = ck['cfg']
-    net = pfModal(5, 11, c['K'], c['width'], c['depth'], c['nF'], rel=c['rel'], tauCap=c.get('tauCap')).to(dev)
+    net = buildNet(c).to(dev)
     net.load_state_dict(ck['state'])
     net.eval()
     return net, ck['dT']
@@ -191,20 +199,42 @@ def runNet(method, mesh, sens, cfg, nTr, out, epoch=0, usePhys=True):
     _save(evaluate(netPred(net, dT, dev), mesh, rep), out)
 
 
+def addTests(run, out, tests=None):
+    """Evaluates the stored network of run on the test sets that its results do not contain yet (default TESTS)."""
+    p = pjoin(out, run + '.json')
+    with open(p) as f:
+        rep = json.load(f)
+    miss = [s for s in (tests or TESTS) if s not in rep]
+    if not miss:
+        return
+    dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    net, dT = loadNet(pjoin(out, run + '.pt'), dev)
+    print("START: run %s, additional test sets %s" % (run, miss))
+    _save(evaluate(netPred(net, dT, dev), rep['mesh'], rep, miss), out)
+
+
 #######################################################################################################################
 # Foster
 #######################################################################################################################
-def runFoster(mesh, sens, K, nTr, out):
-    """Coupled Foster model on the sensor labels of the first nTr labelled boards, regressed over μ."""
-    name = runName('foster', mesh, sens, nTr)
+def runFoster(mesh, sens, K, nTr, out, nom=False):
+    """
+    Coupled Foster model on the sensor labels of the first nTr labelled boards, regressed over μ; nom: fitted on the
+    nominal layout (trainNom, run fosterNom) and evaluated on the nominal test sets.
+    """
+    method = 'fosterNom' if nom else 'foster'
+    name = runName(method, mesh, sens, nTr)
     nS = NSENS[sens]
     t0 = time.time()
-    mdl = pfFoster.fitFam(fam(mesh, 'train')[0:nTr], nS, K, TS)
-    rep = {'run': name, 'method': 'foster', 'mesh': mesh, 'sens': sens, 'train': nTr, 'K': K,
-           'timeTrain': time.time() - t0, 'fits': mdl['fits'], 'params': int(mdl['W'].size)}
-    print("START: run %s, K = %d, fit %.1f s, fit RMSE per board %.2f–%.2f K" %
-          (name, K, rep['timeTrain'], min(f['rmse'] for f in mdl['fits']), max(f['rmse'] for f in mdl['fits'])))
-    _save(evaluate(lambda B, P: (pfFoster.predict(mdl, B['mu'], P)[:, 0:NHOT], None), mesh, rep), out)
+    mdl = pfFoster.select(fam(mesh, 'trainNom' if nom else 'train')[0:nTr], fam(mesh, 'valNom' if nom else 'val'), nS,
+                          K, TS)
+    rep = {'run': name, 'method': method, 'mesh': mesh, 'sens': sens, 'train': nTr, 'K': K,
+           'timeTrain': time.time() - t0, 'fits': mdl['fits'], 'params': int(mdl['W'].size),
+           'variant': mdl['variant'], 'valRmse': mdl['valRmse']}
+    print("START: run %s, K = %d, fit %.1f s, fit RMSE per board %.2f–%.2f K, variant %s (validation RMSE %s)" %
+          (name, K, rep['timeTrain'], min(f['rmse'] for f in mdl['fits']), max(f['rmse'] for f in mdl['fits']),
+           mdl['variant'], {k: round(v, 2) for k, v in mdl['valRmse'].items()}))
+    _save(evaluate(lambda B, P: (pfFoster.predict(mdl, B['mu'], P)[:, 0:NHOT], None), mesh, rep,
+                   TESTS_NOM if nom else None), out)
 
 
 #######################################################################################################################
@@ -232,15 +262,14 @@ def _rom(B, V, P):
     return Q
 
 
-def runPOD(mesh, energy, nTr, out, rMax=256):
+def podBasis(mesh, energy, nTr, rMax=256, nom=True):
     """
-    Rank r: smallest r whose singular values hold the fraction energy of Σσ² (e.g. 0.9999), at most rMax. Global POD basis of the full-field snapshots of the first nTr labelled boards on the superset grid of all their
-    layouts (method of snapshots); for a test board the rows of its nodes are taken (zero for nodes that no training
-    board has, e.g. die cells in the band), orthonormalised and used for a Galerkin projection.
+    Global POD basis of the full-field snapshots of the first nTr labelled boards (trainNom if nom, else train) on the
+    superset grid of all their layouts (method of snapshots). Rank r: smallest r whose singular values hold the
+    fraction energy of Σσ² (e.g. 0.9999), at most rMax. Returns (keys, E (superset nodes x r), info).
     """
-    name = runName('pod', mesh, 'F', nTr)
     dx = MESH[mesh]['dx']
-    tr = fam(mesh, 'train')[0:nTr]
+    tr = fam(mesh, 'trainNom' if nom else 'train')[0:nTr]
     t0 = time.time()
     keys = np.unique(np.concatenate([_keys(B, dx) for B in tr]))
     X = []
@@ -255,22 +284,77 @@ def runPOD(mesh, energy, nTr, out, rMax=256):
     w, U = w[::-1], U[:, ::-1]
     r = int(min(np.searchsorted(np.cumsum(np.maximum(w, 0)) / np.sum(np.maximum(w, 0)), energy) + 1, rMax))
     E = (X.T @ U[:, 0:r]) / np.sqrt(np.maximum(w[0:r], 1e-30))                    # superset nodes x r
-    rep = {'run': name, 'method': 'pod', 'mesh': mesh, 'sens': 'F', 'train': nTr, 'r': r, 'energy': energy, 'timeTrain': time.time() - t0,
-           'sv': np.sqrt(np.maximum(w[0:100], 0) / w[0]).tolist(), 'snapshots': int(X.shape[0]),
-           'nodes': int(len(keys)), 'params': int(E.size)}
-    del X
-    print("START: run %s, r = %d, %d snapshots on %d superset nodes, basis %.1f s, energy %.6f" %
-          (name, r, rep['snapshots'], rep['nodes'], rep['timeTrain'], float(np.sum(w[0:r]) / np.sum(w))))
+    info = {'r': r, 'energy': energy, 'timeTrain': time.time() - t0, 'snapshots': int(X.shape[0]),
+            'sv': np.sqrt(np.maximum(w[0:100], 0) / w[0]).tolist(), 'nodes': int(len(keys)), 'params': int(E.size),
+            'energyKept': float(np.sum(w[0:r]) / np.sum(w))}
+    return keys, E, info
 
+
+def podV(keys, E, B, dx):
+    """Basis of board B (N x r): rows of its nodes in the superset basis E (zero for unknown nodes), orthonormalised."""
+    k = _keys(B, dx)
+    i = np.minimum(np.searchsorted(keys, k), len(keys) - 1)
+    return np.linalg.qr(np.where((keys[i] == k)[:, None], E[i], 0.0))[0]
+
+
+def podPred(keys, E, dx):
+    """Prediction of a board (hot spots, field every dec samples): rows of its nodes, orthonormalised, Galerkin."""
     def pred(B, P):
-        k = _keys(B, dx)
-        i = np.searchsorted(keys, k)
-        i = np.minimum(i, len(keys) - 1)
-        V = np.where((keys[i] == k)[:, None], E[i], 0.0)
-        V, _ = np.linalg.qr(V)
+        V = podV(keys, E, B, dx)
         Q = _rom(B, V, P)
         return Q @ V[B['sens'][0:NHOT]].T, Q[::B['dec']] @ V.T
-    _save(evaluate(pred, mesh, rep), out)
+    return pred
+
+
+def runPOD(mesh, energy, nTr, out, rMax=256, nom=False):
+    """
+    POD (podBasis) of the first nTr labelled boards; for a test board the rows of its nodes are taken (zero for nodes
+    that no training board has, e.g. die cells in the band), orthonormalised and used for a Galerkin projection. nom:
+    basis of the nominal layout (trainNom, run podNom), evaluated on the nominal test sets.
+    """
+    method = 'podNom' if nom else 'pod'
+    name = runName(method, mesh, 'F', nTr)
+    keys, E, info = podBasis(mesh, energy, nTr, rMax, nom)
+    rep = dict({'run': name, 'method': method, 'mesh': mesh, 'sens': 'F', 'train': nTr}, **info)
+    print("START: run %s, r = %d, %d snapshots on %d superset nodes, basis %.1f s, energy %.6f" %
+          (name, info['r'], info['snapshots'], info['nodes'], info['timeTrain'], info['energyKept']))
+    _save(evaluate(podPred(keys, E, MESH[mesh]['dx']), mesh, rep, TESTS_NOM if nom else None), out)
+
+
+#######################################################################################################################
+# Field map
+#######################################################################################################################
+def fieldMap(mesh, out, board=0, energy=0.9999, rMax=256):
+    """
+    Field of the nominal testing board n1[board] on the top of the copper layer at the peak of the hot spot of T_H:
+    FV, and the errors of POD (nominal layout) and of the networks with the sensor versions S and L. Writes
+    fieldmap_<mesh>.json (x, y in mm, FV rise and errors in K, time of the peak in s).
+    """
+    from src.py.model.PF.pfParam import MATERIALS
+    B = fam(mesh, 'n1')[board]
+    P = B['P'][0]
+    th = simulate(B, P, TS)
+    k = int(np.argmax(th[:, B['sens'][0]]))
+    geo = np.asarray(B['geo'])
+    rho = np.asarray(buildBoard(B['mu'], B['pos'], CHIPS_HB, mesh)['rho'])            # material of the nodes
+    cu = np.flatnonzero(np.abs(rho - MATERIALS['Cu'][1]) < 1.0)
+    cu = cu[geo[cu, 2] >= geo[cu, 2].max() - 1e-9]
+    rep = {'mesh': mesh, 'board': board, 'mu': B['mu'], 't': k * TS, 'x': (geo[cu, 0] * 1e3).tolist(),
+           'y': (geo[cu, 1] * 1e3).tolist(), 'fv': th[k, cu].tolist()}
+    keys, E, _ = podBasis(mesh, energy, 24, rMax, True)
+    V = podV(keys, E, B, MESH[mesh]['dx'])
+    rep['pod'] = (_rom(B, V, P[0:k + 1])[k] @ V[cu].T - th[k, cu]).tolist()
+    dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    for sens in ('S', 'L'):
+        net, dT = loadNet(pjoin(out, runName('pinn', mesh, sens) + '.pt'), dev)
+        with torch.no_grad():
+            f = predict(net, prepBoard(B, dev), P, dT, TS, rows=torch.as_tensor(cu, device=dev),
+                        tIdx=torch.as_tensor([k], device=dev)).cpu().numpy()[0]
+        rep['pinn' + sens] = (f - th[k, cu]).tolist()
+    print("INFO: field map %s, board %d, t = %.2f s: RMSE POD %.2f K, proposed S %.2f K, L %.2f K" %
+          (mesh, board, rep['t'], *[float(np.sqrt(np.mean(np.square(rep[m])))) for m in ('pod', 'pinnS', 'pinnL')]))
+    with open(pjoin(out, 'fieldmap_%s.json' % mesh), 'w') as f:
+        json.dump(rep, f, indent=1, default=float)
 
 
 #######################################################################################################################
@@ -315,7 +399,7 @@ def scale(mesh, out, lengths=(40.0, 300.0, 1800.0, 14400.0), nFV=300.0):
         net, dT = loadNet(pt, dev)
     if os.path.isfile(pjoin(out, runName('foster', mesh, 'L') + '.json')):
         mdlF = pfFoster.fitFam(fam(mesh, 'train'), NSENS['L'], 4, TS)
-    pp = pjoin(out, runName('pod', mesh, 'F') + '.json')
+    pp = pjoin(out, runName('podNom', mesh, 'F') + '.json')
     rPod = int(json.load(open(pp))['r']) if os.path.isfile(pp) else 32            # rank of the POD run of this mesh
     rep['rPod'] = rPod
     for Lsec in lengths:

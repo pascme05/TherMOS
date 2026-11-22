@@ -1,222 +1,82 @@
 {
- "Title": "Proposed network",
- "Description": "Physics-informed parametric operator network: sensor labels of the training boards plus the physics loss of the physics-only boards",
- "Para": [
-  {
-   "Name": "Space functions",
-   "Category": "Network",
-   "Description": "number of space functions phi_k (trunk outputs) and time constants tau_k per chip",
-   "Variable": "K",
-   "Value": 32,
-   "Unit": "-"
+  "Info": {
+    "title": "Proposed network",
+    "desc": "Physics-informed parametric operator network: sensor labels of the training boards plus the physics loss of the physics-only boards",
+    "_note": "Edit the values only. Keys starting with '_' are comments and are ignored. 'CHANGE' marks parameters that depend on the computer (GPU memory, runtime); all other values are those of the paper."
   },
-  {
-   "Name": "Trunk width",
-   "Category": "Network",
-   "Description": "neurons per hidden layer of the trunk network",
-   "Variable": "width",
-   "Value": 128,
-   "Unit": "-"
+  "Net": {
+    "K": 32,
+    "_K": "Space functions: number of space functions phi_k (trunk outputs) and time constants tau_k per chip",
+    "width": 128,
+    "_width": "Trunk width: neurons per hidden layer of the trunk network",
+    "depth": 4,
+    "_depth": "Trunk depth: number of hidden layers of the trunk network",
+    "nF": 4,
+    "_nF": "Fourier frequencies: Fourier frequencies per coordinate of the trunk input",
+    "rel": 1,
+    "_rel": "Relative coordinates: (1): coordinates relative to every chip as trunk inputs, (0): absolute coordinates only",
+    "tauCap": 80.0,
+    "_tauCap": "Maximum time constant: upper limit of the time constants: lambda_k >= 1/tauCap (s)"
   },
-  {
-   "Name": "Trunk depth",
-   "Category": "Network",
-   "Description": "number of hidden layers of the trunk network",
-   "Variable": "depth",
-   "Value": 4,
-   "Unit": "-"
+  "Loss": {
+    "alpha": 1.0,
+    "_alpha": "Data weight: weight of the data loss (labels at the sensor nodes)",
+    "beta": 1.0,
+    "_beta": "Physics weight: weight of the physics loss (finite-volume residual of the physics-only boards; 0: no physics)",
+    "gamma": 1.0,
+    "_gamma": "Steady-state weight: weight of the steady-state loss (sum of phi_k equals G^-1 Bp; 0: off)",
+    "phys": 1,
+    "_phys": "Physics-only boards: (1): use the physics-only boards (physics and steady-state loss), (0): labelled boards only"
   },
-  {
-   "Name": "Fourier frequencies",
-   "Category": "Network",
-   "Description": "Fourier frequencies per coordinate of the trunk input",
-   "Variable": "nF",
-   "Value": 4,
-   "Unit": "-"
+  "Train": {
+    "epoch": 200,
+    "_epoch": "maximum number of epochs; paper value, for a quick check of the chain use setup['epoch'] in the setup file instead",
+    "pat": 20,
+    "_pat": "Patience: early stopping after pat epochs without improvement of the validation RMSE (at the sensors)",
+    "nStep": 100,
+    "_nStep": "Steps per epoch: optimiser steps per epoch",
+    "lr": 0.001,
+    "_lr": "Learning rate: initial learning rate of Adam (halved after 5 epochs without improvement)",
+    "clip": 1.0,
+    "_clip": "Gradient clipping: maximum norm of the gradient",
+    "seed": 42,
+    "_seed": "CHANGE only for a repetition with another seed (spread of the results); paper: 42",
+    "Ts": 0.05,
+    "_Ts": "Sampling time: sampling time of the profiles (s)"
   },
-  {
-   "Name": "Relative coordinates",
-   "Category": "Network",
-   "Description": "(1): coordinates relative to every chip as trunk inputs, (0): absolute coordinates only",
-   "Variable": "rel",
-   "Value": 1,
-   "Unit": "-"
+  "Samp": {
+    "nbD": 4,
+    "_nbD": "Data boards per step: labelled profiles per optimiser step",
+    "nbP": 4,
+    "_nbP": "CHANGE (GPU memory): physics-only boards per optimiser step; memory per step ~ nbP x chips x N x K",
+    "nR": 1024,
+    "_nR": "CHANGE (GPU memory, runtime): nodes of the physics residual per board and step",
+    "nbS": 8,
+    "_nbS": "Steady-state boards: boards per step of the steady-state loss",
+    "tP": 30.0,
+    "_tP": "Physics profile length: length of the random loss profiles of the physics loss (s)",
+    "holdMin": 0.5,
+    "_holdMin": "Minimum hold time: minimum hold time of the random loss profiles of the physics loss (s)",
+    "holdMax": 8.0,
+    "_holdMax": "Maximum hold time: maximum hold time of the random loss profiles of the physics loss (s)",
+    "nCache": 16,
+    "_nCache": "CHANGE (GPU memory): boards of the physics loss with G^-1 in memory; dense G^-1 needs 4 N^2 bytes per board (coarse N = 790: 2.5 MB, medium N = 3551: 50 MB, 16 boards 0.8 GB). Reduce if CUDA runs out of memory (the physics loss then sees fewer boards per epoch), increase on larger GPUs",
+    "nNew": 4,
+    "_nNew": "Cache renewal: boards of the cache replaced per epoch",
+    "nDense": 8000,
+    "_nDense": "CHANGE (GPU memory): boards with more nodes keep only nR rows of G^-1 (sparse LU) instead of the dense inverse (8000: coarse and medium dense, fine rows) (nodes)"
   },
-  {
-   "Name": "Maximum time constant",
-   "Category": "Network",
-   "Description": "upper limit of the time constants: lambda_k >= 1/tauCap",
-   "Variable": "tauCap",
-   "Value": 80.0,
-   "Unit": "s"
-  },
-  {
-   "Name": "Data weight",
-   "Category": "Loss",
-   "Description": "weight of the data loss (labels at the sensor nodes)",
-   "Variable": "alpha",
-   "Value": 1.0,
-   "Unit": "-"
-  },
-  {
-   "Name": "Physics weight",
-   "Category": "Loss",
-   "Description": "weight of the physics loss (finite-volume residual of the physics-only boards; 0: no physics)",
-   "Variable": "beta",
-   "Value": 1.0,
-   "Unit": "-"
-  },
-  {
-   "Name": "Steady-state weight",
-   "Category": "Loss",
-   "Description": "weight of the steady-state loss (sum of phi_k equals G^-1 Bp; 0: off)",
-   "Variable": "gamma",
-   "Value": 1.0,
-   "Unit": "-"
-  },
-  {
-   "Name": "Physics-only boards",
-   "Category": "Loss",
-   "Description": "(1): use the physics-only boards (physics and steady-state loss), (0): labelled boards only",
-   "Variable": "phys",
-   "Value": 1,
-   "Unit": "-"
-  },
-  {
-   "Name": "Epochs",
-   "Category": "Training",
-   "Description": "maximum number of epochs",
-   "Variable": "epoch",
-   "Value": 200,
-   "Unit": "-"
-  },
-  {
-   "Name": "Patience",
-   "Category": "Training",
-   "Description": "early stopping after pat epochs without improvement of the validation RMSE (at the sensors)",
-   "Variable": "pat",
-   "Value": 20,
-   "Unit": "-"
-  },
-  {
-   "Name": "Steps per epoch",
-   "Category": "Training",
-   "Description": "optimiser steps per epoch",
-   "Variable": "nStep",
-   "Value": 100,
-   "Unit": "-"
-  },
-  {
-   "Name": "Learning rate",
-   "Category": "Training",
-   "Description": "initial learning rate of Adam (halved after 5 epochs without improvement)",
-   "Variable": "lr",
-   "Value": 0.001,
-   "Unit": "-"
-  },
-  {
-   "Name": "Gradient clipping",
-   "Category": "Training",
-   "Description": "maximum norm of the gradient",
-   "Variable": "clip",
-   "Value": 1.0,
-   "Unit": "-"
-  },
-  {
-   "Name": "Seed",
-   "Category": "Training",
-   "Description": "random seed (initialisation, sampling)",
-   "Variable": "seed",
-   "Value": 42,
-   "Unit": "-"
-  },
-  {
-   "Name": "Sampling time",
-   "Category": "Training",
-   "Description": "sampling time of the profiles",
-   "Variable": "Ts",
-   "Value": 0.05,
-   "Unit": "s"
-  },
-  {
-   "Name": "Data boards per step",
-   "Category": "Sampling",
-   "Description": "labelled profiles per optimiser step",
-   "Variable": "nbD",
-   "Value": 4,
-   "Unit": "-"
-  },
-  {
-   "Name": "Physics boards per step",
-   "Category": "Sampling",
-   "Description": "physics-only boards per optimiser step",
-   "Variable": "nbP",
-   "Value": 4,
-   "Unit": "-"
-  },
-  {
-   "Name": "Residual nodes",
-   "Category": "Sampling",
-   "Description": "nodes of the physics residual per board and step",
-   "Variable": "nR",
-   "Value": 1024,
-   "Unit": "-"
-  },
-  {
-   "Name": "Steady-state boards",
-   "Category": "Sampling",
-   "Description": "boards per step of the steady-state loss",
-   "Variable": "nbS",
-   "Value": 8,
-   "Unit": "-"
-  },
-  {
-   "Name": "Physics profile length",
-   "Category": "Sampling",
-   "Description": "length of the random loss profiles of the physics loss",
-   "Variable": "tP",
-   "Value": 30.0,
-   "Unit": "s"
-  },
-  {
-   "Name": "Minimum hold time",
-   "Category": "Sampling",
-   "Description": "minimum hold time of the random loss profiles of the physics loss",
-   "Variable": "holdMin",
-   "Value": 0.5,
-   "Unit": "s"
-  },
-  {
-   "Name": "Maximum hold time",
-   "Category": "Sampling",
-   "Description": "maximum hold time of the random loss profiles of the physics loss",
-   "Variable": "holdMax",
-   "Value": 8.0,
-   "Unit": "s"
-  },
-  {
-   "Name": "G^-1 cache",
-   "Category": "Sampling",
-   "Description": "boards of the physics loss with G^-1 in memory (dense 4 N^2 bytes, or nR rows 4 nR N bytes per board above nDense nodes)",
-   "Variable": "nCache",
-   "Value": 16,
-   "Unit": "-"
-  },
-  {
-   "Name": "Cache renewal",
-   "Category": "Sampling",
-   "Description": "boards of the cache replaced per epoch",
-   "Variable": "nNew",
-   "Value": 4,
-   "Unit": "-"
-  },
-  {
-   "Name": "Dense limit",
-   "Category": "Sampling",
-   "Description": "boards with more nodes keep only nR rows of G^-1 (sparse LU) instead of the dense inverse",
-   "Variable": "nDense",
-   "Value": 8000,
-   "Unit": "nodes"
+  "Mesh": {
+    "_note": "values that replace the ones above on a mesh (coarse, medium, fine)",
+    "fine": {
+      "nR": 2048,
+      "_nR": "CHANGE (GPU memory): rows of G^-1 per cached board on the fine mesh (N = 21080: 2048 rows = 173 MB per board)",
+      "nCache": 8,
+      "_nCache": "CHANGE (GPU memory): cached boards on the fine mesh (8 x 173 MB = 1.4 GB); reduce on GPUs < 8 GB",
+      "epoch": 300,
+      "_epoch": "maximum number of epochs on the fine mesh; runtime ~115 s per epoch on an RTX 3070 (8 GB), i.e. ~3-5 h per run with early stopping",
+      "pat": 30,
+      "_pat": "early-stopping patience on the fine mesh (epochs)"
+    }
   }
- ]
 }

@@ -17,9 +17,11 @@
 Main function of the setups of the PINN journal paper (setup/journal_pinn/journal_pinn_*.py, half-bridge module). It
 executes the parts of a setup in this order: data, runs (every method on every mesh, sensor version and number of
 training boards), memory and computational load, layout optimisation, figure scripts. The parameters are read from
-config/journal_pinn/<name>.json (list of parameters with Name, Category, Description, Variable, Value, Unit):
-data.json (meshes, data sets, operating points) and one file per method (foster, pod, pinn, nophys).
-Runs whose results exist are skipped (setup['skip'] = 1).
+config/journal_pinn/<name>.json (sections as in config/gui/start.json, '_<Variable>' keys are comments):
+data.json (meshes, data sets, operating points) and one file per method (foster, pod, pinn, nophys, deeponet); the
+methods fosterNom and podNom are the baselines fitted on the nominal layout (trainNom) with the parameters of foster and pod.
+The section Mesh of a method config (e.g. "fine": {"nR": 2048}) replaces values on that mesh.
+Runs whose results exist are skipped (setup['skip'] = 1); missing test sets of existing network runs are added.
 """
 
 #######################################################################################################################
@@ -62,10 +64,28 @@ NET = ('K', 'width', 'depth', 'nF', 'tauCap', 'alpha', 'beta', 'gamma', 'epoch',
 #######################################################################################################################
 # Additional Functions
 #######################################################################################################################
-def loadCfg(name):
-    """Parameters of config/journal_pinn/<name>.json as {Variable: Value}."""
+def readCfg(name):
+    """Config config/journal_pinn/<name>.json as it is (sections as in config/gui/start.json)."""
     with open(pjoin(base, 'config', 'journal_pinn', name + '.json'), encoding='utf-8') as f:
-        return {p['Variable']: p['Value'] for p in json.load(f)['Para']}
+        return json.load(f)
+
+
+def loadCfg(name):
+    """
+    Parameters of config/journal_pinn/<name>.json as {Variable: Value}: the sections (Net, Loss, ...) are merged, keys
+    starting with '_' are comments; the section Mesh gives '<Variable>_<mesh>' (e.g. nR_fine), which replaces
+    <Variable> on that mesh (runMethod).
+    """
+    out = {}
+    for sec, d in readCfg(name).items():
+        if sec == 'Info' or sec.startswith('_') or not isinstance(d, dict):
+            continue
+        if sec == 'Mesh':
+            out.update({'%s_%s' % (k, m): v for m, dm in d.items() if isinstance(dm, dict)
+                        for k, v in dm.items() if not k.startswith('_')})
+        else:
+            out.update({k: v for k, v in d.items() if not k.startswith('_')})
+    return out
 
 
 def applyData():
@@ -73,9 +93,9 @@ def applyData():
     from src.py.model.PF import pfParam
     from setup.tutorial import genBoardPFHB as g
     c = loadCfg('data')
-    for m in ('coarse', 'medium', 'fine'):
-        M = m.capitalize()
-        pfParam.MESH[m] = {'dx': c['dx' + M], 'dzMax': c['dz' + M] * 1e-3, 'rowMax': int(c['row' + M])}
+    for m, d in readCfg('data')['Mesh'].items():
+        if not m.startswith('_'):
+            pfParam.MESH[m] = {'dx': d['dx'], 'dzMax': d['dz'] * 1e-3, 'rowMax': int(d['row'])}
     g.SIZES.update({'train': c['nTrain'], 'val': c['nVal'], 'phys': c['nPhys'], 't1': c['nT1'], 'nProf': c['nProf']})
     g.TS, g.T_END, g.T4_END, g.DEC = c['Ts'], c['tEnd'], c['t4End'], int(c['dec'])
     g.OP.update({'Vdc': c['Vdc'], 'fs': c['fs'], 'Tj': c['Tj']})
@@ -96,15 +116,21 @@ def _script(name, args):
 # Parts
 #######################################################################################################################
 def runMethod(method, mesh, sens, nTr, out, epoch=0):
-    """One run of a method (foster, pod, pinn, nophys) on a mesh with a sensor version and nTr training boards."""
+    """
+    One run of a method (foster, fosterNom, pod, podNom, pinn, nophys, deeponet) on a mesh with a sensor version and
+    nTr training boards.
+    """
     from setup.tutorial import studyPFHB as st
-    c = loadCfg(method)
-    if method == 'foster':
-        st.runFoster(mesh, sens, int(c['K']), nTr, out)
-    elif method == 'pod':
-        st.runPOD(mesh, c['energy'], nTr, out, int(c['rMax']))
+    nom = method.endswith('Nom')
+    c = loadCfg(method[:-3] if nom else method)
+    c.update({k[:-len(mesh) - 1]: v for k, v in c.items() if k.endswith('_' + mesh)})      # mesh-specific values
+    if method.startswith('foster'):
+        st.runFoster(mesh, sens, int(c['K']), nTr, out, nom)
+    elif method.startswith('pod'):
+        st.runPOD(mesh, c['energy'], nTr, out, int(c['rMax']), nom)
     else:
         cfg = {k: c[k] for k in NET}
+        cfg.update({k: c[k] for k in ('arch', 'hid', 'layers') if k in c})                   # deeponet
         cfg.update(rel=bool(c['rel']), holds=(c['holdMin'], c['holdMax']))
         st.runNet(method, mesh, sens, cfg, nTr, out, epoch, bool(c['phys']))
 
@@ -132,12 +158,19 @@ def main(setup):
     for mesh in setup['mesh']:
         for nTr in setup['nTrain']:
             for method in setup['methods']:
-                for sens in (['F'] if method == 'pod' else setup['sens']):
+                for sens in (['F'] if method.startswith('pod') else setup['sens']):
                     name = st.runName(method, mesh, sens, nTr)
                     if skip and isfile(pjoin(out, name + '.json')):
                         print("INFO: run %s exists, skipped" % name)
+                        if method in ('pinn', 'nophys', 'deeponet'):
+                            st.addTests(name, out)
                         continue
                     runMethod(method, mesh, sens, nTr, out, epoch)
+
+    # field map of a nominal testing board (FV and errors of POD and the networks)
+    for mesh in setup.get('fieldmap', []):
+        if not (skip and isfile(pjoin(out, 'fieldmap_%s.json' % mesh))):
+            st.fieldMap(mesh, out)
 
     # memory and computational load
     if setup['scale']:

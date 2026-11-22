@@ -28,7 +28,8 @@ Loss (dimensionless, θ scaled with the 99 % quantile ΔT of the labelled rises)
        r = (G⁻¹·C·dθ̂/dt + θ̂ − G⁻¹·Bp·P)/ΔT = Σ_c (M_c·db_c + Φ_c·b_c) − Θ_c·p̂_c·P_ref/ΔT
 
    with Φ_c (N x K) the space functions of chip c at the nodes, M_c = G⁻¹·C·Φ_c, Θ_c = G⁻¹·Bp_c (steady state per W)
-   and db/dt from the lag equation (exact, no finite differences). L_P = mean(r²). Only the rows of G⁻¹ at the
+   and db/dt from the lag equation (exact, no finite differences; pfDeepONet: backward difference). L_P = mean(r²).
+   Only the rows of G⁻¹ at the
    residual nodes are needed: G⁻¹ is inverted densely on the GPU (Cholesky, float64) for a cache of nCache boards of
    the pool, nNew of them are replaced every epoch.
 3) Steady state (all boards of the pool, needs only Θ = G⁻¹·Bp, one sparse LU per board): for a constant loss the
@@ -49,7 +50,8 @@ computed (sparse LU, G symmetric: G⁻¹[rows, :] = (G⁻¹·E_rows)ᵀ), which 
 Boards with different numbers of nodes (e.g. a coarse grid on which the die footprints cover a different number of
 cells depending on the position) are padded to the largest N: the padded nodes repeat node 0, have C = 0 and zero
 columns of G⁻¹, and the residual nodes are drawn per board from its own nodes, so the padding never enters a loss.
-Functions:  prepBoard(B, dev), ginv(B, dev), steady(B), predict(net, bt, P, dT, Ts, rows, tIdx), physRes(...),
+Functions:  buildNet(cfg, nCtx), prepBoard(B, dev), ginv(B, dev), steady(B), predict(net, bt, P, dT, Ts, rows, tIdx),
+            physRes(...),
             ssRes(...), fitParam(train, phys, val, cfg), evalBoard(net, B, dT, ...)
 
 V1.0: 21.11.2026, Pascal Schirmer
@@ -60,6 +62,10 @@ V1.1: 21.11.2026, Pascal Schirmer
 
 V1.2: 21.11.2026, Pascal Schirmer
 - Sensor labels (cfg 'sens') and rows of G⁻¹ for large boards (cfg 'nDense')
+
+V1.3: 22.11.2026, Pascal Schirmer
+- Baseline physics-informed DeepONet (cfg 'arch' deeponet, net.seq gives b and db/dt for both networks, buildNet);
+  its steady-state loss is not used (γ = 0), since its coefficients do not settle at p̂ by construction
 """
 
 #######################################################################################################################
@@ -68,7 +74,7 @@ V1.2: 21.11.2026, Pascal Schirmer
 # ==============================================================================
 # Internal
 # ==============================================================================
-from src.py.model.PF.pfNet import pfModal
+from src.py.model.PF.pfNet import pfModal, pfDeepONet
 from src.py.model.PF.pfParam import P_REF, xHat, chipRel, chipCtx, muHat, randProfile
 
 # ==============================================================================
@@ -85,12 +91,20 @@ import torch
 CFG = {'K': 32, 'width': 128, 'depth': 4, 'nF': 4, 'rel': True, 'alpha': 1.0, 'beta': 1.0, 'lr': 1e-3,
        'nStep': 100, 'epoch': 200, 'pat': 20, 'nbD': 4, 'nD': 1024, 'nbP': 4, 'nR': 1024, 'tP': 30.0,
        'holds': (0.5, 8.0), 'Ts': 0.05, 'seed': 42, 'clip': 1.0, 'nCache': 32, 'nNew': 8, 'gamma': 1.0, 'nbS': 8,
-       'tauCap': 80.0, 'sens': 0, 'nDense': 8000}
+       'tauCap': 80.0, 'sens': 0, 'nDense': 8000, 'arch': 'modal', 'hid': 64, 'layers': 2}
 
 
 #######################################################################################################################
 # Additional Functions
 #######################################################################################################################
+def buildNet(cfg, nCtx=11):
+    """Network of the config: 'arch' modal (pfModal, exact lags) or deeponet (pfDeepONet, recurrent branch)."""
+    if cfg.get('arch', 'modal') == 'deeponet':
+        return pfDeepONet(5, nCtx, cfg['K'], cfg['width'], cfg['depth'], cfg['nF'], rel=cfg['rel'],
+                          hid=cfg.get('hid', 64), layers=cfg.get('layers', 2))
+    return pfModal(5, nCtx, cfg['K'], cfg['width'], cfg['depth'], cfg['nF'], rel=cfg['rel'], tauCap=cfg.get('tauCap'))
+
+
 def _t(a, dev):
     return torch.as_tensor(np.asarray(a), dtype=torch.float32, device=dev)
 
@@ -158,7 +172,7 @@ def predict(net, bt, P, dT, Ts, rows=None, tIdx=None, scaled=False):
     p = (P if torch.is_tensor(P) else _t(P, dev)).T / P_REF                    # nc x L
     xs = bt['xs'] if rows is None else bt['xs'][:, rows]
     phi = net.basis(xs, bt['ctx'])                                              # nc x n x K
-    b = net.coeff(p, net.rates(bt['ctx']), Ts)                                  # nc x L x K
+    b = net.seq(p, bt['ctx'], Ts)[0]                                            # nc x L x K
     if tIdx is not None:
         b = b[:, tIdx]
     out = torch.einsum('clk,cnk->ln', b, phi)
@@ -174,9 +188,7 @@ def physRes(net, xs, ctx, C, GiR, ThR, rows, P, dT, Ts):
     p = P.transpose(1, 2) / P_REF                                               # B x nc x L
     p0 = torch.cat([torch.zeros_like(p[..., 0:1]), p[..., 1:]], dim=-1)
     phi = net.basis(xs, ctx)                                                    # B x nc x N x K
-    lam = net.rates(ctx)                                                        # B x nc x K
-    b = net.coeff(p, lam, Ts)                                                   # B x nc x L x K
-    db = lam[..., None, :] * (p0[..., None] - b)
+    b, db = net.seq(p, ctx, Ts)                                                 # B x nc x L x K (b and db/dt)
     nb, nc, N, K = phi.shape
     Cphi = (C[:, :, None, None] * phi.permute(0, 2, 1, 3)).reshape(nb, N, nc * K)         # B x N x nc·K
     Mr = torch.bmm(GiR, Cphi).reshape(nb, -1, nc, K).permute(0, 2, 1, 3)                  # B x nc x n x K
@@ -246,12 +258,12 @@ def fitParam(train, phys, val, cfg=None, dev=None, log=print):
     # ==============================================================================
     # Network
     # ==============================================================================
-    net = pfModal(5, CTX.shape[-1], cfg['K'], cfg['width'], cfg['depth'], cfg['nF'], rel=cfg['rel'],
-                  tauCap=cfg['tauCap']).to(dev)
+    net = buildNet(cfg, CTX.shape[-1]).to(dev)
     opt = torch.optim.Adam(net.parameters(), lr=cfg['lr'])
     sch = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=0.5, patience=5)
-    log("INFO: pfModal with K = %d, trunk %d x %d, %d Fourier frequencies, relative coordinates %s, %d parameters" %
-        (cfg['K'], cfg['depth'], cfg['width'], cfg['nF'], cfg['rel'], sum(q.numel() for q in net.parameters())))
+    log("INFO: %s with K = %d, trunk %d x %d, %d Fourier frequencies, relative coordinates %s, %d parameters" %
+        (type(net).__name__, cfg['K'], cfg['depth'], cfg['width'], cfg['nF'], cfg['rel'],
+         sum(q.numel() for q in net.parameters())))
 
     def valRmse():
         se, n = 0.0, 0
@@ -309,7 +321,7 @@ def fitParam(train, phys, val, cfg=None, dev=None, log=print):
             xs = torch.gather(XS[bi], 2, rows[:, None, :, None].expand(-1, XS.shape[1], -1, XS.shape[-1]))
             p = sP[j].transpose(1, 2) / P_REF
             phi = net.basis(xs, CTX[bi])
-            b = net.coeff(p, net.rates(CTX[bi]), Ts)
+            b = net.seq(p, CTX[bi], Ts)[0]
             pred = torch.einsum('bclk,bcnk->bln', b, phi)
             tgt = sTh[j] if nS else torch.gather(sTh[j], 2, rows[:, None, :].expand(-1, sTh.shape[1], -1))
             lD = torch.mean((pred - tgt) ** 2)

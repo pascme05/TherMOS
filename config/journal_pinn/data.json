@@ -1,214 +1,73 @@
 {
- "Title": "Data sets",
- "Description": "Half-bridge module: meshes, data sets and operating points (genBoardPFHB.py)",
- "Para": [
-  {
-   "Name": "Coarse grid",
-   "Category": "Mesh",
-   "Description": "lateral grid spacing dx = dy of the coarse mesh",
-   "Variable": "dxCoarse",
-   "Value": 2.0,
-   "Unit": "mm"
+  "Info": {
+    "title": "Data sets",
+    "desc": "Half-bridge module: meshes, data sets and operating points (genBoardPFHB.py)",
+    "_note": "Edit the values only. Keys starting with '_' are comments and are ignored. 'CHANGE' marks parameters that depend on the computer (GPU memory, runtime); all other values are those of the paper."
   },
-  {
-   "Name": "Coarse row height",
-   "Category": "Mesh",
-   "Description": "maximum height of a node row of the coarse mesh",
-   "Variable": "dzCoarse",
-   "Value": 1.0,
-   "Unit": "mm"
+  "Mesh": {
+    "coarse": {
+      "dx": 2.0,
+      "_dx": "Coarse grid: lateral grid spacing dx = dy of the coarse mesh (mm)",
+      "dz": 1.0,
+      "_dz": "Coarse row height: maximum height of a node row of the coarse mesh (mm)",
+      "row": 2,
+      "_row": "Coarse rows per layer: maximum number of node rows per layer of the coarse mesh"
+    },
+    "medium": {
+      "dx": 1.0,
+      "_dx": "Medium grid: lateral grid spacing of the medium mesh (mm)",
+      "dz": 0.5,
+      "_dz": "Medium row height: maximum height of a node row of the medium mesh (mm)",
+      "row": 4,
+      "_row": "Medium rows per layer: maximum number of node rows per layer of the medium mesh"
+    },
+    "fine": {
+      "dx": 0.5,
+      "_dx": "Fine grid: lateral grid spacing of the fine mesh (mm)",
+      "dz": 0.25,
+      "_dz": "Fine row height: maximum height of a node row of the fine mesh (mm)",
+      "row": 6,
+      "_row": "Fine rows per layer: maximum number of node rows per layer of the fine mesh"
+    }
   },
-  {
-   "Name": "Coarse rows per layer",
-   "Category": "Mesh",
-   "Description": "maximum number of node rows per layer of the coarse mesh",
-   "Variable": "rowCoarse",
-   "Value": 2,
-   "Unit": "-"
+  "Sets": {
+    "nTrain": 24,
+    "_nTrain": "Training boards: labelled boards of the training set (condition and chip positions vary, centres outside the band x_c = 12-16 mm); do not change for the paper (all results depend on the data sets)",
+    "nProf": 2,
+    "_nProf": "Profiles per training board: random operating-point profiles per training board; do not change for the paper (all results depend on the data sets)",
+    "nVal": 6,
+    "_nVal": "Validation boards: labelled boards of the validation set (early stopping); do not change for the paper (all results depend on the data sets)",
+    "nPhys": 200,
+    "_nPhys": "Physics-only boards: boards without simulation (only C, G, Bp) for the physics loss of the network; do not change for the paper (all results depend on the data sets)",
+    "nT1": 10,
+    "_nT1": "Test boards T1: boards of the test set T1 (inside the training domain); do not change for the paper (all results depend on the data sets)"
   },
-  {
-   "Name": "Medium grid",
-   "Category": "Mesh",
-   "Description": "lateral grid spacing of the medium mesh",
-   "Variable": "dxMedium",
-   "Value": 1.0,
-   "Unit": "mm"
+  "Prof": {
+    "Ts": 0.05,
+    "_Ts": "Sampling time: sampling time of all profiles and models (s)",
+    "tEnd": 40.0,
+    "_tEnd": "Profile length: length of the training, validation and test profiles T1-T3 (s)",
+    "t4End": 1800.0,
+    "_t4End": "Mission length: length of the drive-cycle mission T4 (from cold) (s)",
+    "dec": 10,
+    "_dec": "Field decimation: the full temperature field is stored every dec samples (POD snapshots, field errors); the sensors are stored at every sample"
   },
-  {
-   "Name": "Medium row height",
-   "Category": "Mesh",
-   "Description": "maximum height of a node row of the medium mesh",
-   "Variable": "dzMedium",
-   "Value": 0.5,
-   "Unit": "mm"
-  },
-  {
-   "Name": "Medium rows per layer",
-   "Category": "Mesh",
-   "Description": "maximum number of node rows per layer of the medium mesh",
-   "Variable": "rowMedium",
-   "Value": 4,
-   "Unit": "-"
-  },
-  {
-   "Name": "Fine grid",
-   "Category": "Mesh",
-   "Description": "lateral grid spacing of the fine mesh",
-   "Variable": "dxFine",
-   "Value": 0.5,
-   "Unit": "mm"
-  },
-  {
-   "Name": "Fine row height",
-   "Category": "Mesh",
-   "Description": "maximum height of a node row of the fine mesh",
-   "Variable": "dzFine",
-   "Value": 0.25,
-   "Unit": "mm"
-  },
-  {
-   "Name": "Fine rows per layer",
-   "Category": "Mesh",
-   "Description": "maximum number of node rows per layer of the fine mesh",
-   "Variable": "rowFine",
-   "Value": 6,
-   "Unit": "-"
-  },
-  {
-   "Name": "Training boards",
-   "Category": "Sets",
-   "Description": "labelled boards of the training set (condition and chip positions vary, centres outside the band x_c = 12-16 mm)",
-   "Variable": "nTrain",
-   "Value": 24,
-   "Unit": "-"
-  },
-  {
-   "Name": "Profiles per training board",
-   "Category": "Sets",
-   "Description": "random operating-point profiles per training board",
-   "Variable": "nProf",
-   "Value": 2,
-   "Unit": "-"
-  },
-  {
-   "Name": "Validation boards",
-   "Category": "Sets",
-   "Description": "labelled boards of the validation set (early stopping)",
-   "Variable": "nVal",
-   "Value": 6,
-   "Unit": "-"
-  },
-  {
-   "Name": "Physics-only boards",
-   "Category": "Sets",
-   "Description": "boards without simulation (only C, G, Bp) for the physics loss of the network",
-   "Variable": "nPhys",
-   "Value": 200,
-   "Unit": "-"
-  },
-  {
-   "Name": "Test boards T1",
-   "Category": "Sets",
-   "Description": "boards of the test set T1 (inside the training domain)",
-   "Variable": "nT1",
-   "Value": 10,
-   "Unit": "-"
-  },
-  {
-   "Name": "Sampling time",
-   "Category": "Profile",
-   "Description": "sampling time of all profiles and models",
-   "Variable": "Ts",
-   "Value": 0.05,
-   "Unit": "s"
-  },
-  {
-   "Name": "Profile length",
-   "Category": "Profile",
-   "Description": "length of the training, validation and test profiles T1-T3",
-   "Variable": "tEnd",
-   "Value": 40.0,
-   "Unit": "s"
-  },
-  {
-   "Name": "Mission length",
-   "Category": "Profile",
-   "Description": "length of the drive-cycle mission T4 (from cold)",
-   "Variable": "t4End",
-   "Value": 1800.0,
-   "Unit": "s"
-  },
-  {
-   "Name": "Field decimation",
-   "Category": "Profile",
-   "Description": "the full temperature field is stored every dec samples (POD snapshots, field errors); the sensors are stored at every sample",
-   "Variable": "dec",
-   "Value": 10,
-   "Unit": "-"
-  },
-  {
-   "Name": "DC-link voltage",
-   "Category": "Operating point",
-   "Description": "DC-link voltage of the half-bridge",
-   "Variable": "Vdc",
-   "Value": 400.0,
-   "Unit": "V"
-  },
-  {
-   "Name": "Switching frequency",
-   "Category": "Operating point",
-   "Description": "PWM switching frequency",
-   "Variable": "fs",
-   "Value": 5000.0,
-   "Unit": "Hz"
-  },
-  {
-   "Name": "Junction temperature",
-   "Category": "Operating point",
-   "Description": "junction temperature of the device parameters (fixed, linear thermal model)",
-   "Variable": "Tj",
-   "Value": 125.0,
-   "Unit": "degC"
-  },
-  {
-   "Name": "Maximum current",
-   "Category": "Operating point",
-   "Description": "maximum phase current amplitude of the random operating points (0 ... Imax)",
-   "Variable": "Imax",
-   "Value": 30.0,
-   "Unit": "A"
-  },
-  {
-   "Name": "Minimum output frequency",
-   "Category": "Operating point",
-   "Description": "minimum output frequency (start-up, stall: losses alternate between high and low side)",
-   "Variable": "foMin",
-   "Value": 0.5,
-   "Unit": "Hz"
-  },
-  {
-   "Name": "Maximum output frequency",
-   "Category": "Operating point",
-   "Description": "maximum output frequency (nominal operation: high and low side carry the same mean loss)",
-   "Variable": "foMax",
-   "Value": 50.0,
-   "Unit": "Hz"
-  },
-  {
-   "Name": "Minimum hold time",
-   "Category": "Operating point",
-   "Description": "minimum duration of a random operating point",
-   "Variable": "holdMin",
-   "Value": 0.5,
-   "Unit": "s"
-  },
-  {
-   "Name": "Maximum hold time",
-   "Category": "Operating point",
-   "Description": "maximum duration of a random operating point",
-   "Variable": "holdMax",
-   "Value": 8.0,
-   "Unit": "s"
+  "Op": {
+    "Vdc": 400.0,
+    "_Vdc": "DC-link voltage: DC-link voltage of the half-bridge (V)",
+    "fs": 5000.0,
+    "_fs": "Switching frequency: PWM switching frequency (Hz)",
+    "Tj": 125.0,
+    "_Tj": "Junction temperature: junction temperature of the device parameters (fixed, linear thermal model) (degC)",
+    "Imax": 30.0,
+    "_Imax": "Maximum current: maximum phase current amplitude of the random operating points (0 ... Imax) (A)",
+    "foMin": 0.5,
+    "_foMin": "Minimum output frequency: minimum output frequency (start-up, stall: losses alternate between high and low side) (Hz)",
+    "foMax": 50.0,
+    "_foMax": "Maximum output frequency: maximum output frequency (nominal operation: high and low side carry the same mean loss) (Hz)",
+    "holdMin": 0.5,
+    "_holdMin": "Minimum hold time: minimum duration of a random operating point (s)",
+    "holdMax": 8.0,
+    "_holdMax": "Maximum hold time: maximum duration of a random operating point (s)"
   }
- ]
 }
