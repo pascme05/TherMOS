@@ -191,7 +191,7 @@ def main(setup):
     applyData()
 
     # data
-    if setup['data']:
+    if setup.get('data'):
         from setup.tutorial import genBoardPFHB
         genBoardPFHB.main(setup['data'], None, bool(skip))
 
