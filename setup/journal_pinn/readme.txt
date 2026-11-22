@@ -35,3 +35,4 @@ podNom (sensors F: full field), pinn, nophys, deeponet.
 A test on another computer: set setup['out'] (e.g. 'results/pfhb_test') and setup['name'], for a quick check of the
 whole chain setup['epoch'] = 2; adapt the GPU memory in config/journal_pinn/pinn.json, nophys.json, deeponet.json
 (entries with CHANGE: nCache, nbP, nR, Mesh/fine).
+GUI: python start_gui.py, page Journals > PINN journal (all setups, their settings, runs, logs and results).

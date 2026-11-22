@@ -19,7 +19,8 @@ root folder of the repository.
 Pages:  1) Project:     run settings, input files, shared parameters; input data
         2) Modes:       workflow, parameters, inputs, theory, run and results of every operating mode
         3) Results:     browser of all results folders
-        4) Help:        tutorials, documentation (docs/GUI.md) and parameter reference
+        4) Journals:    setups of the TherMOS and PINN journal papers (load, settings, run, results)
+        5) Help:       tutorials, documentation (docs/GUI.md) and parameter reference
 The configuration is edited in the GUI and saved/loaded as JSON (sidebar); config workbooks can be imported.
 """
 
@@ -42,7 +43,7 @@ import streamlit as st
 from gui.core import config as conf
 from gui.core import forms
 from gui.core import tutorials as tut
-from gui.views import project, inputs, mode, results, docs, tutorials, study
+from gui.views import project, inputs, mode, results, docs, tutorials, study, journals
 from gui.views.registry import PAGES
 
 #######################################################################################################################
@@ -135,6 +136,10 @@ PAGES.update({m: st.Page(mode.make_page(m), title=f"{m} · {d['title']}" if mult
                          url_path=f"mode{m}") for m, d in A.MODES.items()})
 PAGES['study'] = st.Page(study.page, title='Study', icon=':material/tune:', url_path='study')
 PAGES['results'] = st.Page(results.page, title='Results browser', icon=':material/folder_data:', url_path='results')
+PAGES['journal-thermos'] = st.Page(journals.thermos_page, title='TherMOS journal', icon=':material/article:',
+                                   url_path='journal-thermos')
+PAGES['journal-pinn'] = st.Page(journals.pinn_page, title='PINN journal', icon=':material/description:',
+                                url_path='journal-pinn')
 TOOLS = {}
 for _url, (_mod, _title, _icon) in A.TOOLS.items():
     try:
@@ -149,6 +154,7 @@ pages = {
     'Operating modes' if multi else 'Simulation': [PAGES[m] for m in A.MODES] + [PAGES['study']],
     'Theory & Tools': list(TOOLS.values()),
     'Results': [PAGES['results']],
+    'Journals': [PAGES['journal-thermos'], PAGES['journal-pinn']],
     'Help': ([st.Page(tutorials.page, title='Tutorials', icon=':material/school:', url_path='tutorials')]
              if tut.TUTORIALS else []) +
             [st.Page(docs.page, title='Documentation', icon=':material/menu_book:', url_path='docs')],

@@ -30,6 +30,7 @@ python start_gui.py                      # opens http://localhost:8501
 | **Operating modes** | One page per model family (RC, SS, SF, PO, PS, ML, DL, PI, PF, KR) plus the **Study** page; the Inputs view of every mode starts with a box *What this mode needs* (to build, to predict a new case, for a new design) |
 | **Theory & Tools** | Power losses, Thermal stack, Hand calculator, Thermal networks, MOR & POD, Numerics, Neural networks, Board designer, Design effects |
 | **Results** | Browser of all results folders, including runs started from the start scripts |
+| **Journals** | Setups of the TherMOS and the PINN journal paper: load, settings, run, results (section 7) |
 | **Help** | Tutorials and this guide |
 
 **Project settings**
@@ -430,6 +431,15 @@ The board designer builds a finite-volume model of a board with chips. The model
 optimisation and a feature selection. *Load* sets the configuration of the tutorial (or the settings of the Study or
 board page) and opens the page. *What you should see* contains numbers from real runs of the tutorial
 configurations. The configs are in `config/gui/tutorials/`; regenerate them with `python -m gui.core.tutorials`.
+
+**Journals** (`gui/views/journals.py`, `gui/core/journals.py`) reproduce the results of the two papers:
+- *TherMOS journal*: one card per setup of `setup/journal` (Sec. IV-B to IV-D, 3D IMS). *Load setup* sets its GUI
+  config (`config/gui/<setup>.json`) and opens the operating mode; *Run* there reproduces the result.
+- *PINN journal*: the setups of `setup/journal_pinn` in run order with the results of the paper they produce, the
+  runtime and how many of their results exist. Per setup: *Description & results* (expected files, present or
+  missing, hot-spot RMSE per testing set; figure PDFs), *Settings* (all values, CHANGE marks the lines to adapt;
+  used by *Run* or saved into the setup file), *Run* (background process, log in `<out>/logs/<name>.log`, stop,
+  command line) and *Method configs* (`config/journal_pinn/*.json` as a table with the comment of every parameter).
 
 ## 8. Configurations and results
 
