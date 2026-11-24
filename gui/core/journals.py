@@ -64,10 +64,12 @@ THERMOS_DIR = 'setup/journal'
 # PINN journal: setup (run order) -> results of the paper, runtime (RTX 3070, estimates of setup/journal_pinn/readme)
 PINN = [
     dict(id='journal_pinn_Tab_IV_V_data', res="Tables IV, V; Figs. 4, 5", what="Data sets on 3 meshes", time="~2 h"),
-    dict(id='journal_pinn_Tab_VII_nominal', res="Table VII", what="Nominal layout N1, T2, T4: Foster, POD, networks",
-         time="~20 h"),
+    dict(id='journal_pinn_Tab_VII_nominal', res="Table VII", what="Nominal layout N1, T2, T4, T5: Foster, POD, networks",
+         time="~30 h"),
     dict(id='journal_pinn_Tab_X_Fig_10_variable', res="Table X, Fig. 10", what="Variable layouts T1, T3",
          time="~1 h (shared runs)"),
+    dict(id='journal_pinn_ablation', res="Ablation (Section IV-A)",
+         what="Steps of the proposed network: heads, physics boards, moment loss", time="~3 h"),
     dict(id='journal_pinn_Tab_VIII_IX_Fig_6_7_8_9_medium', res="Tables VIII, IX; Figs. 6-9",
          what="Medium mesh details, field map", time="~10 min (after 2, 3)"),
     dict(id='journal_pinn_Fig_11_samples', res="Fig. 11", what="Number of training boards", time="~5 h"),
@@ -76,10 +78,11 @@ PINN = [
     dict(id='journal_pinn_Fig_13_layout', res="Fig. 13", what="Layout optimisation", time="~10 min"),
     dict(id='journal_pinn_figures', res="all figures and tables", what="Figure data and PDFs (docu/paper)",
          time="~5 min"),
-    dict(id='journal_pinn_all', res="all (setups 1-8)", what="All setups in one go (setup['setups'])",
-         time="~30 h"),
+    dict(id='journal_pinn_all', res="all (setups 1-9)", what="All setups in one go (setup['setups'])",
+         time="~42 h"),
 ]
-PINN_METHODS = ['foster', 'fosterNom', 'podNom', 'pinn', 'nophys', 'deeponet']
+PINN_METHODS = ['foster', 'fosterNom', 'podNom', 'pinn', 'nophys', 'deeponet', 'deeponetExt', 'pinnBase', 'pinnLin',
+                'pinnLinBoth', 'pinnExt']
 MESHES = ['coarse', 'medium', 'fine']
 
 
@@ -166,19 +169,19 @@ def status(setup):
         res = []
         for sid in setup['setups']:
             if os.path.isfile(script(sid)):
-                s = dict(setup_dict(script(sid)), out=setup.get('out', 'results/pfhb'))
+                s = dict(setup_dict(script(sid)), out=setup.get('out', 'results/pfhb_v2'))
                 res += [r for r in status(s) if r not in res]
         return res
-    out = os.path.join(ROOT, setup.get('out', 'results/pfhb'))
+    out = os.path.join(ROOT, setup.get('out', 'results/pfhb_v2'))
     st = [(f, os.path.isdir(os.path.join(ROOT, f)) and bool(os.listdir(os.path.join(ROOT, f))))
           for f in data_sets(setup)]
     return st + [(f, os.path.isfile(os.path.join(out, f))) for f in expected(setup)]
 
 
-TESTS = ['n1', 't1', 't2', 't3', 't4']                                # testing sets of the paper (Table V)
+TESTS = ['n1', 't1', 't2', 't3', 't4', 't5']                              # testing sets of the paper (Table V)
 
 
-def summary(name, out='results/pfhb'):
+def summary(name, out='results/pfhb_v2'):
     """Hot-spot RMSE (K) per testing set and training time (s) of a run result, {} if not a run result."""
     try:
         with open(os.path.join(ROOT, out, name), encoding='utf-8') as f:
@@ -195,7 +198,7 @@ def summary(name, out='results/pfhb'):
 # Runs (background process)
 #######################################################################################################################
 def log_file(setup):
-    return os.path.join(ROOT, setup.get('out', 'results/pfhb'), 'logs', '%s.log' % setup.get('name', 'run'))
+    return os.path.join(ROOT, setup.get('out', 'results/pfhb_v2'), 'logs', '%s.log' % setup.get('name', 'run'))
 
 
 def command(path, changes=None):

@@ -28,7 +28,7 @@ variable layouts (train) and evaluated on all test sets (addTests completes the 
 Sensor versions: S = 4 hot spots, L = 16 points (hot spots, 4 NTC positions, 8 points on the Al base).
 Errors (K) against the finite-volume model of the same mesh: hot spots (all methods, every sample) and the whole
 field (pod, pinn; every DEC-th sample): MAE, RMSE, MAX, pooled over the boards of a test set, plus the runtime per board.
-Results: results/pfhb/<run>.json (+ .pt of the networks), run = <method>_<mesh>_<sens>[_n<nTr>].
+Results: results/pfhb_v2/<run>.json (+ .pt of the networks), run = <method>_<mesh>_<sens>[_n<nTr>].
 Functions:  runNet, addTests, runFoster, podBasis, runPOD, scale, optLayout
 """
 
@@ -182,7 +182,7 @@ def netPred(net, dT, dev):
 def runNet(method, mesh, sens, cfg, nTr, out, epoch=0, usePhys=True, physSet='phys'):
     """
     Trains the network on the first nTr labelled boards (labels at the sensors) and evaluates it; physSet: set of the
-    physics-only boards (phys: labelled range of h, physExt: h extended below the labelled range).
+    physics-only boards (phys: labelled range of h, physExt: h extended below the labelled range, 'phys+physExt': both).
     """
     name = runName(method, mesh, sens, nTr)
     dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -190,7 +190,7 @@ def runNet(method, mesh, sens, cfg, nTr, out, epoch=0, usePhys=True, physSet='ph
     if not usePhys:
         cfg.update(beta=0.0, gamma=0.0)
     train, val = fam(mesh, 'train')[0:nTr], fam(mesh, 'val')
-    phys = fam(mesh, physSet) if usePhys else []
+    phys = [B for s in physSet.split('+') for B in fam(mesh, s)] if usePhys else []   # e.g. 'phys+physExt'
     print("START: run %s (%d labelled, %d physics-only boards of %s, %s labels) on %s" %
           (name, len(train), len(phys), physSet, sens, dev))
     res = fitParam(train, phys, val, cfg, dev)

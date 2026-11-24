@@ -102,7 +102,8 @@ def buildNet(cfg, nCtx=11):
     if cfg.get('arch', 'modal') == 'deeponet':
         return pfDeepONet(5, nCtx, cfg['K'], cfg['width'], cfg['depth'], cfg['nF'], rel=cfg['rel'],
                           hid=cfg.get('hid', 64), layers=cfg.get('layers', 2))
-    return pfModal(5, nCtx, cfg['K'], cfg['width'], cfg['depth'], cfg['nF'], rel=cfg['rel'], tauCap=cfg.get('tauCap'))
+    return pfModal(5, nCtx, cfg['K'], cfg['width'], cfg['depth'], cfg['nF'], rel=cfg['rel'], tauCap=cfg.get('tauCap'),
+                   lin=bool(cfg.get('lin', False)))
 
 
 def _t(a, dev):
@@ -247,6 +248,22 @@ def fitParam(train, phys, val, cfg=None, dev=None, log=print):
     for b in bPo:
         b['xsP'] = _pad(b['xs'], N, 1, True)
     thS = [_t(steady(B), dev) for B in pool] if useSS else []
+    # moment loss (delta > 0): Σ_k φ_k/λ_k^j = (G⁻¹C)^j·Θ·P_ref/ΔT, j = 1 … nMom, i.e., the moments of the transfer
+    # function (G + sC)⁻¹·Bp = Σ_j (−s)^j (G⁻¹C)^j Θ of every board of the pool; they are dominated by the slow modes and
+    # constrain the time constants (j = 0 is the steady-state loss). Each moment is scaled with rms(Θ)/rms(m_j).
+    wM, nMom = float(cfg.get('delta', 0.0)), int(cfg.get('nMom', 2))
+    mom, momS = [], []
+    if wM > 0 and pool:
+        from scipy.sparse.linalg import splu
+        for B in pool:
+            lu, v, ms, ss = splu(B['G'].tocsc()), steady(B), [], []
+            r0 = np.sqrt(np.mean(v ** 2))
+            for _ in range(0, nMom):
+                v = lu.solve(np.asarray(B['C'], dtype=float)[:, None] * v)
+                ms.append(_t(v, dev))
+                ss.append(r0 / np.sqrt(np.mean(v ** 2)))
+            mom.append(ms)
+            momS.append(ss)
     nR = min(cfg['nR'], N0)
     bVa = [prepBoard(B, dev) for B in val]
     cache = {}
@@ -300,14 +317,14 @@ def fitParam(train, phys, val, cfg=None, dev=None, log=print):
     # Training
     # ==============================================================================
     best, bestNet, wait = np.inf, copy.deepcopy(net.state_dict()), 0
-    hist = {'loss': [], 'lossData': [], 'lossPhys': [], 'lossSS': [], 'val': [], 'lr': [], 'time': []}
+    hist = {'loss': [], 'lossData': [], 'lossPhys': [], 'lossSS': [], 'lossMom': [], 'val': [], 'lr': [], 'time': []}
     t0 = time.time()
     for ep in range(0, cfg['epoch']):
         net.train()
         if usePhys:
             refresh()
             keys = list(cache.keys())
-        acc = np.zeros(4)
+        acc = np.zeros(5)
         for _ in range(0, cfg['nStep']):
             opt.zero_grad()
             # data loss: nbD profiles, shared random nodes plus the die nodes of every board
@@ -348,22 +365,35 @@ def fitParam(train, phys, val, cfg=None, dev=None, log=print):
                 rS = ssRes(net, torch.stack([bPo[k]['xs'][:, r] for k, r in zip(ks, rr)]),
                            torch.stack([bPo[k]['ctx'] for k in ks]), torch.stack([thS[k][r] for k, r in zip(ks, rr)]), dT)
                 lS = torch.mean(rS ** 2)
-            loss = wD * lD + wP * lP + wS * lS
+            # moment loss: nbS boards of the pool, random nodes
+            lM = torch.zeros((), device=dev)
+            if mom:
+                ks = rng.integers(0, len(pool), cfg['nbS'])
+                rr = [torch.randperm(bPo[k]['N'], device=dev)[0:nR] for k in ks]
+                phiM = net.basis(torch.stack([bPo[k]['xs'][:, r] for k, r in zip(ks, rr)]),
+                                 torch.stack([bPo[k]['ctx'] for k in ks]))                  # B x nc x n x K
+                lamM = net.rates(torch.stack([bPo[k]['ctx'] for k in ks]))[:, :, None, :]   # B x nc x 1 x K
+                for j in range(0, nMom):
+                    sj = _t([momS[k][j] for k in ks], dev)[:, None, None]
+                    tgt = torch.stack([mom[k][j][r] for k, r in zip(ks, rr)]).transpose(1, 2) * (P_REF / dT)
+                    lM = lM + torch.mean((sj * ((phiM / lamM ** (j + 1)).sum(-1) - tgt)) ** 2) / nMom
+            loss = wD * lD + wP * lP + wS * lS + wM * lM
             loss.backward()
             if cfg['clip'] > 0:
                 torch.nn.utils.clip_grad_norm_(net.parameters(), cfg['clip'])
             opt.step()
-            acc += np.array([float(loss.detach()), float(lD.detach()), float(lP.detach()), float(lS.detach())])
+            acc += np.array([float(loss.detach()), float(lD.detach()), float(lP.detach()), float(lS.detach()),
+                             float(lM.detach())])
         acc /= cfg['nStep']
         net.eval()
         rv = valRmse()
         sch.step(rv)
-        for k, v in zip(('loss', 'lossData', 'lossPhys', 'lossSS', 'val', 'lr', 'time'),
-                        (acc[0], acc[1], acc[2], acc[3], rv, opt.param_groups[0]['lr'], time.time() - t0)):
+        for k, v in zip(('loss', 'lossData', 'lossPhys', 'lossSS', 'lossMom', 'val', 'lr', 'time'),
+                        (acc[0], acc[1], acc[2], acc[3], acc[4], rv, opt.param_groups[0]['lr'], time.time() - t0)):
             hist[k].append(float(v))
-        log("INFO: Epoch %d/%d, lr %.2e, loss %.3e (data %.3e, physics %.3e, steady %.3e), validation RMSE %.3f K, "
-            "%.0f s" % (ep + 1, cfg['epoch'], opt.param_groups[0]['lr'], acc[0], acc[1], acc[2], acc[3], rv,
-                        time.time() - t0))
+        log("INFO: Epoch %d/%d, lr %.2e, loss %.3e (data %.3e, physics %.3e, steady %.3e, moments %.3e), "
+            "validation RMSE %.3f K, %.0f s" % (ep + 1, cfg['epoch'], opt.param_groups[0]['lr'], acc[0], acc[1],
+                                                acc[2], acc[3], acc[4], rv, time.time() - t0))
         if rv < best:
             best, bestNet, wait = rv, copy.deepcopy(net.state_dict()), 0
         else:

@@ -1,7 +1,7 @@
 {
   "Info": {
     "title": "Physics-informed DeepONet, extended physics",
-    "desc": "Physics-informed DeepONet: same trunk, data and physics loss as the proposed network, recurrent branch (GRU of the loss history) instead of the exact lags; no steady-state loss (gamma = 0); physics-only boards physExt with h extended below the labelled range (250-5000 W/(m2K)), labels unchanged (500-5000 W/(m2K))",
+    "desc": "Physics-informed DeepONet with the same physics-only boards as the proposed network (standard and extended, h 250-5000 W/(m2K)); no moment loss (the recurrent branch has no decay rates)",
     "_note": "Edit the values only. Keys starting with '_' are comments and are ignored. 'CHANGE' marks parameters that depend on the computer (GPU memory, runtime); all other values are those of the paper."
   },
   "Net": {
@@ -33,8 +33,8 @@
     "_gamma": "Steady-state weight: weight of the steady-state loss (0: not used, the branch coefficients do not settle at the loss by construction)",
     "phys": 1,
     "_phys": "Physics-only boards: (1): use the physics-only boards (physics and steady-state loss), (0): labelled boards only",
-    "physSet": "physExt",
-    "_physSet": "Physics set: physics-only boards of the physics loss: phys (h 500-5000 W/(m2K), labelled range) or physExt (h 250-5000 W/(m2K), extended below the labels)"
+    "physSet": "phys+physExt",
+    "_physSet": "Physics set: physics-only boards of the physics, steady-state and moment loss: phys (h 500-5000 W/(m2K), labelled range), physExt (h 250-5000 W/(m2K), extended below the labels) or phys+physExt (both, 400 boards)"
   },
   "Train": {
     "epoch": 200,

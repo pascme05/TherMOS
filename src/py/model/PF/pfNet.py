@@ -140,8 +140,19 @@ class pfModal(nn.Module):
     than the training profiles is not seen in them and acts like an integrator over long profiles (drift). b is the
     exact zero-order-hold solution (coeff), so it is stable for any profile length.
     """
-    def __init__(self, nSp=5, nCtx=11, K=16, width=128, depth=4, nF=4, tau=(0.02, 40.0), rel=True, tauCap=None):
+    def __init__(self, nSp=5, nCtx=11, K=16, width=128, depth=4, nF=4, tau=(0.02, 40.0), rel=True, tauCap=None,
+                 lin=False, nMu=4):
         super().__init__()
+        # lin: log-linear heads of the scaled condition μ̂ (last nMu context inputs, log h, log k_diel, ...) outside the
+        # tanh layers: log λ_k and log of a gain g_k of φ_k get a linear term in μ̂ (zero at the start), i.e., the
+        # rates and amplitudes follow a power law of h beyond the training range instead of saturating.
+        self.lin, self.nMu = bool(lin), int(nMu)
+        if self.lin:
+            self.linR = nn.Linear(self.nMu, int(K))
+            self.linG = nn.Linear(self.nMu, int(K))
+            for m in (self.linR, self.linG):
+                nn.init.zeros_(m.weight)
+                nn.init.zeros_(m.bias)
         self.nF, self.K, self.rel = int(nF), int(K), bool(rel)
         self.lamMin = 0.0 if not tauCap else 1.0 / float(tauCap)
         if self.nF > 0:
@@ -165,11 +176,17 @@ class pfModal(nn.Module):
         if self.nF > 0:
             a = xs[..., None] * self.freq
             xs = torch.cat([xs, torch.sin(a).flatten(-2), torch.cos(a).flatten(-2)], dim=-1)
-        return self.trunk(torch.cat([xs, ctx[..., None, :].expand(*xs.shape[:-1], ctx.shape[-1])], dim=-1))
+        phi = self.trunk(torch.cat([xs, ctx[..., None, :].expand(*xs.shape[:-1], ctx.shape[-1])], dim=-1))
+        if self.lin:
+            phi = phi * torch.exp(self.linG(ctx[..., -self.nMu:]))[..., None, :]
+        return phi
 
     def rates(self, ctx):
         """Decay rates λ (... x K) (1/s)."""
-        return self.lamMin + torch.exp(self.a0 + self.rate(ctx))
+        a = self.a0 + self.rate(ctx)
+        if self.lin:
+            a = a + self.linR(ctx[..., -self.nMu:])
+        return self.lamMin + torch.exp(a)
 
     @staticmethod
     def coeff(p, lam, Ts):

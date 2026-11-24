@@ -1,7 +1,7 @@
 {
   "Info": {
-    "title": "Proposed network, extended physics",
-    "desc": "Physics-informed parametric operator network: sensor labels of the training boards plus the physics loss of the physics-only boards; physics-only boards physExt with h extended below the labelled range (250-5000 W/(m2K)), labels unchanged (500-5000 W/(m2K))",
+    "title": "Ablation: base network + extended physics-only boards only",
+    "desc": "Base network trained with the extended physics-only boards only (h 250-5000 W/(m2K)) instead of the standard ones; no log-linear heads, no moment loss",
     "_note": "Edit the values only. Keys starting with '_' are comments and are ignored. 'CHANGE' marks parameters that depend on the computer (GPU memory, runtime); all other values are those of the paper."
   },
   "Net": {
@@ -16,7 +16,9 @@
     "rel": 1,
     "_rel": "Relative coordinates: (1): coordinates relative to every chip as trunk inputs, (0): absolute coordinates only",
     "tauCap": 80.0,
-    "_tauCap": "Maximum time constant: upper limit of the time constants: lambda_k >= 1/tauCap (s)"
+    "_tauCap": "Maximum time constant: upper limit of the time constants: lambda_k >= 1/tauCap (s)",
+    "lin": 0,
+    "_lin": "Log-linear condition heads: (1): log of the decay rates and of a gain of every space function get a linear term of the scaled condition (log h, log k_diel, ...) outside the tanh layers, i.e., they follow a power law of h beyond the training range instead of saturating; (0): off (base network)"
   },
   "Loss": {
     "alpha": 1.0,
@@ -28,7 +30,11 @@
     "phys": 1,
     "_phys": "Physics-only boards: (1): use the physics-only boards (physics and steady-state loss), (0): labelled boards only",
     "physSet": "physExt",
-    "_physSet": "Physics set: physics-only boards of the physics loss: phys (h 500-5000 W/(m2K), labelled range) or physExt (h 250-5000 W/(m2K), extended below the labels)"
+    "_physSet": "Physics set: physics-only boards of the physics, steady-state and moment loss: phys (h 500-5000 W/(m2K), labelled range), physExt (h 250-5000 W/(m2K), extended below the labels) or phys+physExt (both, 400 boards)",
+    "delta": 0.0,
+    "_delta": "Moment weight: weight of the moment loss, i.e., sum_k phi_k/lambda_k^j = (G^-1 C)^j G^-1 Bp for j = 1 ... nMom on every board (moments of the transfer function, dominated by the slow modes; constrains the time constants on the physics-only boards); 0: off",
+    "nMom": 2,
+    "_nMom": "Moments: number of matched moments j = 1 ... nMom (the steady state j = 0 is the steady-state loss)"
   },
   "Train": {
     "epoch": 200,

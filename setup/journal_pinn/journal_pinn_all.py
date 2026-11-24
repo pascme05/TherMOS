@@ -60,7 +60,7 @@ setup['name'] = 'journal_pinn_all'                                              
 # ==============================================================================
 # Experiment
 # ==============================================================================
-setup['out'] = 'results/pfhb'                                                                                            # CHANGE: results folder relative to TherMOS (string), used by all setups; another folder for a test (e.g. 'results/pfhb_test')
+setup['out'] = 'results/pfhb_v2'                                                                                         # CHANGE: results folder relative to TherMOS (string), used by all setups; another folder for a test (e.g. 'results/pfhb_test')
 setup['skip'] = 1                                                                                                        # (0): recompute everything, (1): skip runs whose results exist (restart after an interruption)
 setup['epoch'] = 0                                                                                                       # CHANGE: (0): epochs of the configs (paper), (N): at most N epochs (quick check of the chain, use another out)
 setup['stop'] = 1                                                                                                        # (0): continue with the next setup after an error, (1): stop at the first failing setup
@@ -68,7 +68,7 @@ setup['stop'] = 1                                                               
 # ==============================================================================
 # Setups (run order)
 # ==============================================================================
-setup['setups'] = ['journal_pinn_Tab_IV_V_data', 'journal_pinn_Tab_VII_nominal', 'journal_pinn_Tab_X_Fig_10_variable', 'journal_pinn_Tab_VIII_IX_Fig_6_7_8_9_medium', 'journal_pinn_Fig_11_samples', 'journal_pinn_Tab_XI_Fig_12_load', 'journal_pinn_Fig_13_layout', 'journal_pinn_figures']  # CHANGE: setups to run (setup/journal_pinn/<setup>.py), in this order; remove the ones not needed (data first, figures last)
+setup['setups'] = ['journal_pinn_Tab_IV_V_data', 'journal_pinn_Tab_VII_nominal', 'journal_pinn_Tab_X_Fig_10_variable', 'journal_pinn_ablation', 'journal_pinn_Tab_VIII_IX_Fig_6_7_8_9_medium', 'journal_pinn_Fig_11_samples', 'journal_pinn_Tab_XI_Fig_12_load', 'journal_pinn_Fig_13_layout', 'journal_pinn_figures']  # CHANGE: setups to run (setup/journal_pinn/<setup>.py), in this order; remove the ones not needed (data first, figures last)
 
 #######################################################################################################################
 # Calculations

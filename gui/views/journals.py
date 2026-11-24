@@ -139,11 +139,11 @@ def _results(sid, s):
             r = {'file': f, 'present': '✓' if ok else 'missing'}
             if ok and f.endswith('.json'):
                 r.update({k: round(v, 3) if k != 'train (s)' else round(v) for k, v in
-                          J.summary(f, s.get('out', 'results/pfhb')).items()})
+                          J.summary(f, s.get('out', 'results/pfhb_v2')).items()})
             rows.append(r)
         df = pd.DataFrame(rows)
         table(df, hide_index=True, width='stretch')
-        st.caption(f"Folder: {s.get('out')} (data: data/board/pfhb). Columns N1 … T4: hot-spot RMSE (K) on the "
+        st.caption(f"Folder: {s.get('out')} (data: data/board/pfhb). Columns N1 … T5: hot-spot RMSE (K) on the "
                    "testing sets (Table V of the paper); train: training time (s). Missing runs are computed by "
                    "*Run*, present ones are skipped (setup['skip'] = 1).")
     if s.get('figs') or s.get('build'):

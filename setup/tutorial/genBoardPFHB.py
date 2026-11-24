@@ -29,7 +29,8 @@ training labels and hot-spot errors; the first 4 are the hot spots, sensor versi
     val     6 boards as train, 1 random profile of 40 s (early stopping, model selection)
     phys    200 boards as train, operator only (physics loss of the network)
     physExt 200 boards as phys, but h extended below the labelled range (H_PHYS: 250-5000 W/(m²K)), operator only;
-            physics loss of the variants pinnExt/deeponetExt (extrapolation beyond the labels, covered by physics)
+            physics loss of pinn, deeponetExt (with phys) and pinnExt (extrapolation beyond the labels, covered by
+            physics)
     t1      10 boards as train, designed profile (start-up, acceleration, nominal, regeneration, 40 s)
     t2      6 boards, extrapolated h and k_diel, nominal positions, designed profile
     t3      6 boards with one chip inside the band, designed profile

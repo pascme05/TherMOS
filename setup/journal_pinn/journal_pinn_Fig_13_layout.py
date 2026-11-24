@@ -59,7 +59,7 @@ setup['name'] = 'journal_pinn_Fig_13_layout'                                    
 # ==============================================================================
 # Experiment
 # ==============================================================================
-setup['out'] = 'results/pfhb'                                                                                            # CHANGE: results folder relative to TherMOS (string); another folder for a test (e.g. 'results/pfhb_test')
+setup['out'] = 'results/pfhb_v2'                                                                                         # CHANGE: results folder relative to TherMOS (string); another folder for a test (e.g. 'results/pfhb_test')
 setup['skip'] = 1                                                                                                        # (0): recompute everything, (1): skip runs whose results exist (restart after an interruption)
 setup['epoch'] = 0                                                                                                       # CHANGE: (0): epochs of the configs (paper), (N): at most N epochs (quick check of the chain, use another out)
 

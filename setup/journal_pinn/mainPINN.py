@@ -132,7 +132,7 @@ def runMethod(method, mesh, sens, nTr, out, epoch=0):
         st.runPOD(mesh, c['energy'], nTr, out, int(c['rMax']), nom)
     else:
         cfg = {k: c[k] for k in NET}
-        cfg.update({k: c[k] for k in ('arch', 'hid', 'layers') if k in c})                   # deeponet
+        cfg.update({k: c[k] for k in ('arch', 'hid', 'layers', 'lin', 'delta', 'nMom') if k in c})  # deeponet, heads, moments
         cfg.update(rel=bool(c['rel']), holds=(c['holdMin'], c['holdMax']))
         st.runNet(method, mesh, sens, cfg, nTr, out, epoch, bool(c['phys']), c.get('physSet', 'phys'))
 

@@ -34,7 +34,7 @@
     "phys": 1,
     "_phys": "Physics-only boards: (1): use the physics-only boards (physics and steady-state loss), (0): labelled boards only",
     "physSet": "phys",
-    "_physSet": "Physics set: physics-only boards of the physics loss: phys (h 500-5000 W/(m2K), labelled range) or physExt (h 250-5000 W/(m2K), extended below the labels)"
+    "_physSet": "Physics set: physics-only boards of the physics, steady-state and moment loss: phys (h 500-5000 W/(m2K), labelled range), physExt (h 250-5000 W/(m2K), extended below the labels) or phys+physExt (both, 400 boards)"
   },
   "Train": {
     "epoch": 200,
