@@ -15,8 +15,10 @@
 #######################################################################################################################
 """
 This script generates the data sets of Tables IV and V (Section III-B) on the three meshes: training, validation
-and physics-only boards of the variable layouts, training and validation boards of the nominal layout, and the
-testing sets N1, T1-T4 (fixed seeds, config/journal_pinn/data.json). Run it first. Runtime: ~2 h (fine mesh ~1.5 h).
+and physics-only boards of the variable layouts (phys: h 500-5000, physExt: h 250-5000 W/(m2K)), training and
+validation boards of the nominal layout, and the testing sets N1, T1-T5 (T5: h = 150 W/(m2K), below labels and
+physics; fixed seeds, config/journal_pinn/data.json). Run it first; existing sets are skipped, i.e. only physExt and
+T5 are added to existing data. Runtime: ~2 h (fine mesh ~1.5 h), physExt and T5 only: a few minutes.
 Lines marked CHANGE are the ones to adapt (name and results folder of a test, quick check, other computer); the
 parameters of the methods are in config/journal_pinn/<method>.json (CHANGE there: GPU memory). Existing results in
 setup['out'] are skipped, so the setups share the network runs (e.g. pinn_medium_L is trained once).

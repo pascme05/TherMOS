@@ -40,7 +40,11 @@
     "nPhys": 200,
     "_nPhys": "Physics-only boards: boards without simulation (only C, G, Bp) for the physics loss of the network; do not change for the paper (all results depend on the data sets)",
     "nT1": 10,
-    "_nT1": "Test boards T1: boards of the test set T1 (inside the training domain); do not change for the paper (all results depend on the data sets)"
+    "_nT1": "Test boards T1: boards of the test set T1 (inside the training domain); do not change for the paper (all results depend on the data sets)",
+    "hPhysMin": 250.0,
+    "_hPhysMin": "Physics range: lower limit of h of the physics-only boards physExt (W/(m2K)); the labelled boards cover 500-5000 W/(m2K), physExt 250-5000 (extrapolation beyond the labels, covered by physics)",
+    "hT5": 150.0,
+    "_hT5": "Test set T5: heat transfer coefficient of the 3 boards of T5 (k_diel 1, nominal, 8 W/(mK)), below the labelled and the physics range (true extrapolation) (W/(m2K))"
   },
   "Prof": {
     "Ts": 0.05,

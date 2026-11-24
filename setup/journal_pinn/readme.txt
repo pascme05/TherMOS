@@ -32,7 +32,14 @@ epoch, ~3-5 h per run). Data: data/board/pfhb/<mesh>/. Results: setup['out'] (de
 results are skipped (setup['skip'] = 1), so the setups share the network runs and an interrupted setup restarts where
 it stopped.
 Results per run: <method>_<mesh>_<sensors>[_n<boards>].json (+ .pt for the networks), methods foster, fosterNom,
-podNom (sensors F: full field), pinn, nophys, deeponet.
+pod, podNom (sensors F: full field), pinn, nophys, deeponet, pinnExt, deeponetExt.
+Extrapolation of the cooling: the labelled boards cover h = 500-5000 W/(m2K). pinnExt and deeponetExt use the
+physics-only boards physExt (h = 250-5000, no simulation needed) instead of phys (500-5000), so that T2 (h = 250) lies
+outside the labels but inside the physics and the new testing set T5 (h = 150, 3 boards) outside both; pinn and
+deeponet are the ablation with physics only in the labelled range. To add this to existing results: run 1 (adds
+physExt and T5 to the data, minutes), then 2 and 3 (new runs pinnExt/deeponetExt; T5 is added to the stored networks,
+Foster and POD are refitted since T5 is missing), then 8. Extra runtime: about 2 x (1 + 1 + 5) h for the new
+networks on all meshes, mostly the fine mesh.
 A test on another computer: set setup['out'] (e.g. 'results/pfhb_test') and setup['name'], for a quick check of the
 whole chain setup['epoch'] = 2; adapt the GPU memory in config/journal_pinn/pinn.json, nophys.json, deeponet.json
 (entries with CHANGE: nCache, nbP, nR, Mesh/fine).

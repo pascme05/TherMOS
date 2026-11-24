@@ -98,6 +98,8 @@ def applyData():
             pfParam.MESH[m] = {'dx': d['dx'], 'dzMax': d['dz'] * 1e-3, 'rowMax': int(d['row'])}
     g.SIZES.update({'train': c['nTrain'], 'val': c['nVal'], 'phys': c['nPhys'], 't1': c['nT1'], 'nProf': c['nProf']})
     g.TS, g.T_END, g.T4_END, g.DEC = c['Ts'], c['tEnd'], c['t4End'], int(c['dec'])
+    g.H_PHYS = (c.get('hPhysMin', g.H_PHYS[0]), g.H_PHYS[1])                          # physExt (default 250)
+    g.H_T5 = c.get('hT5', g.H_T5)                                                   # t5 (default 150)
     g.OP.update({'Vdc': c['Vdc'], 'fs': c['fs'], 'Tj': c['Tj']})
     g.SEG.update({'I': (0.0, c['Imax']), 'fo': (c['foMin'], c['foMax']), 'hold': (c['holdMin'], c['holdMax'])})
     return c
@@ -132,7 +134,7 @@ def runMethod(method, mesh, sens, nTr, out, epoch=0):
         cfg = {k: c[k] for k in NET}
         cfg.update({k: c[k] for k in ('arch', 'hid', 'layers') if k in c})                   # deeponet
         cfg.update(rel=bool(c['rel']), holds=(c['holdMin'], c['holdMax']))
-        st.runNet(method, mesh, sens, cfg, nTr, out, epoch, bool(c['phys']))
+        st.runNet(method, mesh, sens, cfg, nTr, out, epoch, bool(c['phys']), c.get('physSet', 'phys'))
 
 
 #######################################################################################################################
@@ -202,10 +204,15 @@ def main(setup):
                 for sens in (['F'] if method.startswith('pod') else setup['sens']):
                     name = st.runName(method, mesh, sens, nTr)
                     if skip and isfile(pjoin(out, name + '.json')):
-                        print("INFO: run %s exists, skipped" % name)
-                        if method in ('pinn', 'nophys', 'deeponet'):
-                            st.addTests(name, out)
-                        continue
+                        if not method.startswith(('foster', 'pod')):
+                            print("INFO: run %s exists, skipped" % name)
+                            st.addTests(name, out)                      # new test sets (e.g. t5) of the stored network
+                            continue
+                        miss = st.missingTests(name, out, method.endswith('Nom'))
+                        if not miss:
+                            print("INFO: run %s exists, skipped" % name)
+                            continue
+                        print("INFO: run %s misses the test sets %s, refitted (Foster/POD are not stored)" % (name, miss))
                     runMethod(method, mesh, sens, nTr, out, epoch)
 
     # field map of a nominal testing board (FV and errors of POD and the networks)

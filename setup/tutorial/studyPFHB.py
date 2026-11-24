@@ -75,8 +75,8 @@ warnings.filterwarnings("ignore")
 # Settings
 #######################################################################################################################
 TS = 0.05
-TESTS = ['n1', 't1', 't2', 't3', 't4']
-TESTS_NOM = ['n1', 't2', 't4']                                          # test sets with the nominal layout
+TESTS = ['n1', 't1', 't2', 't3', 't4', 't5']
+TESTS_NOM = ['n1', 't2', 't4', 't5']                                    # test sets with the nominal layout
 NSENS = {'S': 4, 'L': 16}
 NHOT = 4
 ZOOM = 60.0                                                             # traces at every sample up to (s)
@@ -179,24 +179,34 @@ def netPred(net, dT, dev):
     return pred
 
 
-def runNet(method, mesh, sens, cfg, nTr, out, epoch=0, usePhys=True):
-    """Trains the network on the first nTr labelled boards (labels at the sensors) and evaluates it."""
+def runNet(method, mesh, sens, cfg, nTr, out, epoch=0, usePhys=True, physSet='phys'):
+    """
+    Trains the network on the first nTr labelled boards (labels at the sensors) and evaluates it; physSet: set of the
+    physics-only boards (phys: labelled range of h, physExt: h extended below the labelled range).
+    """
     name = runName(method, mesh, sens, nTr)
     dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     cfg = dict(cfg, sens=NSENS[sens], **({'epoch': epoch} if epoch else {}))
     if not usePhys:
         cfg.update(beta=0.0, gamma=0.0)
     train, val = fam(mesh, 'train')[0:nTr], fam(mesh, 'val')
-    phys = fam(mesh, 'phys') if usePhys else []
-    print("START: run %s (%d labelled, %d physics-only boards, %s labels) on %s" %
-          (name, len(train), len(phys), sens, dev))
+    phys = fam(mesh, physSet) if usePhys else []
+    print("START: run %s (%d labelled, %d physics-only boards of %s, %s labels) on %s" %
+          (name, len(train), len(phys), physSet, sens, dev))
     res = fitParam(train, phys, val, cfg, dev)
     net, dT = res['net'], res['dT']
     torch.save({'state': net.state_dict(), 'dT': dT, 'cfg': res['cfg']}, pjoin(out, name + '.pt'))
     rep = {'run': name, 'method': method, 'mesh': mesh, 'sens': sens, 'train': nTr, 'phys': len(phys),
-           'timeTrain': res['time'], 'epochs': len(res['hist']['val']), 'best': res['best'], 'dT': dT,
+           'physSet': physSet if usePhys else None, 'timeTrain': res['time'], 'epochs': len(res['hist']['val']), 'best': res['best'], 'dT': dT,
            'hist': res['hist'], 'cfg': res['cfg'], 'params': int(sum(q.numel() for q in net.parameters()))}
     _save(evaluate(netPred(net, dT, dev), mesh, rep), out)
+
+
+def missingTests(run, out, nom=False):
+    """Test sets that the stored results of a run do not contain yet (Foster and POD are refitted, they are not stored)."""
+    with open(pjoin(out, run + '.json')) as f:
+        rep = json.load(f)
+    return [s for s in (TESTS_NOM if nom else TESTS) if s not in rep]
 
 
 def addTests(run, out, tests=None):

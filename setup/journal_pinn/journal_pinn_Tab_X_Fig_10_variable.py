@@ -14,9 +14,10 @@
 # Function Description
 #######################################################################################################################
 """
-This script reproduces Table X and Fig. 10 (Section IV-B, variable layouts, testing sets T1 and T3): Foster fitted
-on the variable layouts, the proposed network, the network without physics and the physics-informed DeepONet on
-3 meshes x 2 sensor versions; Fig. 10 shows the error over the chip displacement (medium mesh, sensors L).
+This script reproduces Table X and Fig. 10 (Section IV-B, variable layouts, testing sets T1 and T3): Foster and POD
+fitted on the variable layouts, the proposed network, the network without physics, the physics-informed DeepONet,
+and the variants with extended physics (pinnExt, deeponetExt) on 3 meshes x 2 sensor versions; Fig. 10 shows the
+error over the chip displacement (medium mesh, sensors L).
 Runtime (RTX 3070): Foster ~5-10 min per run, networks as in Table VII (shared runs).
 Lines marked CHANGE are the ones to adapt (name and results folder of a test, quick check, other computer); the
 parameters of the methods are in config/journal_pinn/<method>.json (CHANGE there: GPU memory). Existing results in
@@ -74,7 +75,7 @@ setup['data'] = []                                                              
 # ==============================================================================
 setup['mesh'] = ['coarse', 'medium', 'fine']                                                                             # CHANGE: meshes of the runs: coarse (2 mm), medium (1 mm), fine (0.5 mm; networks ~3-5 h per run)
 setup['sens'] = ['S', 'L']                                                                                               # sensor versions of the training labels: S (4 hot spots), L (16: hot spots, 4 NTC, 8 on the base)
-setup['methods'] = ['foster', 'pinn', 'nophys', 'deeponet']                                                              # methods (config <method>.json): foster/fosterNom, pod/podNom (Nom: nominal layout; pod full field), pinn, nophys, deeponet
+setup['methods'] = ['foster', 'pod', 'pinn', 'nophys', 'deeponet', 'pinnExt', 'deeponetExt']                            # methods (config <method>.json): foster/fosterNom, pod/podNom (Nom: nominal layout; pod full field), pinn, nophys, deeponet
 setup['nTrain'] = [24]                                                                                                   # numbers of labelled training boards (first n of the training set, maximum 24)
 setup['fieldmap'] = []                                                                                                   # meshes of the field map (copper layer at the peak of a testing board of N1: FV, errors of POD and the networks S, L)
 

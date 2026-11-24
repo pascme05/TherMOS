@@ -22,6 +22,8 @@ ones of the paper and should not be changed to reproduce it.
   pinn.json      proposed physics-informed network
   nophys.json    the same network without physics (ablation)
   deeponet.json  physics-informed DeepONet (baseline: recurrent branch instead of the exact lags)
+  pinnExt.json, deeponetExt.json  as pinn/deeponet with the physics set physExt (Loss/physSet): physics-only boards
+                 with h = 250-5000 W/(m2K), below the labelled range 500-5000 (extrapolation covered by physics)
 fosterNom and podNom (setup['methods']) use foster.json and pod.json, but are fitted on the nominal layout (trainNom).
 The section Mesh of a method config replaces values on one mesh, e.g. "Mesh": {"fine": {"nR": 2048, "nCache": 8}}.
 A new variant: copy a method config (e.g. pinn.json to pinn2.json), change the values, and add its name to

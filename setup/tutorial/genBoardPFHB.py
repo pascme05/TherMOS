@@ -28,10 +28,14 @@ training labels and hot-spot errors; the first 4 are the hot spots, sensor versi
     train   24 boards, LHS in μ, chip centres outside the band x_c ∈ [12, 16] mm, 2 random profiles of 40 s
     val     6 boards as train, 1 random profile of 40 s (early stopping, model selection)
     phys    200 boards as train, operator only (physics loss of the network)
+    physExt 200 boards as phys, but h extended below the labelled range (H_PHYS: 250-5000 W/(m²K)), operator only;
+            physics loss of the variants pinnExt/deeponetExt (extrapolation beyond the labels, covered by physics)
     t1      10 boards as train, designed profile (start-up, acceleration, nominal, regeneration, 40 s)
     t2      6 boards, extrapolated h and k_diel, nominal positions, designed profile
     t3      6 boards with one chip inside the band, designed profile
     t4      1 board, nominal positions, drive-cycle mission of 30 min from cold (field every 1 s)
+    t5      3 boards, h = H_T5 (150 W/(m²K)) below the labelled and the physics range, k_diel 1, nominal, 8, nominal
+            positions, designed profile (true extrapolation: neither labels nor physics)
 Nominal layout (chips fixed at the nominal positions, only the condition μ varies; baselines of the nominal section):
     trainNom 24 boards, LHS in μ, nominal positions, 2 random profiles of 40 s
     valNom   6 boards as trainNom, 1 random profile of 40 s
@@ -85,8 +89,12 @@ NSUB = 200                                                              # sub-sa
 DEV = DEVICES['Si IGBT discrete 1200 V / 75 A (TO-247)']                # IGBT and diode of every switch
 OP = {'Vdc': 400.0, 'fs': 5000.0, 'Tj': 125.0}                          # DC link (V), switching (Hz), T_j (°C)
 SEG = {'I': (0.0, 30.0), 'fo': (0.5, 50.0), 'hold': (0.5, 8.0), 'ramp': (0.0, 1.0)}   # random operating points
-SEEDS = {'train': 1, 'val': 2, 'phys': 3, 't1': 4, 't2': 5, 't3': 6, 't4': 7, 'trainNom': 11, 'valNom': 12, 'n1': 13}
+SEEDS = {'train': 1, 'val': 2, 'phys': 3, 't1': 4, 't2': 5, 't3': 6, 't4': 7, 'trainNom': 11, 'valNom': 12, 'n1': 13,
+         'physExt': 14, 't5': 15}
 SIZES = {'train': 24, 'val': 6, 'phys': 200, 't1': 10, 'nProf': 2}      # boards per set, profiles per training board
+H_PHYS = (250.0, 5000.0)                                                # h range of physExt (W/(m²K)), labels: MU['h']
+H_T5 = 150.0                                                            # h of t5, below labels and physics (W/(m²K))
+KD_T5 = (1.0, None, 8.0)                                                # k_diel of the t5 boards (None: nominal) (W/(mK))
 SETS = list(SEEDS.keys())
 
 
@@ -204,10 +212,11 @@ def genSet(s, mesh, t):
     """Boards of the set s on the mesh (same boards and profiles on every mesh, seed SEEDS[s])."""
     rng = np.random.default_rng(SEEDS[s])
     bb = lambda m, p: buildBoard(m, p, CHIPS_HB, mesh)
-    if s in ('train', 'val', 'phys', 't1'):
-        n = SIZES[s]
-        B = [bb(m, samplePos(rng, BAND, chips=CHIPS_HB)) for m in sampleMu(n, rng)]
-        if s == 'phys':
+    if s in ('train', 'val', 'phys', 't1', 'physExt'):
+        n = SIZES['phys' if s == 'physExt' else s]
+        lim = dict(MU, h=(H_PHYS[0], H_PHYS[1], True)) if s == 'physExt' else None
+        B = [bb(m, samplePos(rng, BAND, chips=CHIPS_HB)) for m in sampleMu(n, rng, lim)]
+        if s in ('phys', 'physExt'):
             return B
         if s == 't1':
             return labelled(B, [[designed(t)] for _ in B])
@@ -226,6 +235,9 @@ def genSet(s, mesh, t):
         mus = sampleMu(6, rng)
         B = [bb(mus[i], samplePos(rng, BAND, i % 4, CHIPS_HB)) for i in range(0, 6)]
         return labelled(B, [[designed(t)] for _ in B])
+    if s == 't5':
+        mus = [dict(NOM, h=H_T5, **({} if k is None else {'kDiel': k})) for k in KD_T5]
+        return labelled([bb(m, nominal()) for m in mus], [[designed(t)] for _ in mus])
     if s == 't4':
         tt = np.arange(0.0, T4_END + TS * 1e-9, TS)
         return labelled([bb(sampleMu(1, rng)[0], nominal())], [[mission(tt, rng)]], T4_DEC)

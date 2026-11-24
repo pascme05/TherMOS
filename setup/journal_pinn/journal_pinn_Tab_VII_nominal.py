@@ -14,10 +14,13 @@
 # Function Description
 #######################################################################################################################
 """
-This script reproduces Table VII (Section IV-A, nominal layout, testing sets N1, T2, T4): Foster and POD fitted on
-the nominal layout (trainNom), the proposed network, the network without physics and the physics-informed
-DeepONet (trained on the variable layouts) on 3 meshes x 2 sensor versions. The networks are the same runs as in
-Table X. Runtime (RTX 3070): coarse and medium ~1 h per network run, fine ~3-5 h per network run.
+This script reproduces Table VII (Section IV-A, nominal layout, testing sets N1, T2, T4, T5): Foster and POD fitted
+on the nominal layout (trainNom), the proposed network, the network without physics and the physics-informed
+DeepONet (trained on the variable layouts) on 3 meshes x 2 sensor versions. pinnExt and deeponetExt are the same
+networks with the physics-only boards physExt (h 250-5000 W/(m2K), below the labelled range 500-5000): T2 (h = 250)
+then lies outside the labels but inside the physics, T5 (h = 150) outside both. The networks are the same runs as in
+Table X; existing runs get the new testing set T5 added, Foster and POD are refitted if T5 is missing.
+Runtime (RTX 3070): coarse and medium ~10-20 min per network run, fine ~1-2.5 h per network run.
 Lines marked CHANGE are the ones to adapt (name and results folder of a test, quick check, other computer); the
 parameters of the methods are in config/journal_pinn/<method>.json (CHANGE there: GPU memory). Existing results in
 setup['out'] are skipped, so the setups share the network runs (e.g. pinn_medium_L is trained once).
@@ -74,7 +77,7 @@ setup['data'] = []                                                              
 # ==============================================================================
 setup['mesh'] = ['coarse', 'medium', 'fine']                                                                             # CHANGE: meshes of the runs: coarse (2 mm), medium (1 mm), fine (0.5 mm; networks ~3-5 h per run)
 setup['sens'] = ['S', 'L']                                                                                               # sensor versions of the training labels: S (4 hot spots), L (16: hot spots, 4 NTC, 8 on the base)
-setup['methods'] = ['fosterNom', 'podNom', 'pinn', 'nophys', 'deeponet']                                                 # methods (config <method>.json): foster/fosterNom, pod/podNom (Nom: nominal layout; pod full field), pinn, nophys, deeponet
+setup['methods'] = ['fosterNom', 'podNom', 'pinn', 'nophys', 'deeponet', 'pinnExt', 'deeponetExt']                      # methods (config <method>.json): foster/fosterNom, pod/podNom (Nom: nominal layout; pod full field), pinn, nophys, deeponet
 setup['nTrain'] = [24]                                                                                                   # numbers of labelled training boards (first n of the training set, maximum 24)
 setup['fieldmap'] = []                                                                                                   # meshes of the field map (copper layer at the peak of a testing board of N1: FV, errors of POD and the networks S, L)
 
