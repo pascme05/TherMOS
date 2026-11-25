@@ -23,6 +23,11 @@ node). The data sets are generated first (genBoardPF.py, once, files data/board/
     python setup/journal_pinn/journal_pinn_operator.py
 Follow the code: src/py/main.py -> src/py/model/PF/pfFit.py (training) -> pfSol.py (testing), network in pfNet.py
 (pfOperator: trunk x branch).
+Single-board variant (PF mode of main.py, settings in the config workbook, draft docu/paper/PF_paper_v2_singleboard.tex);
+not part of journal_pinn_all.py. The extensions of the parametric network V1.2 (log-linear condition heads, moment
+loss, extended physics-only boards; config/journal_pinn/pinn.json) need a family of boards with varying conditions and
+learned decay rates, which the single-board networks do not have: the condition is fixed and the time dependence comes
+from the branch (operator) or the time input (coordinate network).
 """
 
 #######################################################################################################################

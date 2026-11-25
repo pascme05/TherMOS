@@ -424,9 +424,11 @@ DOT3 = DOT % '''
   ra [label=<<B>Rate net</B><BR/>λ<SUB>k</SUB>(z<SUB>c</SUB>, μ)>];
   lag [label=<<B>Exact lags</B><BR/>db/dt = λ·(p̂ − b)>];
   T [label=<<B>Field</B><BR/>θ̂ = ΔT·Σ<SUB>c</SUB>Σ<SUB>k</SUB> φ<SUB>k</SUB>·b<SUB>c,k</SUB>>, fillcolor="#dcefdc", color="#4d9a4d"];
-  L [label=<<B>Loss</B><BR/>α·data + β·physics + γ·steady>, fillcolor="#fbe6cf", color="#d28a2e"];
+  hd [label=<<B>Log-linear heads</B><BR/>ω<SUB>k</SUB>·μ̂, ν<SUB>k</SUB>·μ̂ (power law of h)>, fillcolor="#e6f2d9", color="#77AC30"];
+  L [label=<<B>Loss</B><BR/>α·data + β·physics + γ·steady + δ·moments>, fillcolor="#fbe6cf", color="#d28a2e"];
   O [label=<<B>Operator per board</B><BR/>C, G, B<SUB>p</SUB> (no simulation)>, shape=note];
   mu -> tr; z -> tr; x -> tr; mu -> ra; z -> ra; ra -> lag; P -> lag; lag -> T; tr -> T; T -> L; O -> L;
+  mu -> hd; hd -> ra; hd -> tr;
 '''
 
 
@@ -466,8 +468,11 @@ def _parametric():
                     "condition:\n"
                     "- the space functions move with the chip (coordinates relative to its centre),\n"
                     "- the lags are integrated exactly (zero-order hold), so a 30 min profile is as stable as 40 s,\n"
-                    "- the physics and steady-state losses need only the matrices of a board, so hundreds of boards "
-                    "without any simulation teach the network the effect of every parameter.")
+                    "- the physics, steady-state and moment losses need only the matrices of a board, so hundreds of "
+                    "boards without any simulation teach the network the effect of every parameter, also outside "
+                    "the range of the simulated boards,\n"
+                    "- log-linear heads (option lin) let the rates and amplitudes follow a power law of the cooling "
+                    "beyond the training range instead of saturating like the tanh layers.")
     cm.equations([
         ("Modal solution of a linear board (exact)",
          r"\boldsymbol\theta(t)=\sum_{c}\sum_{m}\frac{\boldsymbol v_m\boldsymbol v_m^\top\mathbf B_{p,c}}{\lambda_m}"
@@ -477,10 +482,12 @@ def _parametric():
         ("Parametric network",
          [r"\hat\theta(\boldsymbol x,t)=\Delta T\sum_{c=1}^{n_c}\sum_{k=1}^{K}\varphi_k(\boldsymbol x,\boldsymbol z_c,"
           r"\boldsymbol\mu)\,b_{c,k}(t)",
-          r"\lambda_k=\frac{1}{\tau_{cap}}+e^{a_k+\Delta a_k(\boldsymbol z_c,\boldsymbol\mu)},\qquad "
+          r"\lambda_k=\frac{1}{\tau_{cap}}+e^{a_k+\Delta a_k(\boldsymbol z_c,\boldsymbol\mu)+\boldsymbol\omega_k^\top"
+          r"\hat{\boldsymbol\mu}},\qquad\varphi_k=\tilde\varphi_k\,e^{\boldsymbol\nu_k^\top\hat{\boldsymbol\mu}}",
           r"b_{c,k}[n]=e^{-\lambda_kT_s}\,b_{c,k}[n-1]+\bigl(1-e^{-\lambda_kT_s}\bigr)\,\hat p_c[n]"],
          "The lags are evaluated for the whole profile at once (FFT convolution). τ_cap bounds the slowest time "
-         "constant of the network."),
+         "constant of the network. The heads ω_k, ν_k (lin = 1, zero at the start) are linear in the scaled condition "
+         "μ̂ (log h, log k_diel, ...), i.e., λ_k ∝ h^ω and φ_k ∝ h^ν continue beyond the training range."),
         ("Physics loss (per board, at random nodes)",
          r"\boldsymbol r=\frac{\mathbf G^{-1}\mathbf C\,\dot{\hat{\boldsymbol\theta}}+\hat{\boldsymbol\theta}-"
          r"\mathbf G^{-1}\mathbf B_p\boldsymbol P}{\Delta T}", "dθ̂/dt follows analytically from the lags."),
@@ -489,7 +496,14 @@ def _parametric():
          r"\mathbf G^{-1}\mathbf B_{p,c}\,\frac{P_{ref}}{\Delta T}",
          "Pins the slow modes that 40 s training profiles cannot determine; without it the prediction drifts by "
          "about 8 K over 30 min."),
-        ("Loss", r"L=\alpha\,L_{data}+\beta\,\overline{r^2}+\gamma\,\overline{r_{ss}^2}", None),
+        ("Moment loss (per board and chip, j = 1 … n_m)",
+         r"\boldsymbol r_{mom,c,j}=s_{c,j}\Bigl(\sum_{k}\frac{\boldsymbol\varphi_k}{\lambda_k^j}-"
+         r"(\mathbf G^{-1}\mathbf C)^j\,\mathbf G^{-1}\mathbf B_{p,c}\,\frac{P_{ref}}{\Delta T}\Bigr)",
+         "Matches the moments of the transfer function at s = 0 (as a Krylov basis does). j = 1 is the area between "
+         "the step response and its final value, Σ φ_k·τ_k: it fixes the slow time constants on every board from its "
+         "matrices alone. s_c,j = rms(G⁻¹B_p)/rms(m_j) scales each moment to the steady state."),
+        ("Loss", r"L=\alpha\,L_{data}+\beta\,\overline{r^2}+\gamma\,\overline{r_{ss}^2}+\delta\,"
+                 r"\overline{r_{mom}^2}", None),
     ], sym=[
         ('μ', 'condition: cooling h, dielectric k_diel, die-attach factor s_att, base heat-capacity factor s_ρc', '–'),
         ('z_c', 'descriptor of chip c: centre, size (w, l), type (IGBT, diode, SiC MOSFET)', '–'),
@@ -501,7 +515,9 @@ def _parametric():
         ('C, G, B_p', 'capacitance and conductance matrices, distribution of the chip losses (per board)', 'J/K, W/K, –'),
         ('v_m, λ_m', 'mode m of the board and its decay rate', '–, 1/s'),
         ('T_s', 'sampling time (0.05 s)', 's'),
-        ('α, β, γ', 'weights of the data, physics and steady-state loss (1, 1, 1)', '–'),
+        ('ω_k, ν_k, μ̂', 'log-linear heads of the rates and amplitudes; condition scaled to [−1, 1] (log for h)', '–'),
+        ('n_m, s_c,j', 'number of moments (2); scale of moment j', '–'),
+        ('α, β, γ, δ', 'weights of the data, physics, steady-state and moment loss (1, 1, 1, 1)', '–'),
     ], title="Equations and symbols of the parametric operator")
     df, live = _paramResults()
     table(df, hide_index=True)
@@ -518,7 +534,10 @@ def _parametric():
         "lower than with 24 simulated boards without physics (2.02 K) and 9 times lower than with 3 boards without "
         "physics (15.0 K).",
         "**Extrapolation needs operators, not data:** outside the training range the error grows (10.4 K), and "
-        "physics-only boards placed there lower it without any simulation (4.6 K).",
+        "physics-only boards placed there lower it without any simulation (4.6 K). The log-linear heads and the "
+        "moment loss (runs lin, linBoth, v2) carry the resistances and time constants of these boards further: in the "
+        "PINN journal (half-bridge, h = 150 W/(m²K), outside all boards) the error drops from 53 K to 3.5 K "
+        "(preliminary, coarse mesh).",
         "**When not to use it:** for one known linear board a Krylov reduction of its own matrices (12 states) "
         "reaches 0.03 K in 0.09 s per board — more accurate than the network. The network pays off for many designs, chip positions (where projection methods fail), long "
         "profiles and gradient-based layout optimisation.",

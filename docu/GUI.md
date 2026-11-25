@@ -60,7 +60,7 @@ Every page has the views below:
 | ML | Static regression on (rolled) features | LR, tree, SVR, GPR, ensemble, MLP | 1D | Linear regression with and without EWMA features |
 | DL | CNN / LSTM / CNN + LSTM on windows | 3 networks | 1D | **Architecture diagram from the network code** (layers, shapes, parameters), windows over a profile |
 | PI | CNN + LSTM with a physics loss | – | 1D | **Network and loss graph** (data loss + residual of the lumped stator model), residual explorer |
-| PF | Field PINN: network for T(x, t) with the heat equation as physics loss | operator / coordinate network | 2D/3D | From POD to the network in four steps with six small tools (POD modes and Galerkin error over K, exact ZOH lag vs Euler, chip superposition, physics residual vs error, steady-state anchor vs drift, POD of moving chips vs cooling), both structures, source footprints and sensor placement on your data, measured reference results, parametric operator |
+| PF | Field PINN: network for T(x, t) with the heat equation as physics loss | operator / coordinate network | 2D/3D | From POD to the network in four steps with six small tools (POD modes and Galerkin error over K, exact ZOH lag vs Euler, chip superposition, physics residual vs error, steady-state anchor vs drift, POD of moving chips vs cooling), both structures, source footprints and sensor placement on your data, measured reference results, parametric operator (log-linear condition heads, physics, steady-state and moment losses on physics-only boards) |
 | KR | Krylov reduction: moment matching of the FV operator of the board | – | 2D/3D | What the mode needs, the idea in three steps (steady state, delay moments, projection), tool: error over the number of moment blocks q for a moved chip and another cooling, equations with symbol table, fair-comparison note |
 
 **Network view of the DL mode**
@@ -440,6 +440,10 @@ configurations. The configs are in `config/gui/tutorials/`; regenerate them with
   missing, hot-spot RMSE per testing set; figure PDFs), *Settings* (all values, CHANGE marks the lines to adapt;
   used by *Run* or saved into the setup file), *Run* (background process, log in `<out>/logs/<name>.log`, stop,
   command line) and *Method configs* (`config/journal_pinn/*.json` as a table with the comment of every parameter).
+  Proposed network V1.2 (`pinn.json`): log-linear condition heads (`Net › lin`), standard plus extended physics-only
+  boards (`Loss › physSet = phys+physExt`) and the moment loss (`Loss › delta`, `nMom`); the setup
+  `journal_pinn_ablation` adds the extensions one at a time (`pinnBase` → `pinnLin` → `pinnLinBoth` → `pinn`,
+  plus `pinnExt`). Results of the rerun in `results/pfhb_v2`, the first version in `results/pfhb`.
 
 ## 8. Configurations and results
 

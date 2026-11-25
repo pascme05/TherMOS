@@ -253,10 +253,9 @@ def loadNet(path):
     if not path or not os.path.isfile(path):
         return None
     import torch
-    from src.py.model.PF.pfNet import pfModal
+    from src.py.model.PF.pfParamFit import buildNet
     ck = torch.load(path, map_location='cpu')
-    c = ck['cfg']
-    net = pfModal(5, 11, c['K'], c['width'], c['depth'], c['nF'], rel=c['rel'], tauCap=c.get('tauCap'))
+    net = buildNet(ck['cfg'])                                         # modal or DeepONet, with the heads if cfg['lin']
     net.load_state_dict(ck['state'])
     net.eval()
     return net, float(ck['dT'])

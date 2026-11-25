@@ -66,6 +66,14 @@ V1.2: 21.11.2026, Pascal Schirmer
 V1.3: 22.11.2026, Pascal Schirmer
 - Baseline physics-informed DeepONet (cfg 'arch' deeponet, net.seq gives b and db/dt for both networks, buildNet);
   its steady-state loss is not used (γ = 0), since its coefficients do not settle at p̂ by construction
+
+V1.4: 24.11.2026, Pascal Schirmer
+- Log-linear condition heads (cfg 'lin', pfModal) and the moment loss (cfg 'delta', 'nMom'):
+      r_M,c,j = s_c,j·(Σ_k φ_k/λ_k^j − (G⁻¹·C)^j·Θ_c·P_ref/ΔT),   j = 1 … nMom,   L_M = mean(r_M²)
+  the moments of the transfer function at s = 0 (j = 0 is the steady state L_S); j = 1 is Σ_k φ_k·τ_k, the area
+  between the step response and its final value, so L_M fixes the slow time constants on every board of the pool from
+  its operator alone (physics-only boards outside the labelled range). s_c,j = rms(Θ_c)/rms(m_c,j); the moments are
+  computed once per board with the LU of G (nMom solves). L = α·L_D + β·L_P + γ·L_S + δ·L_M
 """
 
 #######################################################################################################################

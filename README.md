@@ -109,7 +109,7 @@ python start_gui.py                      # opens http://localhost:8501
   - Tutorial: `python setup/tutorial/genBoardPF.py`, then `python setup/tutorial/tutorial_PF.py`. Measured on the 3D
     tutorial board (3453 nodes, maximum rise 107 K, new load profile): RMSE 8.9 K with data only, 0.81 K with
     physics 2 (PS mode on the same data: 1.09 K, 6 times faster). Details: `docu/GUI.md`, section *PF mode*.
-  - Parametric operator (one network for a family of boards: cooling, materials and chip positions without retraining): `python setup/tutorial/genBoardPFParam.py`, then `python setup/tutorial/studyPFParam.py base --out results/pfparam`. Measured (K = 32): RMSE 0.98 K for new conditions and positions, 1.09 K for unseen chip positions, 0.57 K over a 30 min mission profile in 0.03 s.
+  - Parametric operator (one network for a family of boards: cooling, materials and chip positions without retraining): `python setup/tutorial/genBoardPFParam.py`, then `python setup/tutorial/studyPFParam.py base --out results/pfparam`. Measured (K = 32): RMSE 0.98 K for new conditions and positions, 1.09 K for unseen chip positions, 0.57 K over a 30 min mission profile in 0.03 s. Network V1.2 (PINN journal) adds log-linear condition heads and a moment loss and uses extended physics-only boards (runs `lin`, `linBoth`, `v2`; `python setup/tutorial/genBoardPFParam.py physExt` first), so that the cooling extrapolates beyond the simulated boards.
 - **Study:** grid search, optimisation (built-in or Optuna) and forward feature selection on the validation data.
 - **Theory & Tools:**
   - power losses and thermal stack;

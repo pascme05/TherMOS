@@ -27,6 +27,8 @@ Start with: python setup/journal_pinn/<setup>.py, in this order:
   9 journal_pinn_figures.py                        data of all figures and tables, figure PDFs (docu/paper)   ~5 min
   journal_pinn_all.py                              all setups 1-9 in one go (list setup['setups'])            ~42 h
   mainPINN.py                                      main function of the setups (no need to edit)
+  journal_pinn_operator.py, journal_pinn_coord.py  single-board PF networks (main.py, config pinn_*.xlsx; earlier draft,
+                                                   not in journal_pinn_all.py; the V1.2 extensions do not apply)
 
 Times: RTX 3070 (8 GB), estimates; most of the time is the training of the networks on the fine mesh (~115 s per
 epoch, ~3-5 h per run). Data: data/board/pfhb/<mesh>/ (incl. the extended physics-only boards physExt and the testing

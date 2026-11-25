@@ -46,6 +46,11 @@ V1.1: 21.11.2026, Pascal Schirmer
 
 V1.2: 22.11.2026, Pascal Schirmer
 - Physics-informed DeepONet baseline pfDeepONet (trunk of pfModal, recurrent branch instead of the exact lags)
+
+V1.3: 24.11.2026, Pascal Schirmer
+- Log-linear condition heads of pfModal (lin = True): log λ_k += ω_kᵀ·μ̂ and φ_k ·= exp(ν_kᵀ·μ̂) with the scaled
+  condition μ̂ (last nMu context inputs), outside the tanh layers and zero at the start, i.e., the rates and amplitudes
+  follow a power law of h beyond the training range instead of saturating
 """
 
 #######################################################################################################################

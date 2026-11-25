@@ -22,6 +22,11 @@ This script runs the studies of the parametric PF network on the board families 
         n3/n6/n12   3/6/12 labelled boards + 200 physics-only boards; n3np/n6np/n12np without physics
         K8/K16      8/16 space functions (default 32); norel: without the coordinates relative to the chips;
                     noSS: without the steady-state loss
+        lin         base + log-linear condition heads (rates and amplitudes follow a power law of the condition)
+        linBoth     lin + physics-only boards phys and physExt (400 boards)
+        v2          network V1.2 of the PINN journal: lin + phys and physExt + moment loss (delta 1, 2 moments);
+                    v2phys: the same with phys only (linBoth, v2 need the set physExt: python
+                    setup/tutorial/genBoardPFParam.py physExt)
         tL10/tL20   24 labelled boards with one profile of 10/20 s; tP1: one profile of 40 s (base: two of 40 s)
         pos<n>      n = 1/3/6/24 labelled boards of trainPos (nominal μ, only the positions vary)
         mu<n>       n = 1/3/6/24 labelled boards of trainMu (nominal positions, only μ varies)
@@ -58,8 +63,7 @@ sys.path.insert(0, base)
 # ==============================================================================
 from src.py.model.PF.pfParam import (loadFam, buildBoard, simulate, layout, samplePos, chipCtx, muHat, _ok, CHIPS, NOM,
                                      P_REF, W_MM, L_MM, MARGIN, GAP, Z_MAX)
-from src.py.model.PF.pfParamFit import fitParam, evalBoard, prepBoard, predict
-from src.py.model.PF.pfNet import pfModal
+from src.py.model.PF.pfParamFit import fitParam, evalBoard, prepBoard, predict, buildNet
 from src.py.board.genBoard import genBoard
 
 # ==============================================================================
@@ -88,6 +92,10 @@ RUNS = {'base': ({}, 24, 'phys'), 'nophys': (NP, 24, None), 'physAll': ({}, 24, 
         'physExt': ({}, 24, 'physExt'), 'base2': ({'seed': 7}, 24, 'phys'), 'nophys2': (dict(NP, seed=7), 24, None),
         'noSS': ({'gamma': 0.0}, 24, 'phys'), 'K8': ({'K': 8}, 24, 'phys'), 'K16': ({'K': 16}, 24, 'phys'),
         'norel': ({'rel': False}, 24, 'phys')}
+# network V1.2 (journal_pinn): log-linear condition heads (lin), moment loss (delta, nMom), both physics sets
+V2 = {'lin': True, 'delta': 1.0, 'nMom': 2}
+RUNS.update({'lin': ({'lin': True}, 24, 'phys'), 'linBoth': ({'lin': True}, 24, 'phys+physExt'),
+             'v2': (V2, 24, 'phys+physExt'), 'v2phys': (V2, 24, 'phys')})
 # training-sample study: (cfg, labelled boards, physics family, (labelled family, profiles per board, length (s)))
 RUNS.update({'tL10': ({}, 24, 'phys', ('train', 1, 10.0)), 'tL20': ({}, 24, 'phys', ('train', 1, 20.0)),
              'tP1': ({}, 24, 'phys', ('train', 1, 40.0))})
@@ -155,7 +163,7 @@ def run(name, folder, out, epoch=None):
         L = int(round(sel[2] / TS)) + 1
         for B in train:
             B['P'], B['th'] = [P[0:L] for P in B['P'][0:sel[1]]], [th[0:L] for th in B['th'][0:sel[1]]]
-    phys = _fam(folder, ph) if ph else []
+    phys = [B for f in ph.split('+') for B in _fam(folder, f)] if ph else []       # e.g. 'phys+physExt'
     val = _fam(folder, 'val')
     print("START: run %s (%d labelled, %s physics boards) on %s" % (name, nTr, len(phys), dev))
     res = fitParam(train, phys, val, cfg, dev)
@@ -370,8 +378,7 @@ def baseKrylov(folder, out, blocks=(2, 4, 8)):
 #######################################################################################################################
 def _loadNet(path, dev):
     ck = torch.load(path, map_location=dev)
-    c = ck['cfg']
-    net = pfModal(5, 11, c['K'], c['width'], c['depth'], c['nF'], rel=c['rel'], tauCap=c.get('tauCap')).to(dev)
+    net = buildNet(ck['cfg']).to(dev)                                 # with the log-linear heads if cfg['lin']
     net.load_state_dict(ck['state'])
     net.eval()
     return net, ck['dT']
